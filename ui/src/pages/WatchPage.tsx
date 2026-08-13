@@ -296,10 +296,8 @@ export default function WatchPage() {
                 />
               ) : playerKind === "stream" && video ? (
                 <LocalPlayer
-                  key={`${video.video_id}-native-${sharedStartSeconds}`}
+                  key={`${video.video_id}-player-${sharedStartSeconds}`}
                   ref={playerRef}
-                  live
-                  liveLabel={t("watchStreamingBadge")}
                   durationSeconds={colonDurationToSeconds(video.duration)}
                   onError={exitStreaming} onExitStreaming={watchTogetherTransportLocked ? undefined : exitStreaming}
                   exitStreamingLabel={t("watchExitStreaming")}
@@ -334,7 +332,7 @@ export default function WatchPage() {
                 />
               ) : (playerKind === "local" || playerKind === "direct") && video ? (
                 <LocalPlayer
-                  key={`${video.video_id}-native-${sharedStartSeconds}`}
+                  key={`${video.video_id}-player-${sharedStartSeconds}`}
                   ref={playerRef}
                   hls={playerKind === "direct" && !directProgressive}
                   durationSeconds={parseVideoDurationSeconds(video.duration) ?? undefined}

@@ -1135,6 +1135,7 @@ const {
   getAudioHeadResponse,
   getAudioResponse,
   getAudioVodPlaylist,
+  getVideoResponse,
   getHlsPlaylist,
   getHlsResource,
   getHlsSegment,
