@@ -6,6 +6,7 @@ import { api, SB_CATEGORIES } from "../api";
 import { subtitleLanguageLabel } from "../subtitleLanguages";
 import { useI18n } from "../i18n";
 import SubtitlePicker from "./SubtitlePicker";
+import { useMediaRelease } from "./useMediaRelease";
 import { downloadScreenshotCanvas, type PlayerScreenshotFormat } from "../playerScreenshot";
 import { enforceLocalPlayerVolume } from "../localPlayerVolume";
 import { stepPlaybackRate } from "../playbackSpeedStep";
@@ -141,6 +142,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  useMediaRelease(videoRef);
   const barRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | null>(null);
   const endedRef = useRef(false);
