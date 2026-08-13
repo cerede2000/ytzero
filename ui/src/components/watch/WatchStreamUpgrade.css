@@ -1,0 +1,36 @@
+.watch-stream-upgrade {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.watch-stream-upgrade:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+/* Fades away in lockstep with the native player's own control bar. */
+.watch-stream-upgrade--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  .watch-stream-upgrade span {
+    display: none;
+  }
+}
