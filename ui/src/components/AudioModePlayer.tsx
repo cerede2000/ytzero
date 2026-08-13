@@ -383,17 +383,22 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     setHandler("play", () => audio?.play().catch(() => {}));
     setHandler("pause", () => audio?.pause());
     if (!live) {
-      setHandler("seekbackward", () => { if (audio) setAudioPosition(audio.currentTime - 10); });
-      setHandler("seekforward", () => { if (audio) setAudioPosition(audio.currentTime + 10); });
+      // System playback controls have room for two buttons either side of play,
+      // and skipping and seeking compete for them: registering both leaves iOS
+      // showing the seek pair and no way through the queue at all. A list is
+      // worth more there than ten seconds — a phone in a pocket can reach the
+      // next track and nothing else would let it — while a video on its own has
+      // nowhere to skip to and keeps the seek buttons it has always had.
+      const throughList = Boolean(onNextTrack || onPreviousTrack);
+      setHandler("nexttrack", onNextTrack ? () => onNextTrack() : null);
+      setHandler("previoustrack", onPreviousTrack ? () => onPreviousTrack() : null);
+      setHandler("seekbackward", throughList ? null : () => { if (audio) setAudioPosition(audio.currentTime - 10); });
+      setHandler("seekforward", throughList ? null : () => { if (audio) setAudioPosition(audio.currentTime + 10); });
+      // The scrubber is not one of those buttons, so it stays either way.
       setHandler("seekto", (event) => {
         if (typeof event.seekTime === "number") setAudioPosition(event.seekTime);
       });
     }
-    // With a list behind it, the lock screen and the car stereo should be able
-    // to move through that list — otherwise the phone in a pocket can only
-    // pause, and the queue is a thing you can see but not use.
-    setHandler("nexttrack", onNextTrack ? () => onNextTrack() : null);
-    setHandler("previoustrack", onPreviousTrack ? () => onPreviousTrack() : null);
     setHandler("stop", () => {
       if (!audio) return;
       audio.pause();
