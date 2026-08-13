@@ -7,7 +7,7 @@ const assets = await readdir(assetsDirectory);
 const budgets: Array<{ pattern: RegExp; maximumBytes: number; label: string }> = [
   { pattern: /^index-.*\.js$/, maximumBytes: 562_000, label: "initial JavaScript" },
   { pattern: /^SettingsPage-.*\.js$/, maximumBytes: 150_000, label: "settings route" },
-  { pattern: /^WatchPage-.*\.js$/, maximumBytes: 150_000, label: "watch route" },
+  { pattern: /^WatchPage-.*\.js$/, maximumBytes: 155_000, label: "watch route" },
   { pattern: /^hls-.*\.js$/, maximumBytes: 550_000, label: "lazy HLS runtime" },
   { pattern: /^EmojiCatalog-.*\.js$/, maximumBytes: 330_000, label: "lazy emoji catalog" },
   { pattern: /^index-.*\.css$/, maximumBytes: 100_000, label: "initial CSS" },

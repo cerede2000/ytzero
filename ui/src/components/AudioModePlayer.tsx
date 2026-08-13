@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import { LoaderCircle, Pause, Play, RefreshCw, Volume2, VolumeX } from "lucide-react";
 import { api } from "../api";
+import { audioStallStep, bufferedSecondsAhead, initialAudioStallState } from "../audioStallWatch";
 import { installInitialAudioPlaybackUnlock } from "../audioPlaybackUnlock";
 import { useI18n } from "../i18n";
 import { enforceLocalPlayerVolume } from "../localPlayerVolume";
@@ -15,6 +16,7 @@ import "./AudioModePlayer.css";
 const VOLUME_KEY = "localPlayerVolume";
 const MUTED_KEY = "localPlayerMuted";
 const MAX_RETRY_ATTEMPTS = 3;
+const STALL_SAMPLE_MS = 1_000;
 
 function fmtTime(seconds: number): string {
   const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
@@ -297,6 +299,45 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
       setBuffering(false);
     }
   };
+
+  /**
+   * Rebuild the source underneath a player that has stopped being able to
+   * play, keeping the listener where they were. This is the automatic twin of
+   * the retry button, for the failure that never reaches the error state.
+   */
+  const recoverFromStall = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    startedAtRef.current = audio.currentTime;
+    setBuffering(true);
+    try {
+      await api.retryAudio(videoId);
+    } catch {
+      // A failed re-resolve is still worth reloading from: the source may have
+      // been throttled rather than lost, and silence is the alternative.
+    }
+    setSourceRevision((revision) => revision + 1);
+  }, [videoId]);
+
+  useEffect(() => {
+    if (live) return;
+    let watch = initialAudioStallState;
+    const timer = window.setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      const step = audioStallStep(watch, {
+        at: Date.now(),
+        paused: audio.paused,
+        ended: audio.ended,
+        seeking: audio.seeking,
+        readyState: audio.readyState,
+        bufferedAhead: bufferedSecondsAhead(audio.buffered, audio.currentTime),
+      });
+      watch = step.state;
+      if (step.recover) void recoverFromStall();
+    }, STALL_SAMPLE_MS);
+    return () => window.clearInterval(timer);
+  }, [live, recoverFromStall]);
 
   // System-level controls keep the same <audio> element alive on the lock
   // screen; the custom controls below only replace its on-page chrome.
