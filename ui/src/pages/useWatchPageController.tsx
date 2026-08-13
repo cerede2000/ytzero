@@ -354,7 +354,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   } = useWatchPlaybackPosition({
     sourceKey: directProgressive ? "progressive" : "hls",
     audioActive, id, membersOnlyNotice, playerKind, playerRef,
-    privateVideoNotice, sharedStartSeconds, video,
+    privateVideoNotice, sharedStartSeconds, startFromBeginning, video,
   });
   const currentPlaybackSeconds = useCallback(() => resolveShareTimestamp(
     enhancePlayerStateRef.current?.state.currentTime,
@@ -726,14 +726,14 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     // A watch room is tied to one video. Keep the ended player and chat in
     // place instead of silently navigating the host away from every guest.
     if (watchTogetherRoomId) return;
-    if (nextInPlaylistRef.current) navigate(nextInPlaylistRef.current);
+    if (nextInPlaylistRef.current) navigate(nextInPlaylistRef.current, { state: { fromStart: true } });
     else if (queueEndAction === "advance") playNextQueueVideo();
     else if (queueEndAction === "offer") showUpNextVideo();
   }, [id, navigate, playNextQueueVideo, queueEndAction, showUpNextVideo, watchTogetherRoomId]);
 
   const playNextVideo = useCallback(() => {
     if (watchTogetherRoomId) return;
-    if (nextPlaylistPath) navigate(nextPlaylistPath);
+    if (nextPlaylistPath) navigate(nextPlaylistPath, { state: { fromStart: true } });
     else playNextQueueVideo();
   }, [navigate, nextPlaylistPath, playNextQueueVideo, watchTogetherRoomId]);
   const playPreviousVideo = useCallback(() => {

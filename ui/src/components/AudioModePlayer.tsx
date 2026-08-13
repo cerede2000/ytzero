@@ -389,6 +389,11 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
         if (typeof event.seekTime === "number") setAudioPosition(event.seekTime);
       });
     }
+    // With a list behind it, the lock screen and the car stereo should be able
+    // to move through that list — otherwise the phone in a pocket can only
+    // pause, and the queue is a thing you can see but not use.
+    setHandler("nexttrack", onNextTrack ? () => onNextTrack() : null);
+    setHandler("previoustrack", onPreviousTrack ? () => onPreviousTrack() : null);
     setHandler("stop", () => {
       if (!audio) return;
       audio.pause();

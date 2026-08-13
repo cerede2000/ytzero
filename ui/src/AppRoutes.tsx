@@ -36,7 +36,7 @@ type AppRoutesProps = {
   feedSort: "published" | "arrival";
   keepWatchedInFeed: boolean;
   isAdmin: boolean;
-  onPlay: (video: Video, playbackQueue?: PlaybackQueueContext) => void;
+  onPlay: (video: Video, playbackQueue?: PlaybackQueueContext, options?: PlayOptions) => void;
   profilePermissions: ProfilePermissions;
   channelOpenSync: ChannelOpenSyncMode;
   shortsEnabled: boolean;
