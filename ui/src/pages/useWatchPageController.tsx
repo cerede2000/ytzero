@@ -206,6 +206,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     play: goToUpNextVideo,
     playPrefetched: playNextQueueVideo,
     playPrevious: playPreviousQueueVideo,
+    preceding: precedingQueueVideo,
     prefetched: prefetchedQueueVideo,
     show: showUpNextVideo,
     skip: skipUpNextVideo,
@@ -338,7 +339,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     progressRef, streamPositionRef,
   } = useWatchPlaybackPosition({
     audioActive, id, membersOnlyNotice, playerKind, playerRef,
-    privateVideoNotice, sharedStartSeconds, startFromBeginning, video,
+    privateVideoNotice, resumeAtSeconds, sharedStartSeconds, startFromBeginning, video,
   });
   const currentPlaybackSeconds = useCallback(() => resolveShareTimestamp(
     enhancePlayerStateRef.current?.state.currentTime,
@@ -567,6 +568,19 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const previousPlaylistVideo = playlistIndex > 0 ? playlistVideos[playlistIndex - 1] : undefined;
   const nextPlaylistPath = nextPlaylistVideo ? `/watch/${nextPlaylistVideo.videoId}/playlist/${playlistId}${playlistSortSearch(playlistSort)}` : null;
   const previousPlaylistPath = previousPlaylistVideo ? `/watch/${previousPlaylistVideo.videoId}/playlist/${playlistId}${playlistSortSearch(playlistSort)}` : null;
+  /**
+   * The neighbouring entries, described well enough to be played by swapping
+   * the source of the element already playing. Handing a locked phone a new
+   * element instead loses the playback session, and the system gives it to
+   * whichever app asks next.
+   */
+  const trackAt = (entry: { videoId: string; title: string; channelTitle: string; thumbnail: string } | undefined) =>
+    entry ? { videoId: entry.videoId, title: entry.title, channelTitle: entry.channelTitle, thumbnail: entry.thumbnail } : null;
+  const queueTrack = (entry: Video | null | undefined) =>
+    entry ? { videoId: entry.video_id, title: entry.title, channelTitle: entry.channel_title, thumbnail: entry.thumbnail } : null;
+  const nextTrack = trackAt(nextPlaylistVideo) ?? (queueIsPlaylist ? queueTrack(prefetchedQueueVideo) : null);
+  const previousTrack = trackAt(previousPlaylistVideo) ?? (queueIsPlaylist ? queueTrack(precedingQueueVideo) : null);
+
   usePlaylistDownloadPrefetch({ enabled: prefetchNextPlaylistVideo, playlistId, routeNextVideoId: nextPlaylistVideo?.videoId, queue: playbackQueue, queueNextVideoId: prefetchedQueueVideo?.video_id });
 
   useEffect(() => {
@@ -1427,6 +1441,9 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     cancelOrRemoveDownload,
     canPlayNextVideo,
     canPlayPreviousVideo,
+    handleTrackAdvanced,
+    nextTrack,
+    previousTrack,
     captionsDefaultLang,
     captionsDefaultOn,
     capturePlaybackPosition,

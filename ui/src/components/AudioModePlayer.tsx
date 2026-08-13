@@ -5,6 +5,7 @@ import { api } from "../api";
 import { audioStallStep, bufferedSecondsAhead, initialAudioStallState } from "../audioStallWatch";
 import { installInitialAudioPlaybackUnlock } from "../audioPlaybackUnlock";
 import { useI18n } from "../i18n";
+import { img } from "../img";
 import { enforceLocalPlayerVolume } from "../localPlayerVolume";
 import type { WatchPlayerHandle } from "../playerHandle";
 import { Button } from "./ui";
@@ -18,6 +19,13 @@ const MUTED_KEY = "localPlayerMuted";
 const MAX_RETRY_ATTEMPTS = 3;
 const STALL_SAMPLE_MS = 1_000;
 const STALL_NUDGE_SECONDS = 0.01;
+
+export interface NeighbouringTrack {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+}
 
 function fmtTime(seconds: number): string {
   const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
@@ -131,6 +139,37 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     playlistSrc: retryPlaylistSrc,
     progressiveSrc: retryProgressiveSrc,
   });
+
+  /**
+   * Move to a neighbouring entry without letting go of the element.
+   *
+   * A locked phone keeps playing the element it granted playback to; replacing
+   * that element ends the session, and the system hands it to whichever app
+   * asks next. Swapping the source keeps the grant, so the list runs on. The
+   * page is told where playback went and catches up when someone looks at it.
+   */
+  const advancedRef = useRef<string | null>(null);
+  const switchToTrack = useCallback((track: NeighbouringTrack) => {
+    const audio = audioRef.current;
+    if (!audio || live) return false;
+    const base = transport === "playlist" ? api.audioPlaylistUrl(track.videoId) : api.audioUrl(track.videoId);
+    advancedRef.current = track.videoId;
+    startedAtRef.current = 0;
+    endedRef.current = false;
+    setBuffering(true);
+    audio.src = `${base}${base.includes("?") ? "&" : "?"}c=${callerRef.current}`;
+    audio.load();
+    void audio.play().catch(() => {});
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.channelTitle,
+        artwork: track.thumbnail ? [{ src: img(track.thumbnail), sizes: "480x360", type: "image/jpeg" }] : [],
+      });
+    } catch {}
+    onTrackAdvanced?.(track.videoId);
+    return true;
+  }, [live, onTrackAdvanced, transport]);
 
   const setAudioPosition = useCallback((seconds: number) => {
     const audio = audioRef.current;
@@ -346,9 +385,11 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
   useEffect(() => {
     if (live) return;
     let watch = initialAudioStallState;
+    // Once the element moved on by itself, rebuilding "its" source would mean
+    // rebuilding the wrong one and cutting off what is actually playing.
     const timer = window.setInterval(() => {
       const audio = audioRef.current;
-      if (!audio) return;
+      if (!audio || advancedRef.current) return;
       const step = audioStallStep(watch, {
         at: Date.now(),
         currentTime: audio.currentTime,
@@ -389,9 +430,15 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
       // worth more there than ten seconds — a phone in a pocket can reach the
       // next track and nothing else would let it — while a video on its own has
       // nowhere to skip to and keeps the seek buttons it has always had.
-      const throughList = Boolean(onNextTrack || onPreviousTrack);
-      setHandler("nexttrack", onNextTrack ? () => onNextTrack() : null);
-      setHandler("previoustrack", onPreviousTrack ? () => onPreviousTrack() : null);
+      const throughList = Boolean(onNextTrack || onPreviousTrack || nextTrack || previousTrack);
+      setHandler("nexttrack", onNextTrack || nextTrack ? () => {
+        if (document.hidden && nextTrack && switchToTrack(nextTrack)) return;
+        onNextTrack?.();
+      } : null);
+      setHandler("previoustrack", onPreviousTrack || previousTrack ? () => {
+        if (document.hidden && previousTrack && switchToTrack(previousTrack)) return;
+        onPreviousTrack?.();
+      } : null);
       setHandler("seekbackward", throughList ? null : () => { if (audio) setAudioPosition(audio.currentTime - 10); });
       setHandler("seekforward", throughList ? null : () => { if (audio) setAudioPosition(audio.currentTime + 10); });
       // The scrubber is not one of those buttons, so it stays either way.
@@ -499,6 +546,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
         onEnded={() => {
           if (endedRef.current) return;
           endedRef.current = true;
+          if (document.hidden && nextTrack && switchToTrack(nextTrack)) return;
           setPlaying(false);
           try { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none"; } catch {}
           onEnded?.();
