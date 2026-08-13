@@ -73,8 +73,11 @@
     height: 56.25cqw;
     transition: height 0.42s cubic-bezier(.22, 1, .36, 1);
   }
+  /* Audio mode has no picture to fill, so a fixed share of the viewport just
+     pushes the title and everything under it off a phone screen. Let it take
+     the height its own card needs. */
   .watch-player--audio {
-    height: max(56.25cqw, min(72svh, 680px));
+    height: auto;
   }
 }
 .watch-actions .dl-done { color: #7ee08a; }
