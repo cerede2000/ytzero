@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from "react";
 import { audioHlsBufferConfig, shouldFallbackFromHlsJs, shouldFallbackFromNativeHls } from "../audioMediaSourcePolicy";
+import { useMediaRelease } from "./useMediaRelease";
 
 export function useAudioMediaSource({
   audioRef,
@@ -14,6 +15,8 @@ export function useAudioMediaSource({
   playlistSrc?: string;
   progressiveSrc?: string;
 }): void {
+  useMediaRelease(audioRef);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
