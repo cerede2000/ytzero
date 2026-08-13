@@ -47,6 +47,10 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const feedSort = searchParams.get("sort") === "arrival" ? "arrival" : "published";
   const playlistSort = normalizePlaylistSort(searchParams.get("sort"));
   const watchTogetherRoomId = searchParams.get("room")?.trim() || null;
+  // Opening a list is not resuming a video: a position remembered for an entry
+  // belongs to the last time it was watched on its own, not to the run the
+  // listener has just started.
+  const startFromBeginning = Boolean((location.state as { fromStart?: unknown } | null)?.fromStart);
   const routePlaybackQueue = useMemo<PlaybackQueueContext | null>(() => {
     const stateQueue = (location.state as { playbackQueue?: unknown } | null)?.playbackQueue;
     if (isPlaybackQueueContext(stateQueue)) return stateQueue;
@@ -351,7 +355,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     progressRef, streamPositionRef,
   } = useWatchPlaybackPosition({
     audioActive, id, membersOnlyNotice, playerKind, playerRef,
-    privateVideoNotice, sharedStartSeconds, video,
+    privateVideoNotice, sharedStartSeconds, startFromBeginning, video,
   });
   const currentPlaybackSeconds = useCallback(() => resolveShareTimestamp(
     enhancePlayerStateRef.current?.state.currentTime,
@@ -715,14 +719,14 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     // A watch room is tied to one video. Keep the ended player and chat in
     // place instead of silently navigating the host away from every guest.
     if (watchTogetherRoomId) return;
-    if (nextInPlaylistRef.current) navigate(nextInPlaylistRef.current);
+    if (nextInPlaylistRef.current) navigate(nextInPlaylistRef.current, { state: { fromStart: true } });
     else if (queueEndAction === "advance") playNextQueueVideo();
     else if (queueEndAction === "offer") showUpNextVideo();
   }, [id, navigate, playNextQueueVideo, queueEndAction, showUpNextVideo, watchTogetherRoomId]);
 
   const playNextVideo = useCallback(() => {
     if (watchTogetherRoomId) return;
-    if (nextPlaylistPath) navigate(nextPlaylistPath);
+    if (nextPlaylistPath) navigate(nextPlaylistPath, { state: { fromStart: true } });
     else playNextQueueVideo();
   }, [navigate, nextPlaylistPath, playNextQueueVideo, watchTogetherRoomId]);
   const playPreviousVideo = useCallback(() => {

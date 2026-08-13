@@ -20,7 +20,18 @@ export type PlaybackQueueContext =
 export const SESSION_PLAY_QUEUE_MAX_ITEMS = 100;
 const VIDEO_ID = /^[A-Za-z0-9_-]{6,20}$/;
 
-export type PlayVideo = (video: Video, queue?: PlaybackQueueContext) => void;
+/**
+ * Options a caller can attach to starting playback.
+ *
+ * `fromStart` says this is the opening of a list rather than the resuming of
+ * something watched: a remembered position belongs to the video you left, not
+ * to the list you just pressed play on.
+ */
+export interface PlayOptions {
+  fromStart?: boolean;
+}
+
+export type PlayVideo = (video: Video, queue?: PlaybackQueueContext, options?: PlayOptions) => void;
 
 export function isPlaybackQueueContext(value: unknown): value is PlaybackQueueContext {
   if (!value || typeof value !== "object") return false;

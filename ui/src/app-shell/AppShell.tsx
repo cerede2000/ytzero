@@ -8,7 +8,7 @@ import { Toast } from "../components/ui";
 import { DeArrowProvider } from "../dearrow";
 import { ENHANCE_CONFIGURATION_ELEMENT_ID, serializeEnhanceConfiguration } from "../enhanceBridge";
 import { splitNavItems } from "../nav";
-import type { PlaybackQueueContext } from "../playbackQueue";
+import type { PlaybackQueueContext, PlayOptions } from "../playbackQueue";
 import { AppNameContext } from "../useDocumentTitle";
 import AppBootstrap from "./AppBootstrap";
 import AppSidebar from "./AppSidebar";
@@ -34,9 +34,9 @@ export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
 
   useSidebarVisibility(location.pathname);
 
-  const play = useCallback((video: Video, playbackQueue?: PlaybackQueueContext) => navigate(
+  const play = useCallback((video: Video, playbackQueue?: PlaybackQueueContext, options?: PlayOptions) => navigate(
     `/watch/${video.video_id}`,
-    playbackQueue ? { state: { playbackQueue } } : undefined,
+    playbackQueue || options?.fromStart ? { state: { playbackQueue, fromStart: options?.fromStart } } : undefined,
   ), [navigate]);
 
   if (!i18nReady || !preferences.ready || !plugins.ready || !profile.ready) {

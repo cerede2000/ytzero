@@ -127,7 +127,9 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
   if (!playlist && loading) return <VideoGridSkeleton gridSize="sm" />;
   if (!playlist) return null;
   const playbackQueue: PlaybackQueueContext = { version: 1, kind: "user-playlist", playlistUuid: playlist.portable_uuid, sort };
-  const playPlaylistVideo = (video: Video) => onPlay(video, playbackQueue);
+  // Opening a list is not resuming a video: what is remembered for an entry
+  // belongs to the last time it was watched on its own.
+  const playPlaylistVideo = (video: Video) => onPlay(video, playbackQueue, { fromStart: true });
   const downloadMenuItem = !canDownloadPlaylist ? null : videos.some((video) => video.downloads_enabled)
     ? <Popconfirm
         triggerClassName="ui-menu__popover-trigger"
