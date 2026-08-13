@@ -30,6 +30,7 @@ import {
   type ChannelManualStatus,
   type ChannelRefreshScheduleDetails,
   type ChannelSearchResult,
+  type SearchSuggestChannel,
   type ChannelShortsFeedVisibility,
   type ChannelSyncJob,
   type ChildConfig,
@@ -166,6 +167,11 @@ export const api = {
   cleanupUndo: () => http<{ restored: number }>("/cleanup/undo", { method: "POST", body: "{}" }),
   inProgress: () => sharedGet<{ videos: Video[] }>("in-progress", "/in-progress"),
   youtubeSearch: (q: string) => http<{ results: SearchResult[]; channels: ChannelSearchResult[] }>(`/search/youtube?q=${encodeURIComponent(q)}`),
+  searchSuggest: (q: string, language: string, signal?: AbortSignal) =>
+    http<{ suggestions: string[]; channels: SearchSuggestChannel[] }>(
+      `/search/suggest?q=${encodeURIComponent(q)}&hl=${encodeURIComponent(language)}`,
+      { signal },
+    ),
   plugins: () => sharedGet<{ plugins: PluginManifest[] }>("plugins", "/plugins"),
   updatePlugin: (id: string, enabled: boolean) =>
     http<{ plugins: PluginManifest[] }>(`/plugins/${id}`, { method: "PUT", body: JSON.stringify({ enabled }) }),

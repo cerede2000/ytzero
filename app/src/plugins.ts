@@ -721,6 +721,19 @@ async function selectVideo(uid: number, videoId: string) {
   `).get(uid, uid, videoId) as any | null;
 }
 
+/**
+ * Free-text completions for the search box.
+ *
+ * Core matches the local library itself (followed channels, in the route), but
+ * completing an arbitrary query needs a source outside it, so core ships none
+ * and answers empty. A plugin owns that source and fills this in — the same way
+ * TubeArchivist contributes rows to the feed — which keeps a stock install from
+ * sending anything anywhere while typing.
+ */
+export async function searchQuerySuggestions(_uid: number, _query: string, _language: string): Promise<string[]> {
+  return [];
+}
+
 export async function discoveryRecommendations(_uid: number): Promise<{ recommendations: DiscoveryRecommendation[]; enabled: boolean }> {
   return { recommendations: [], enabled: pluginEnabled("discovery") };
 }

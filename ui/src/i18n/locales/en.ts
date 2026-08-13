@@ -222,6 +222,8 @@ export const en = {
     search: "Search",
     settingsSearchNoResults: "No matching settings",
     searchPlaceholder: "Search...",
+    searchSuggestions: "Search suggestions",
+    searchSuggestionChannel: "Channel",
     clear: "Clear",
     clearFilters: "Clear filters",
     showAll: "Show all",

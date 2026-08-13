@@ -222,6 +222,8 @@ export const de: Locale = {
     search: "Suche",
     settingsSearchNoResults: "Keine passenden Einstellungen",
     searchPlaceholder: "Suchen...",
+    searchSuggestions: "Suchvorschläge",
+    searchSuggestionChannel: "Kanal",
     clear: "Löschen",
     clearFilters: "Filter zurücksetzen",
     showAll: "Alle anzeigen",
