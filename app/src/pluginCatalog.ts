@@ -122,6 +122,46 @@ export const SOCIAL_SETTINGS: PluginSettingSource[] = [
   },
 ];
 
+export const SEARCH_SUGGEST_SETTINGS: PluginSettingSource[] = [
+  {
+    key: "suggestion_language",
+    type: "select",
+    label: { en: "Suggestion language", pl: "Język podpowiedzi", de: "Sprache der Vorschläge" },
+    description: {
+      en: "Completions follow the interface language by default, which only covers a few languages. Pick another one to search in a language the interface does not offer.",
+      pl: "Podpowiedzi domyślnie podążają za językiem interfejsu, który obejmuje tylko kilka języków. Wybierz inny, aby szukać w języku niedostępnym w interfejsie.",
+      de: "Vervollständigungen folgen standardmäßig der Oberflächensprache, die nur wenige Sprachen abdeckt. Wähle eine andere, um in einer nicht angebotenen Sprache zu suchen.",
+    },
+    options: [
+      { value: "auto", label: { en: "Follow the interface", pl: "Zgodnie z interfejsem", de: "Wie die Oberfläche" } },
+      { value: "en", label: { en: "English", pl: "English", de: "English" } },
+      { value: "fr", label: { en: "Français", pl: "Français", de: "Français" } },
+      { value: "de", label: { en: "Deutsch", pl: "Deutsch", de: "Deutsch" } },
+      { value: "es", label: { en: "Español", pl: "Español", de: "Español" } },
+      { value: "it", label: { en: "Italiano", pl: "Italiano", de: "Italiano" } },
+      { value: "pt", label: { en: "Português", pl: "Português", de: "Português" } },
+      { value: "nl", label: { en: "Nederlands", pl: "Nederlands", de: "Nederlands" } },
+      { value: "pl", label: { en: "Polski", pl: "Polski", de: "Polski" } },
+      { value: "ja", label: { en: "日本語", pl: "日本語", de: "日本語" } },
+    ],
+    defaultValue: "auto",
+  },
+  {
+    key: "suggestion_limit",
+    type: "slider",
+    min: 3,
+    max: 10,
+    step: 1,
+    label: { en: "Number of suggestions", pl: "Liczba podpowiedzi", de: "Anzahl der Vorschläge" },
+    description: {
+      en: "How many completions the search box offers under your own channels.",
+      pl: "Ile podpowiedzi pole wyszukiwania pokazuje pod Twoimi kanałami.",
+      de: "Wie viele Vervollständigungen das Suchfeld unter deinen Kanälen anbietet.",
+    },
+    defaultValue: 10,
+  },
+];
+
 export const TUBE_ARCHIVIST_SETTINGS: PluginSettingSource[] = [
   {
     key: "sync_interval_minutes",
