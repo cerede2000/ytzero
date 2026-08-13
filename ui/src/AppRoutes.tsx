@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { api, type ChildStatus, type ProfilePermissions, type Video } from "./api";
 import type { ToastVariant } from "./events";
-import type { PlaybackQueueContext } from "./playbackQueue";
+import type { PlaybackQueueContext, PlayOptions } from "./playbackQueue";
 import { DelayedPageSkeleton } from "./components/LoadingState";
 
 const ArchivePage = lazy(() => import("./pages/ArchivePage"));
@@ -34,7 +34,7 @@ type AppRoutesProps = {
   enabledPluginRoutes: Set<string> | null;
   feedSort: "published" | "arrival";
   isAdmin: boolean;
-  onPlay: (video: Video, playbackQueue?: PlaybackQueueContext) => void;
+  onPlay: (video: Video, playbackQueue?: PlaybackQueueContext, options?: PlayOptions) => void;
   profilePermissions: ProfilePermissions;
   shortsEnabled: boolean;
   showTopChannels: boolean;

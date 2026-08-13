@@ -12,6 +12,7 @@ export function useWatchPlaybackPosition({
   playerRef,
   privateVideoNotice,
   sharedStartSeconds,
+  startFromBeginning,
   video,
 }: {
   audioActive: boolean;
@@ -21,6 +22,7 @@ export function useWatchPlaybackPosition({
   playerRef: RefObject<WatchPlayerHandle | null>;
   privateVideoNotice: boolean;
   sharedStartSeconds: number;
+  startFromBeginning: boolean;
   video: Video | null;
 }) {
   const streamPositionRef = useRef(0);
@@ -29,7 +31,7 @@ export function useWatchPlaybackPosition({
   const appliedSharedTargetRef = useRef<{ videoId: string | null; seconds: number }>({ videoId: null, seconds: 0 });
   const matchingVideo = video?.video_id === id ? video : null;
   const livePlayback = matchingVideo?.live_status === "live" || matchingVideo?.live_status === "upcoming";
-  const savedStartSeconds = !livePlayback && matchingVideo?.watch_position && matchingVideo.watch_duration && matchingVideo.watch_duration > 0
+  const savedStartSeconds = !startFromBeginning && !livePlayback && matchingVideo?.watch_position && matchingVideo.watch_duration && matchingVideo.watch_duration > 0
     && matchingVideo.watch_position / matchingVideo.watch_duration < 0.9
     ? Math.floor(matchingVideo.watch_position) : 0;
   // Position refs advance every second without rendering. Do not let an

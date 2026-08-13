@@ -52,10 +52,30 @@ export function useUpNextQueue({ currentVideoId, direction, navigate, queue }: {
     if (prefetched) setVideo(prefetched);
   }, [prefetched]);
 
+  // Running on through a list starts each entry where it begins; a feed hands
+  // you a video you may well have left part-way through, and that position is
+  // still yours.
+  const queueState = useCallback(
+    () => queue ? { state: { playbackQueue: queue, fromStart: isContinuousPlaylistQueue(queue) } } : undefined,
+    [queue],
+  );
+
   const playPrefetched = useCallback(() => {
     if (!prefetched) return;
-    navigate(`/watch/${prefetched.video_id}`, queue ? { state: { playbackQueue: queue } } : undefined);
-  }, [navigate, prefetched, queue]);
+    navigate(`/watch/${prefetched.video_id}`, queueState());
+  }, [navigate, prefetched, queueState]);
+
+  /**
+   * The entry before this one. Nothing is prefetched for it: going back is a
+   * deliberate act, rare enough to pay for its own lookup, and at the top of a
+   * list there is simply nothing to go back to.
+   */
+  const playPrevious = useCallback(async () => {
+    if (!queue || !currentVideoId) return;
+    const resolved = await resolveNextVideo(queue, currentVideoId, direction === "newest" ? "oldest" : "newest")
+      .catch(() => ({ video: null }));
+    if (resolved.video) navigate(`/watch/${resolved.video.video_id}`, queueState());
+  }, [currentVideoId, direction, navigate, queue, queueState]);
 
   const playPrevious = useCallback(() => {
     if (!previous) return;
@@ -64,8 +84,8 @@ export function useUpNextQueue({ currentVideoId, direction, navigate, queue }: {
 
   const play = useCallback(() => {
     if (!video) return;
-    navigate(`/watch/${video.video_id}`, queue ? { state: { playbackQueue: queue } } : undefined);
-  }, [navigate, queue, video]);
+    navigate(`/watch/${video.video_id}`, queueState());
+  }, [navigate, queueState, video]);
 
   const skip = useCallback(async () => {
     if (!video || !queue || loadingNext) return;
