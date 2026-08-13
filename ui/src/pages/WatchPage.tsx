@@ -60,6 +60,7 @@ import { getWatchTogetherLabels, WatchTogetherJoinStatus, WatchTogetherPanelSlot
 import WatchDescription from "../components/watch/WatchDescription";
 import WatchPlaylistPanel from "../components/watch/WatchPlaylistPanel";
 import WatchPlayerModeToggle from "../components/watch/WatchPlayerModeToggle";
+import WatchStreamUpgrade from "../components/watch/WatchStreamUpgrade";
 import WatchRestrictedPlayer from "../components/watch/WatchRestrictedPlayer";
 import { colonDurationToSeconds, formatWatchTime } from "./watchRuntime";
 import { resolveWatchAudioSources } from "./watchAudioMode";
@@ -76,6 +77,8 @@ export default function WatchPage() {
   const videoCardActionConfig = useAppliedVideoCardActionConfig();
   const showSchedulingRow = videoCardActionConfig.actions.some((action) => action.id === "schedule" && !action.hidden);
   const showSessionQueueAction = videoCardActionConfig.actions.some((action) => action.id === "sessionQueue" && !action.hidden);
+  // Overlay buttons fade with the native player's own control bar.
+  const [playerControlsVisible, setPlayerControlsVisible] = useState(true);
   // The controller derives the effective active state from video/profile/room
   // eligibility before it decides whether to mount the iframe.
   const controller = useWatchPageController(audioMode);
@@ -236,6 +239,17 @@ export default function WatchPage() {
               videoLabel={t("playerAudioModeExit")}
               onToggle={(active) => { capturePlaybackPosition(); setAudioMode(active); }}
             />
+            {playerKind === "stream" && video && !audioActive && !watchTogetherTransportLocked && (
+              <WatchStreamUpgrade
+                downloading={downloadStatus === "queued" || downloadStatus === "downloading"}
+                percent={backgroundDownload.percent}
+                visible={playerControlsVisible}
+                downloadLabel={t("playerUpgradeHd")}
+                cancelLabel={t("playerStayInStream")}
+                onDownload={requestDownload}
+                onCancel={cancelOrRemoveDownload}
+              />
+            )}
             <div
               ref={playerWrapRef}
               className={`watch-player${audioActive ? " watch-player--audio" : ""}${usingLocal ? " watch-player--local" : ""}${watchTogetherTransportLocked ? " watch-player--transport-locked" : ""}`}
@@ -276,6 +290,7 @@ export default function WatchPage() {
                   durationSeconds={colonDurationToSeconds(video.duration)}
                   onError={exitStreaming} onExitStreaming={watchTogetherTransportLocked ? undefined : exitStreaming}
                   exitStreamingLabel={t("watchExitStreaming")}
+                  onControlsVisibleChange={setPlayerControlsVisible}
                   src={api.videoStreamUrl(video.video_id)}
                   poster={img(video.thumbnail)}
                   autoplay={!watchTogetherRoomId}
