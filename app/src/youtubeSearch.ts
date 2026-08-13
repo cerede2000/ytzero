@@ -221,5 +221,42 @@ async function searchYouTube(query: string, userId?: number): Promise<{ results:
   return result;
 }
 
-  return { collectSearchVideos, searchChannelFromLockup, searchVideoFromLockup, searchYouTube };
+// ---------- search suggestions (autocomplete) ----------
+// YouTube's own suggestion service. The `client=firefox` flavour answers with
+// plain JSON — ["typed", ["suggestion", ...], ...] — rather than the JSONP the
+// web player uses, so nothing has to be unwrapped. `hl` follows the UI language
+// so a German install gets German completions.
+
+const suggestCache = new Map<string, { at: number; data: string[] }>();
+const SUGGEST_TTL = 5 * 60_000;
+const SUGGEST_TIMEOUT_MS = 3_000;
+// One entry per prefix typed, so this grows far faster than the search cache:
+// keep it bounded instead of letting a long session accumulate every keystroke.
+const SUGGEST_CACHE_MAX = 500;
+
+const SUGGEST_MAX = 10;
+
+/** `limit` only trims the answer, so the cache stays valid when it changes. */
+async function fetchSearchSuggestions(query: string, language = "en", limit = SUGGEST_MAX): Promise<string[]> {
+  const take = Math.max(1, Math.min(SUGGEST_MAX, Math.trunc(limit) || SUGGEST_MAX));
+  const key = `${language}\u0000${query}`;
+  const cached = suggestCache.get(key);
+  if (cached && Date.now() - cached.at < SUGGEST_TTL) return cached.data.slice(0, take);
+
+  const url = "https://suggestqueries.google.com/complete/search"
+    + `?client=firefox&ds=yt&hl=${encodeURIComponent(language)}&q=${encodeURIComponent(query)}`;
+  // Suggestions are a nicety typed against: never let one hang the search box.
+  const res = await fetch(url, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`YouTube suggestions failed (${res.status})`);
+  const payload = JSON.parse(await res.text());
+  const data = (Array.isArray(payload?.[1]) ? payload[1] : [])
+    .filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    .slice(0, SUGGEST_MAX);
+
+  if (suggestCache.size >= SUGGEST_CACHE_MAX) suggestCache.clear();
+  suggestCache.set(key, { at: Date.now(), data });
+  return data.slice(0, take);
+}
+
+  return { collectSearchVideos, fetchSearchSuggestions, searchChannelFromLockup, searchVideoFromLockup, searchYouTube };
 }

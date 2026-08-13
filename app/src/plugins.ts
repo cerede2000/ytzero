@@ -1,6 +1,6 @@
 import { database } from "./database";
 import { getSetting, reloadSettingCache } from "./db";
-import { classifyIsShort, fetchChannelAbout, fetchVideoInfo, searchYouTube, type SearchResult, type VideoInfo } from "./youtube";
+import { classifyIsShort, fetchChannelAbout, fetchSearchSuggestions, fetchVideoInfo, searchYouTube, type SearchResult, type VideoInfo } from "./youtube";
 import { isYouTubeRefusalError } from "./youtubeRateLimit";
 import { buildKeywordPlan, tokenizeDiscoveryText, type KeywordSeed } from "./discoveryKeywords";
 import { maintenanceActive } from "./maintenance";
@@ -23,6 +23,7 @@ import {
   DISCOVERY_SETTINGS,
   PLUGINS,
   PLUGIN_TEXT,
+  SEARCH_SUGGEST_SETTINGS,
   SOCIAL_SETTINGS,
   TUBE_ARCHIVIST_SETTINGS,
   type LocalizedText,
@@ -121,6 +122,7 @@ function settingDefs(pluginId: string): PluginSettingSource[] {
   if (pluginId === "discovery") return DISCOVERY_SETTINGS;
   if (pluginId === "social") return SOCIAL_SETTINGS;
   if (pluginId === "tubearchivist") return TUBE_ARCHIVIST_SETTINGS;
+  if (pluginId === "search-suggest") return SEARCH_SUGGEST_SETTINGS;
   return [];
 }
 
@@ -308,6 +310,20 @@ export const PLUGIN_BACKUP_ADAPTERS: readonly PortablePluginBackupAdapter[] = [
           ON CONFLICT(plugin_id,user_id,key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at
         `).run(userId, skinTone);
       }
+    },
+  },
+  {
+    id: "search-suggest",
+    scope: "profile",
+    schemaVersion: 1,
+    async export(userId) {
+      const settings = (await getPluginSettings(userId, "search-suggest")).settings;
+      return { settings: Object.fromEntries(Object.entries(settings).filter(([key]) => ["suggestion_language", "suggestion_limit"].includes(key))) };
+    },
+    async restore(userId, value) {
+      const input = value && typeof value === "object" ? value as any : {};
+      const settings = Object.fromEntries(Object.entries(input.settings ?? {}).filter(([key]) => ["suggestion_language", "suggestion_limit"].includes(key)));
+      await setPluginSettings(userId, "search-suggest", settings);
     },
   },
   {
@@ -725,13 +741,24 @@ async function selectVideo(uid: number, videoId: string) {
  * Free-text completions for the search box.
  *
  * Core matches the local library itself (followed channels, in the route), but
- * completing an arbitrary query needs a source outside it, so core ships none
- * and answers empty. A plugin owns that source and fills this in — the same way
- * TubeArchivist contributes rows to the feed — which keeps a stock install from
- * sending anything anywhere while typing.
+ * completing an arbitrary query needs a source outside it. The Search
+ * suggestions plugin owns that source — the same way TubeArchivist contributes
+ * rows to the feed — so with it disabled (the default) nothing is sent anywhere
+ * while typing and this answers empty.
  */
-export async function searchQuerySuggestions(_uid: number, _query: string, _language: string): Promise<string[]> {
-  return [];
+export async function searchQuerySuggestions(uid: number, query: string, language: string): Promise<string[]> {
+  if (!pluginEnabled("search-suggest")) return [];
+  try {
+    const { settings } = await getPluginSettings(uid, "search-suggest");
+    // The interface only speaks a few languages; the chosen one wins over it so
+    // a viewer can complete in a language YT Zero itself is not translated to.
+    const chosen = String(settings.suggestion_language ?? "auto");
+    const limit = Number(settings.suggestion_limit ?? 10);
+    return await fetchSearchSuggestions(query, chosen === "auto" ? language : chosen, limit);
+  } catch {
+    // Typed against on every keystroke: an outage must never break the box.
+    return [];
+  }
 }
 
 export async function discoveryRecommendations(_uid: number): Promise<{ recommendations: DiscoveryRecommendation[]; enabled: boolean }> {
