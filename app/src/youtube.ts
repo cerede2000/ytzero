@@ -892,6 +892,7 @@ export function relativePublishedAt(published: PublishedAgo, now = new Date()): 
 
 export const {
   collectSearchVideos,
+  fetchSearchSuggestions,
   searchChannelFromLockup,
   searchVideoFromLockup,
   searchYouTube,
