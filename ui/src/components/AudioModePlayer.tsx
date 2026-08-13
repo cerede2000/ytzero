@@ -19,6 +19,8 @@ const MUTED_KEY = "localPlayerMuted";
 const MAX_RETRY_ATTEMPTS = 3;
 const STALL_SAMPLE_MS = 1_000;
 const STALL_NUDGE_SECONDS = 0.01;
+/** How long before the end of an entry the next one is made ready. */
+const PREFETCH_LEAD_SECONDS = 25;
 
 export interface NeighbouringTrack {
   videoId: string;
@@ -148,14 +150,35 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
    * asks next. Swapping the source keeps the grant, so the list runs on. The
    * page is told where playback went and catches up when someone looks at it.
    */
+  const trackSource = useCallback((id: string) => {
+    const base = transport === "playlist" ? api.audioPlaylistUrl(id) : api.audioUrl(id);
+    return `${base}${base.includes("?") ? "&" : "?"}c=${callerRef.current}`;
+  }, [transport]);
+
+  /**
+   * Make the next entry ready before it is wanted.
+   *
+   * Handing over costs a source resolution — seconds of yt-dlp, spent in the
+   * silence between two tracks, and worse on a weak connection. Asking for it
+   * while the current entry still has time left moves that cost off the gap;
+   * the answer is cached server-side by the time the element asks for real.
+   */
+  const warmedRef = useRef<string | null>(null);
+  const warmNextTrack = useCallback((track: NeighbouringTrack) => {
+    if (warmedRef.current === track.videoId) return;
+    warmedRef.current = track.videoId;
+    void fetch(trackSource(track.videoId), { method: "HEAD" }).catch(() => {});
+  }, [trackSource]);
+
   const advancedRef = useRef<string | null>(null);
   const playingTrackRef = useRef<NeighbouringTrack | null>(null);
   const switchToTrack = useCallback((track: NeighbouringTrack) => {
     const audio = audioRef.current;
     if (!audio || live) return false;
-    const base = transport === "playlist" ? api.audioPlaylistUrl(track.videoId) : api.audioUrl(track.videoId);
+    const base = trackSource(track.videoId);
     advancedRef.current = track.videoId;
     playingTrackRef.current = track;
+    warmedRef.current = null;
     startedAtRef.current = 0;
     endedRef.current = false;
     setBuffering(true);
@@ -568,6 +591,8 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
         onTimeUpdate={(event) => {
           const audio = event.currentTarget;
           enforceLocalPlayerVolume(audio, volume);
+          if (nextTrack && Number.isFinite(audio.duration) && audio.duration > 0
+            && audio.duration - audio.currentTime <= PREFETCH_LEAD_SECONDS) warmNextTrack(nextTrack);
           setCurrentTime(audio.currentTime);
           updateBuffered();
           if (live || !("mediaSession" in navigator) || !Number.isFinite(audio.currentTime) || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
