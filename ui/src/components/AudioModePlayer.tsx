@@ -149,11 +149,13 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
    * page is told where playback went and catches up when someone looks at it.
    */
   const advancedRef = useRef<string | null>(null);
+  const playingTrackRef = useRef<NeighbouringTrack | null>(null);
   const switchToTrack = useCallback((track: NeighbouringTrack) => {
     const audio = audioRef.current;
     if (!audio || live) return false;
     const base = transport === "playlist" ? api.audioPlaylistUrl(track.videoId) : api.audioUrl(track.videoId);
     advancedRef.current = track.videoId;
+    playingTrackRef.current = track;
     startedAtRef.current = 0;
     endedRef.current = false;
     setBuffering(true);
@@ -414,13 +416,17 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
       try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
     };
-    // Whatever the page still believes, the element may have moved on; the
-    // lock screen is showing the entry that is playing and must keep it.
-    if (!advancedRef.current) try {
+    // Whatever the page still believes, the element may have moved on, and it
+    // is the entry playing that belongs on the lock screen. Always write one:
+    // this effect clears the metadata as it re-runs, so declining to set it
+    // leaves a placeholder cover under the name of a track long finished.
+    const playing = playingTrackRef.current;
+    const shownArtwork = playing ? img(playing.thumbnail) : artworkUrl;
+    try {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: title ?? "",
-        artist: channelTitle ?? "",
-        artwork: artworkUrl ? [{ src: artworkUrl, sizes: "480x360", type: "image/jpeg" }] : [],
+        title: (playing ? playing.title : title) ?? "",
+        artist: (playing ? playing.channelTitle : channelTitle) ?? "",
+        artwork: shownArtwork ? [{ src: shownArtwork, sizes: "480x360", type: "image/jpeg" }] : [],
       });
     } catch {}
     setHandler("play", () => audio?.play().catch(() => {}));
@@ -432,12 +438,17 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
       // worth more there than ten seconds — a phone in a pocket can reach the
       // next track and nothing else would let it — while a video on its own has
       // nowhere to skip to and keeps the seek buttons it has always had.
-      const throughList = Boolean(onNextTrack || onPreviousTrack || nextTrack || previousTrack);
-      setHandler("nexttrack", onNextTrack || nextTrack ? () => {
+      // Once the element has moved on by itself, what it can reach is what was
+      // resolved for where it now is — the page's own neighbours belong to an
+      // entry that finished a while ago.
+      const canGoNext = advancedRef.current ? Boolean(nextTrack) : Boolean(onNextTrack || nextTrack);
+      const canGoBack = advancedRef.current ? Boolean(previousTrack) : Boolean(onPreviousTrack || previousTrack);
+      const throughList = canGoNext || canGoBack;
+      setHandler("nexttrack", canGoNext ? () => {
         if (document.hidden && nextTrack && switchToTrack(nextTrack)) return;
         onNextTrack?.();
       } : null);
-      setHandler("previoustrack", onPreviousTrack || previousTrack ? () => {
+      setHandler("previoustrack", canGoBack ? () => {
         if (document.hidden && previousTrack && switchToTrack(previousTrack)) return;
         onPreviousTrack?.();
       } : null);
@@ -549,6 +560,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
           if (endedRef.current) return;
           endedRef.current = true;
           if (document.hidden && nextTrack && switchToTrack(nextTrack)) return;
+          if (advancedRef.current && !nextTrack) { setPlaying(false); return; }
           setPlaying(false);
           try { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none"; } catch {}
           onEnded?.();
