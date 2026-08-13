@@ -70,12 +70,9 @@ export function useUpNextQueue({ currentVideoId, direction, navigate, queue }: {
    * deliberate act, rare enough to pay for its own lookup, and at the top of a
    * list there is simply nothing to go back to.
    */
-  const playPrevious = useCallback(async () => {
-    if (!queue || !currentVideoId) return;
-    const resolved = await resolveNextVideo(queue, currentVideoId, direction === "newest" ? "oldest" : "newest")
-      .catch(() => ({ video: null }));
-    if (resolved.video) navigate(`/watch/${resolved.video.video_id}`, queueState());
-  }, [currentVideoId, direction, navigate, queue, queueState]);
+  const playPrevious = useCallback(() => {
+    if (preceding) navigate(`/watch/${preceding.video_id}`, queueState());
+  }, [navigate, preceding, queueState]);
 
   const playPrevious = useCallback(() => {
     if (!previous) return;
