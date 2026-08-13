@@ -45,8 +45,10 @@ describe("resolvePlayerKind", () => {
   });
 
   describe("experimental streaming", () => {
-    test("streams a not-yet-downloaded video when enabled", () => {
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true })).toBe("stream");
+    test("defaults to the YouTube embed even when streaming is enabled", () => {
+      // Embed-first is the default; streaming only exists as a fallback here.
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true })).toBe("youtube");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, watchMode: "download" })).toBe("youtube");
     });
 
     test("shows loading while the streamable video's library row is being imported", () => {
@@ -61,38 +63,56 @@ describe("resolvePlayerKind", () => {
     });
 
     test("prefers streaming over the wait/ask panels", () => {
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, watchMode: "download" })).toBe("stream");
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, watchMode: "ask" })).toBe("stream");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", watchMode: "download" })).toBe("stream");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", watchMode: "ask" })).toBe("stream");
+    });
+
+    test("drops to the direct stream when the embed can't play", () => {
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, iframeFallback: true })).toBe("stream");
+      // ...but not when streaming is off — the embed error just stands.
+      expect(resolvePlayerKind({ ...base, streamingEnabled: false, iframeFallback: true })).toBe("youtube");
+    });
+
+    test("streams first when the default source is the direct stream", () => {
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream" })).toBe("stream");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", watchMode: "download" })).toBe("stream");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", downloadStatus: "downloading" })).toBe("stream");
     });
 
     test("still plays a finished local file instead of re-streaming", () => {
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, downloadStatus: "done" })).toBe("local");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", downloadStatus: "done" })).toBe("local");
     });
 
-    test("never streams a live broadcast", () => {
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, isLive: true })).toBe("youtube");
+    test("routes a no-muxed video to the download-wait panel in either mode", () => {
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, sourceChoice: "wait" })).toBe("waiting");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", sourceChoice: "wait" })).toBe("waiting");
     });
 
-    test("lets the viewer fall back to YouTube", () => {
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, playerSource: "youtube" })).toBe("youtube");
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, sourceChoice: "remote" })).toBe("youtube");
+    test("plays a live broadcast natively when streaming is on", () => {
+      // A running live streams via its native HLS (so it can go PiP / background).
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, isLive: true })).toBe("stream");
+      // An upcoming (not-yet-started) stream has nothing to play → keep the iframe.
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, isLive: true, isUpcoming: true })).toBe("youtube");
+      // Without streaming enabled, a live still falls back to the iframe.
+      expect(resolvePlayerKind({ ...base, streamingEnabled: false, isLive: true })).toBe("youtube");
+    });
+
+    test("lets the viewer fall back to YouTube from the direct stream", () => {
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", playerSource: "youtube" })).toBe("youtube");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", sourceChoice: "youtube" })).toBe("youtube");
     });
 
     test("does not stream for a downloads-only child profile", () => {
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, childDownloadsOnly: true })).toBe("blocked");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", childDownloadsOnly: true })).toBe("blocked");
     });
 
     test("hands off to the local player once the background download finishes", () => {
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, downloadStatus: "done" })).toBe("local");
+      expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", downloadStatus: "done" })).toBe("local");
     });
 
     test("keeps an active stream mounted until the viewer accepts the finished local file", () => {
       expect(resolvePlayerKind({ ...base, streamingEnabled: true, downloadStatus: "done", keepStreamingAfterDownload: true })).toBe("stream");
       expect(resolvePlayerKind({ ...base, streamingEnabled: true, downloadStatus: "done", keepStreamingAfterDownload: true, playerSource: "youtube" })).toBe("youtube");
-    });
-
-    test("keeps streaming while the download is still in progress", () => {
-      expect(resolvePlayerKind({ ...base, streamingEnabled: true, downloadStatus: "downloading" })).toBe("stream");
     });
   });
 

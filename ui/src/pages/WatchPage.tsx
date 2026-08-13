@@ -271,14 +271,12 @@ export default function WatchPage() {
                 />
               ) : playerKind === "stream" && video ? (
                 <LocalPlayer
-                  key={`${video.video_id}-native-${sharedStartSeconds}`}
+                  key={`${video.video_id}-player-${sharedStartSeconds}`}
                   ref={playerRef}
-                  live
-                  liveLabel={t("watchStreamingBadge")}
                   durationSeconds={colonDurationToSeconds(video.duration)}
                   onError={exitStreaming} onExitStreaming={watchTogetherTransportLocked ? undefined : exitStreaming}
                   exitStreamingLabel={t("watchExitStreaming")}
-                  src={api.hlsUrl(video.video_id)}
+                  src={api.videoStreamUrl(video.video_id)}
                   poster={img(video.thumbnail)}
                   autoplay={!watchTogetherRoomId}
                   transportLocked={watchTogetherTransportLocked}
@@ -309,7 +307,7 @@ export default function WatchPage() {
                 />
               ) : (playerKind === "local" || playerKind === "direct") && video ? (
                 <LocalPlayer
-                  key={`${video.video_id}-native-${sharedStartSeconds}`}
+                  key={`${video.video_id}-player-${sharedStartSeconds}`}
                   ref={playerRef}
                   src={playerKind === "direct" ? api.directStreamUrl(video.video_id) : api.streamUrl(video.video_id)}
                   poster={img(video.thumbnail)}

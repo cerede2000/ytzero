@@ -19,6 +19,7 @@ export function shouldLatchCompletedDownload(
 export function resolvePlayerKind(input: {
   hasVideo: boolean;
   isLive: boolean;
+  isUpcoming?: boolean;
   downloadStatus: string | null;
   localMediaSource?: "download" | "tubearchivist" | null;
   playerSource: "auto" | "youtube";
@@ -30,14 +31,18 @@ export function resolvePlayerKind(input: {
   watchMode: WatchSourceMode;
   streamingEnabled: boolean;
   keepStreamingAfterDownload: boolean;
+  // "youtube" = embed first (drop to the direct stream only if it can't play);
+  // "stream" = the experimental stream first. Defaults to "youtube".
+  defaultSource?: "youtube" | "stream";
+  // The YouTube embed reported it can't play (embedding disabled / unavailable).
+  iframeFallback?: boolean;
 }): PlayerKind {
-  const remoteForcedToYouTube = input.playerSource === "youtube";
-  const wantsRemote = input.sourceChoice === "remote" || input.watchMode === "youtube";
-  const streamEligible = input.streamingEnabled && input.defaultPlayer !== "direct" && !input.directFallback && !remoteForcedToYouTube && input.sourceChoice !== "remote";
-  const canStream = input.hasVideo && streamEligible;
-  // A stream is not a stable local file. Even if an old download row exists,
-  // always use YouTube while the broadcast is live or scheduled.
-  if (input.hasVideo && input.isLive) return "youtube";
+  const canStream = input.hasVideo && input.streamingEnabled && input.playerSource === "auto" && input.sourceChoice !== "youtube";
+  // A live broadcast has no stable local file. When streaming is on we play it in
+  // the native player (via YouTube's own rolling HLS), which — unlike the iframe —
+  // can go Picture-in-Picture / background. An *upcoming* (not-yet-started) stream
+  // has nothing to play, and without streaming we fall back to the iframe.
+  if (input.hasVideo && input.isLive) return canStream && !input.isUpcoming ? "stream" : "youtube";
   // Finishing the background download must not tear down a stream that is
   // already playing. The viewer explicitly hands off to the local file.
   if (canStream && input.keepStreamingAfterDownload && input.downloadStatus === "done") return "stream";
@@ -50,12 +55,19 @@ export function resolvePlayerKind(input: {
   // video is unavailable, while streaming will take over as soon as it does.
   if (!input.hasVideo && streamEligible) return "loading";
   if (input.hasVideo && input.childDownloadsOnly) return "blocked";
-  // Experimental: play-while-downloading. Holds the stream while the file is
-  // still downloading; the viewer can still fall back to YouTube (which flips
-  // sourceChoice / playerSource and skips this branch).
-  if (canStream) return "stream";
+  // A video with no muxed/progressive format routes here (sourceChoice "wait") to
+  // download-and-play; checked first so it works whichever default is set.
   if (input.hasVideo && input.sourceChoice === "wait") return "waiting";
-  if (input.hasVideo && input.watchMode === "download" && input.sourceChoice !== "remote") return "waiting";
+  // When streaming applies, the default source decides: "stream" opens on the
+  // stream; "youtube" (default) uses the embed and only drops to a stream when
+  // the embed can't play (iframeFallback). With streaming off, the watchMode
+  // preference below takes over.
+  if (canStream) {
+    if ((input.defaultSource ?? "youtube") === "stream") return "stream";
+    if (input.iframeFallback) return "stream";
+    return "youtube";
+  }
+  if (input.hasVideo && input.watchMode === "download" && input.sourceChoice !== "youtube") return "waiting";
   if (input.hasVideo && input.watchMode === "ask" && input.sourceChoice === "undecided") return "choice";
   if (input.hasVideo && !remoteForcedToYouTube && (input.directFallback || (wantsRemote && input.defaultPlayer === "direct"))) return "direct";
   return "youtube";

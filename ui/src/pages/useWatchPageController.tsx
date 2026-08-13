@@ -187,6 +187,9 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const [youtubeError, setYoutubeError] = useState<number | null>(null);
   const [directFallback, setDirectFallback] = useState(false);
   const downloadPollGenerationRef = useRef(0);
+  // The embed said it cannot play (removed/private, or embedding disabled).
+  // With streaming on, that is the cue to drop to the direct stream instead.
+  const [iframeFallback, setIframeFallback] = useState(false);
   // Path to the next playlist video, read by the player's onStateChange when a
   // video ends. A ref keeps the player effect free of playlist dependencies.
   const nextInPlaylistRef = useRef<string | null>(null);
@@ -308,6 +311,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const playerKind = resolvePlayerKind({
     hasVideo: !!matchingVideo,
     isLive: matchingVideo?.live_status === "live" || matchingVideo?.live_status === "upcoming",
+    isUpcoming: matchingVideo?.live_status === "upcoming",
     downloadStatus,
     localMediaSource: matchingVideo?.local_media_source,
     playerSource,
@@ -319,6 +323,8 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     watchMode,
     streamingEnabled,
     keepStreamingAfterDownload: downloadReadyToReload,
+    defaultSource: settings?.player_default_source === "stream" ? "stream" : "youtube",
+    iframeFallback,
   });
   const downloadFeedbackKind = downloadReadyToReload ? "ready" : downloadRequestError || downloadStatus === "error" ? "error" : downloadStatus === "downloading" ? "downloading" : "queued";
   const downloadFeedbackVisible = downloadReadyToReload || downloadRequestError || downloadStatus === "queued" || downloadStatus === "downloading" || downloadStatus === "error";
@@ -492,7 +498,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     setSourceChoice("remote");
   }, []);
 
-  useEffect(() => { setSkipStreaming(false); }, [id]);
+  useEffect(() => { setSkipStreaming(false); setIframeFallback(false); }, [id]);
 
   // Leave the experimental stream: fall back to whatever the viewer's configured
   // player would be (download-wait / ask / YouTube — or the local file if the
@@ -1007,10 +1013,9 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
             if (destroyed) return;
             const code = Number(e?.data) || null;
             setYoutubeError(code);
-            if (shouldFallbackToDirectStream(code)) {
-              capturePlaybackPosition();
-              setDirectFallback(true);
-            }
+            // 100 = removed/private, 101/150 = embedding disabled: the embed will
+            // never play this, so let the direct stream take over when it can.
+            if (code === 100 || code === 101 || code === 150) setIframeFallback(true);
           },
         },
       });

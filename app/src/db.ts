@@ -224,6 +224,9 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   player_sub_color: "#ffffff",
   player_sub_bg: "75",
   player_quality: "auto",
+  // Default watch surface: "youtube" (embed first, drop to the direct stream if
+  // the embed can't play) or "stream" (direct 360/720 stream first).
+  player_default_source: "youtube",
   player_speed: "1",
   // Portable per-profile additions shown in every playback-speed selector.
   player_speed_options: "[]",

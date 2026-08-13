@@ -1049,6 +1049,7 @@ const {
   getAudioHeadResponse,
   getAudioResponse,
   getAudioVodPlaylist,
+  getVideoResponse,
   getHlsPlaylist,
   getHlsResource,
   getHlsSegment,
@@ -1071,14 +1072,7 @@ const {
   ytdlpStatus,
 });
 
-const { getDirectVideoResponse, invalidateDirectVideoSources } = createDownloadVideoProgressiveStreaming({
-  YTDLP,
-  downloadCookiesConfigured,
-  downloadCookiesFile,
-  ytdlpStatus,
-});
-
-export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodPlaylist, getDirectVideoResponse, getHlsPlaylist, getHlsResource, getHlsSegment, hasHlsSession, getLiveAudioPlaylist, getLiveAudioResource, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, liveStreamEnabled, retryAudioSource };
+export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodPlaylist, getHlsPlaylist, getHlsResource, getHlsSegment, getVideoResponse, hasHlsSession, getLiveAudioPlaylist, getLiveAudioResource, invalidateAudioSources, isSegmentName, liveStreamEnabled, retryAudioSource };
 // ---------- scheduler ----------
 
 let ticking = false;

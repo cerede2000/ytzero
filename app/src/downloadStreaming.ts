@@ -1,6 +1,7 @@
 import { createAudioStreamingControls } from "./audioStreamingControls";
 import { createDownloadAudioStreaming } from "./downloadAudioStreaming";
 import { createDownloadLiveAudioStreaming } from "./downloadLiveAudioStreaming";
+import { createDownloadVideoProgressiveStreaming } from "./downloadVideoProgressiveStreaming";
 import { createDownloadVideoStreaming } from "./downloadVideoStreaming";
 import type { DlSettings } from "./downloader";
 
@@ -21,6 +22,7 @@ interface DownloadStreamingDependencies {
 
 export function createDownloadStreaming(dependencies: DownloadStreamingDependencies) {
   const videoStreaming = createDownloadVideoStreaming(dependencies);
+  const progressiveVideoStreaming = createDownloadVideoProgressiveStreaming(dependencies);
   const audioStreaming = createDownloadAudioStreaming(dependencies);
   const liveAudioStreaming = createDownloadLiveAudioStreaming(dependencies);
   const audioSourceControls = createAudioStreamingControls(audioStreaming, liveAudioStreaming);
@@ -28,6 +30,7 @@ export function createDownloadStreaming(dependencies: DownloadStreamingDependenc
     ...videoStreaming,
     ...audioStreaming,
     ...liveAudioStreaming,
+    ...progressiveVideoStreaming,
     ...audioSourceControls,
   };
 }

@@ -4,8 +4,8 @@ import { publishAppEvent } from "../appEvents";
 import { database } from "../database";
 import { getUserSetting } from "../db";
 import { childLocalOnly, isChildUser } from "../childTime";
-import { DOWNLOADS_ADMIN_SETTING_KEYS, dlSettings, downloadCookiesConfigured, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
-import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, getDirectVideoResponse, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, hasHlsSession, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
+import { dlSettings, downloadCookiesConfigured, DOWNLOADS_ADMIN_SETTING_KEYS, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
+import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, fetchSubtitles, getDirectVideoResponse, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, getVideoResponse, hasHlsSession, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
 import { createDownloadRule, deleteDownloadRule, DownloadRuleValidationError, listDownloadRules, previewDownloadRule, updateDownloadRule, type DownloadRuleInput } from "../downloadRules";
 import { availableSubtitlesForVideo, normalizeSubtitleLanguage, subtitleStreamForVideo } from "../subtitleAvailability";
 import { subtitleLanguageLabel } from "../subtitleLanguages";
@@ -352,6 +352,21 @@ api.get("/videos/:id/hls/:file", async (c) => {
 });
 
 registerAudioRoutes(api, currentUserId);
+
+// Direct video: proxies YouTube's progressive (muxed) MP4 straight to the
+// <video> element, Range forwarded so it can seek. No ffmpeg and no HLS, so it
+// is far more reliable than the transcoding stream, at the cost of quality
+// (progressive tops out around 720p); the full-quality file comes from a real
+// download.
+api.get("/videos/:id/videostream", async (c) => {
+  const uid = currentUserId(c);
+  if (await isChildUser(uid)) return c.json({ error: "not allowed" }, 403);
+  if (!await profileDownloadsEnabled(uid)) return c.json({ error: "downloads disabled" }, 409);
+  const id = c.req.param("id");
+  if (!await videoExistsStmt.get(id)) return c.json({ error: "not found" }, 404);
+  const res = await getVideoResponse(uid, id, c.req.header("range") ?? null, c.req.raw.signal);
+  return res ?? c.json({ error: "video unavailable" }, 502);
+});
 
 // ---------- subtitles for the local player ----------
 

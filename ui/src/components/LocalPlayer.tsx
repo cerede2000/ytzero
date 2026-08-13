@@ -91,6 +91,9 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   liveLabel?: string;
   durationSeconds?: number;
   onError?: () => void;
+  // Reports whether the transport controls are currently shown, so overlays
+  // rendered by the parent (e.g. the audio / quality buttons) can fade with them.
+  onControlsVisibleChange?: (visible: boolean) => void;
   // Streaming mode only: leave the experimental stream for the viewer's own
   // configured player (rendered as a centred button in the control bar).
   onExitStreaming?: () => void;
@@ -129,6 +132,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   liveLabel,
   durationSeconds,
   onError,
+  onControlsVisibleChange,
   onExitStreaming,
   exitStreamingLabel,
   onDownload,
@@ -157,6 +161,12 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   const [scrubbing, setScrubbing] = useState(false);
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const wasPlayingBeforeFsRef = useRef(false);
+  // Captured at pointer-down (before the synthetic mousemove reveals controls) so
+  // a touch tap can decide: reveal controls first, then only the middle band
+  // toggles play/pause — the sides just (re)show the controls, YouTube-style.
+  const tapStateRef = useRef<{ touch: boolean; controlsShown: boolean }>({ touch: false, controlsShown: true });
+  const [resolution, setResolution] = useState(0);
 
   // ---------- subtitles ----------
   const trackRef = useRef<HTMLTrackElement>(null);
@@ -258,6 +268,12 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
     if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
   }, []);
 
+  // Mirror the control-bar visibility to the parent (controls also show whenever
+  // paused), so parent overlays can fade in lockstep with the transport.
+  useEffect(() => {
+    onControlsVisibleChange?.(controlsVisible || !playing);
+  }, [controlsVisible, playing, onControlsVisibleChange]);
+
   useImperativeHandle(ref, () => ({
     seekTo: (seconds: number) => {
       const v = videoRef.current;
@@ -301,11 +317,17 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
     const v = videoRef.current;
     if (!v) return;
     setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+    setResolution(v.videoHeight || 0);
     if (!live && startSeconds > 0 && startSeconds < v.duration - 5) v.currentTime = startSeconds;
     v.playbackRate = playbackRate;
     enforceLocalPlayerVolume(v, volume);
     v.muted = muted;
     setBuffering(false);
+    // When a finished download hands playback over from the direct stream, this
+    // element is freshly (re)mounted and the `autoplay` attribute is often
+    // ignored on mobile. Retry playback explicitly using the still-recent user
+    // activation; if the browser blocks it, leave it paused (no forced mute).
+    if (autoplay && !live && !transportLocked && v.paused) v.play().catch(() => {});
   };
 
   // Kick off playback for a streaming source. hls.js swaps the media source
@@ -371,16 +393,35 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
 
   const toggleFullscreen = useCallback(() => {
     const el = rootRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) document.exitFullscreen?.();
-    else el.requestFullscreen?.();
+    const v = videoRef.current as any;
+    if (document.fullscreenElement) { document.exitFullscreen?.(); return; }
+    if (document.fullscreenEnabled && el?.requestFullscreen) { el.requestFullscreen().catch(() => {}); return; }
+    // iPhone Safari has no element fullscreen — only the <video> element can go
+    // fullscreen, via the legacy WebKit API (iOS shows its own player with a Done
+    // button). It pauses on exit; the webkitendfullscreen handler resumes.
+    if (typeof v?.webkitEnterFullscreen === "function") {
+      wasPlayingBeforeFsRef.current = !v.paused;
+      try { v.webkitEnterFullscreen(); } catch {}
+    }
   }, []);
 
   const togglePip = useCallback(() => {
     const v = videoRef.current as any;
     if (!v) return;
-    if ((document as any).pictureInPictureElement) (document as any).exitPictureInPicture?.();
-    else v.requestPictureInPicture?.().catch(() => {});
+    // Standard Picture-in-Picture: desktop browsers, iPadOS Safari, Android Chrome.
+    if (typeof v.requestPictureInPicture === "function") {
+      if ((document as any).pictureInPictureElement) (document as any).exitPictureInPicture?.();
+      else v.requestPictureInPicture().catch(() => {});
+      return;
+    }
+    // iPhone Safari only implements the legacy WebKit presentation-mode API, so
+    // the standard call above is undefined there and the button was inert. PiP
+    // is the only way iOS keeps a video playing once Safari is backgrounded or
+    // the screen is locked, so fall back to it to enable background audio.
+    if (typeof v.webkitSetPresentationMode === "function") {
+      const next = v.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture";
+      try { v.webkitSetPresentationMode(next); } catch {}
+    }
   }, []);
 
   const takeScreenshot = useCallback(async () => {
@@ -414,10 +455,36 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   }, [channelTitle, onShortcut, screenshotFilenameTemplate, screenshotFormat, screenshotQuality, showControls, title, videoId]);
 
   useEffect(() => {
+    const v = videoRef.current;
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
+    // iOS pauses the <video> when it leaves its own fullscreen. Resume within the
+    // Done-tap gesture (so play() is permitted). iOS may apply its pause just
+    // before OR just after the event, so play() unconditionally now AND re-assert
+    // it on the very next pause the element emits. Only if it was playing when we
+    // entered. (transportLocked = watch-together: never force playback.)
+    const onWebkitBegin = () => {
+      setIsFullscreen(true);
+      if (v) wasPlayingBeforeFsRef.current = !v.paused;
+    };
+    const onWebkitEnd = () => {
+      setIsFullscreen(false);
+      const el = videoRef.current;
+      if (!el || transportLocked || !wasPlayingBeforeFsRef.current) return;
+      const resume = () => { if (el.paused && !el.ended) el.play().catch(() => {}); };
+      el.play().catch(() => {});           // in the Done-tap gesture (pause-before case)
+      const onPauseOnce = () => { el.removeEventListener("pause", onPauseOnce); resume(); };
+      el.addEventListener("pause", onPauseOnce); // iOS pauses synchronously-after
+      window.setTimeout(() => { el.removeEventListener("pause", onPauseOnce); resume(); }, 350); // async-after, still within transient activation
+    };
+    v?.addEventListener("webkitbeginfullscreen", onWebkitBegin);
+    v?.addEventListener("webkitendfullscreen", onWebkitEnd);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      v?.removeEventListener("webkitbeginfullscreen", onWebkitBegin);
+      v?.removeEventListener("webkitendfullscreen", onWebkitEnd);
+    };
+  }, [transportLocked]);
 
   // Keyboard: playback-local keys. Page navigation, theater and the app-level
   // page-owned modes stay in WatchPage so they behave identically for every source.
@@ -628,9 +695,24 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
         autoPlay={autoplay}
         playsInline
         aria-disabled={transportLocked || undefined}
-        onClick={togglePlay}
-        onDoubleClick={toggleFullscreen}
+        onPointerDown={(e) => {
+          tapStateRef.current = { touch: e.pointerType === "touch", controlsShown: controlsVisible || !playing };
+        }}
+        onClick={(e) => {
+          if (transportLocked) return;
+          const { touch, controlsShown } = tapStateRef.current;
+          if (!touch) { togglePlay(); return; } // mouse: click toggles play/pause
+          // Touch: a first tap only reveals the controls; once they're up, the
+          // middle band toggles play/pause and the sides just keep them shown.
+          if (!controlsShown) { showControls(); return; }
+          const rect = e.currentTarget.getBoundingClientRect();
+          const x = (e.clientX - rect.left) / rect.width;
+          if (x >= 0.33 && x <= 0.67) togglePlay();
+          else showControls();
+        }}
+        onDoubleClick={() => { if (!tapStateRef.current.touch) toggleFullscreen(); }}
         onLoadedMetadata={onLoadedMetadata}
+        onResize={(e) => setResolution(e.currentTarget.videoHeight || 0)}
         onPlay={() => { setPlaying(true); endedRef.current = false; showControls(); }}
         onPause={() => { setPlaying(false); setControlsVisible(true); }}
         onWaiting={() => setBuffering(true)}
@@ -748,8 +830,9 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
             />
           </div>
           <span className="lp-time">{fmtTime(currentTime)} / {fmtTime(barDuration)}</span>
+          {resolution > 0 && <span className="lp-quality" title={t("playerQuality")}>{resolution}p</span>}
           <span className="lp-spacer" />
-          {live && onExitStreaming && (
+          {onExitStreaming && (
             <>
               <button className="lp-exit-stream" onClick={onExitStreaming} aria-label={exitStreamingLabel} disabled={transportLocked}>
                 <MonitorPlay size={17} />
