@@ -17,6 +17,7 @@ const VOLUME_KEY = "localPlayerVolume";
 const MUTED_KEY = "localPlayerMuted";
 const MAX_RETRY_ATTEMPTS = 3;
 const STALL_SAMPLE_MS = 1_000;
+const STALL_NUDGE_SECONDS = 0.01;
 
 function fmtTime(seconds: number): string {
   const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
@@ -301,9 +302,28 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
   };
 
   /**
+   * Make a stalled player ask again. A reader whose range request was never
+   * issued keeps its source and its position and simply waits forever; moving
+   * the playhead onto itself forces a fresh request, which costs nothing and
+   * leaves the element — and its connections — exactly as they were.
+   */
+  const nudgeStalledPlayback = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || !Number.isFinite(audio.currentTime)) return;
+    setBuffering(true);
+    // Assigning the same position back can be optimised away; a step far below
+    // anything audible cannot, and still lands on the same second.
+    try { audio.currentTime = audio.currentTime + STALL_NUDGE_SECONDS; } catch { return; }
+    void audio.play().catch(() => {});
+  }, []);
+
+  /**
    * Rebuild the source underneath a player that has stopped being able to
    * play, keeping the listener where they were. This is the automatic twin of
-   * the retry button, for the failure that never reaches the error state.
+   * the retry button, for the failure that never reaches the error state, and
+   * the heavy answer: iOS can keep fetching on the element being replaced, so
+   * a rebuild risks leaving a second loader behind. Only for stalls a nudge
+   * could not clear.
    */
   const recoverFromStall = useCallback(async () => {
     if (!audioRef.current) return;
@@ -339,10 +359,11 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
         bufferedAhead: bufferedSecondsAhead(audio.buffered, audio.currentTime),
       });
       watch = step.state;
-      if (step.recover) void recoverFromStall();
+      if (step.action === "nudge") nudgeStalledPlayback();
+      else if (step.action === "rebuild") void recoverFromStall();
     }, STALL_SAMPLE_MS);
     return () => window.clearInterval(timer);
-  }, [live, recoverFromStall]);
+  }, [live, nudgeStalledPlayback, recoverFromStall]);
 
   // System-level controls keep the same <audio> element alive on the lock
   // screen; the custom controls below only replace its on-page chrome.

@@ -50,12 +50,15 @@ export interface AudioStallState {
   starvedSince: number | null;
   healthySince: number | null;
   recoveries: number;
+  /** Whether this episode of starvation has already been asked to retry. */
+  nudged: boolean;
 }
 
 export const initialAudioStallState: AudioStallState = {
   starvedSince: null,
   healthySince: null,
   recoveries: 0,
+  nudged: false,
 };
 
 /**
@@ -72,13 +75,24 @@ export function bufferedSecondsAhead(ranges: BufferedRanges, currentTime: number
 }
 
 /**
- * Fold one sample into the watch, reporting whether the player has been unable
- * to play for long enough to warrant rebuilding its source.
+ * What to do about a player that has stopped being able to play.
+ *
+ * A stalled reader is one whose request for the position it needs was never
+ * issued, so the cheap answer is to make it ask again: moving the playhead
+ * forces a fresh request without disturbing the element. Rebuilding the source
+ * is the heavy answer, and not a free one — on iOS a replaced element can keep
+ * fetching on its own, leaving a second loader competing with the new one.
+ */
+export type AudioStallAction = "none" | "nudge" | "rebuild";
+
+/**
+ * Fold one sample into the watch, reporting what the player needs after being
+ * unable to play for long enough that it is no longer ordinary buffering.
  */
 export function audioStallStep(
   state: AudioStallState,
   sample: AudioStallSample,
-): { state: AudioStallState; recover: boolean } {
+): { state: AudioStallState; action: AudioStallAction } {
   // A player that has not moved off zero is still opening its source, which
   // can take seconds while yt-dlp resolves; rebuilding it there would only
   // restart the wait. Starvation is a claim about playback that had begun.
@@ -97,19 +111,35 @@ export function audioStallStep(
         starvedSince: null,
         healthySince: recovered ? sample.at : healthySince,
         recoveries: recovered ? 0 : state.recoveries,
+        // A nudge is spent for as long as the player still cannot play. The
+        // seek it performs briefly lands here, and forgetting it there would
+        // loop on nudges that are not working instead of escalating.
+        nudged: starved && state.nudged,
       },
-      recover: false,
+      action: "none",
     };
   }
 
   const starvedSince = state.starvedSince ?? sample.at;
-  const exhausted = state.recoveries >= AUDIO_STALL_RECOVERY_LIMIT;
-  if (sample.at - starvedSince < AUDIO_STALL_GRACE_MS || exhausted) {
-    return { state: { ...state, starvedSince, healthySince: null }, recover: false };
+  if (sample.at - starvedSince < AUDIO_STALL_GRACE_MS) {
+    return { state: { ...state, starvedSince, healthySince: null }, action: "none" };
+  }
+
+  // Ask again before tearing anything down, and give the answer a grace period
+  // of its own: a request that does go out still has to travel.
+  if (!state.nudged) {
+    return {
+      state: { ...state, starvedSince: sample.at, healthySince: null, nudged: true },
+      action: "nudge",
+    };
+  }
+
+  if (state.recoveries >= AUDIO_STALL_RECOVERY_LIMIT) {
+    return { state: { ...state, starvedSince, healthySince: null }, action: "none" };
   }
 
   return {
-    state: { starvedSince: null, healthySince: null, recoveries: state.recoveries + 1 },
-    recover: true,
+    state: { starvedSince: null, healthySince: null, recoveries: state.recoveries + 1, nudged: false },
+    action: "rebuild",
   };
 }
