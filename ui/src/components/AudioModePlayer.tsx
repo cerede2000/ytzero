@@ -172,12 +172,14 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
 
   const advancedRef = useRef<string | null>(null);
   const playingTrackRef = useRef<NeighbouringTrack | null>(null);
+  const [playingTrack, setPlayingTrack] = useState<NeighbouringTrack | null>(null);
   const switchToTrack = useCallback((track: NeighbouringTrack) => {
     const audio = audioRef.current;
     if (!audio || live) return false;
     const base = trackSource(track.videoId);
     advancedRef.current = track.videoId;
     playingTrackRef.current = track;
+    setPlayingTrack(track);
     warmedRef.current = null;
     startedAtRef.current = 0;
     endedRef.current = false;
@@ -499,6 +501,11 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     };
   }, [artworkUrl, channelTitle, live, setAudioPosition, title, onNext, onPrevious]);
 
+  // The page may still be describing the entry this element has already left.
+  const shownTitle = playingTrack ? playingTrack.title : title;
+  const shownChannel = playingTrack ? playingTrack.channelTitle : channelTitle;
+  const shownArt = playingTrack ? img(playingTrack.thumbnail) : artworkUrl;
+
   const mediaDuration = duration > 0 ? duration : 0;
   const progress = mediaDuration > 0 ? Math.min(1, currentTime / mediaDuration) : 0;
   const bufferedFraction = mediaDuration > 0 ? Math.min(1, buffered / mediaDuration) : 0;
@@ -545,7 +552,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     <div className="audio-mode lp-root">
       <div
         className="audio-mode-art"
-        style={artworkUrl ? { backgroundImage: `url(${artworkUrl})` } : undefined}
+        style={shownArt ? { backgroundImage: `url(${shownArt})` } : undefined}
         aria-hidden="true"
       />
       <div className="audio-mode-scrim" aria-hidden="true" />
@@ -609,7 +616,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
       <div className="audio-mode-hero">
         <div className="audio-mode-card">
           <div className="audio-mode-cover-wrap">
-            {artworkUrl && <img className="audio-mode-cover" src={artworkUrl} alt="" draggable={false} />}
+            {shownArt && <img className="audio-mode-cover" src={shownArt} alt="" draggable={false} />}
             {buffering && status !== "error" && (
               <div className="audio-mode-cover-state" role="status" aria-label={t("loading")}>
                 <LoaderCircle className="spin" size={34} />
@@ -622,8 +629,8 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
             )}
           </div>
           <div className="audio-mode-meta">
-            <div className="audio-mode-title">{title}</div>
-            {channelTitle && <div className="audio-mode-channel">{channelTitle}</div>}
+            <div className="audio-mode-title">{shownTitle}</div>
+            {shownChannel && <div className="audio-mode-channel">{shownChannel}</div>}
           </div>
           {status !== "error" && (
             <div className="audio-mode-player" aria-label={title}>
