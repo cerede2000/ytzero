@@ -1,0 +1,72 @@
+/* The popover wrapper takes over the search field's place in the top bar, so
+   the form itself can simply fill it. */
+.search-anchor {
+  flex: 0 1 560px;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.search-anchor .search-wrap {
+  width: 100%;
+  margin: 0;
+}
+
+.search-suggest {
+  padding: 6px;
+}
+
+/* Width is set from the field's measured width; this caps it on small screens. */
+.search-suggest-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: calc(100vw - 36px);
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+
+.search-suggest-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-suggest-option.is-active {
+  background: var(--surface-3);
+}
+
+.search-suggest-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.search-suggest-icon {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.search-suggest-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-suggest-kind {
+  color: var(--text-3);
+  font-size: 12px;
+  flex-shrink: 0;
+}

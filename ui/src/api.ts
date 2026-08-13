@@ -33,6 +33,7 @@ import {
   type ChannelManualStatus,
   type ChannelRefreshScheduleDetails,
   type ChannelSearchResult,
+  type SearchSuggestChannel,
   type ChannelShortsFeedVisibility,
   type ChannelSyncJob,
   type ChildConfig,
