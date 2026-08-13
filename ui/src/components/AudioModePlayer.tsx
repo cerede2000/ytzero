@@ -306,9 +306,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
    * the retry button, for the failure that never reaches the error state.
    */
   const recoverFromStall = useCallback(async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    startedAtRef.current = audio.currentTime;
+    if (!audioRef.current) return;
     setBuffering(true);
     try {
       await api.retryAudio(videoId);
@@ -316,6 +314,12 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
       // A failed re-resolve is still worth reloading from: the source may have
       // been throttled rather than lost, and silence is the alternative.
     }
+    // Read the position only once the new source is about to be attached. A
+    // listener who seeks while the source is being re-resolved would otherwise
+    // be dragged back to wherever they were when the stall was noticed.
+    const audio = audioRef.current;
+    if (!audio) return;
+    startedAtRef.current = audio.currentTime;
     setSourceRevision((revision) => revision + 1);
   }, [videoId]);
 
@@ -327,6 +331,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
       if (!audio) return;
       const step = audioStallStep(watch, {
         at: Date.now(),
+        currentTime: audio.currentTime,
         paused: audio.paused,
         ended: audio.ended,
         seeking: audio.seeking,

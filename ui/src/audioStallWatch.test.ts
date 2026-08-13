@@ -10,7 +10,7 @@ import {
   type AudioStallState,
 } from "./audioStallWatch";
 
-const HEALTHY = { paused: false, ended: false, seeking: false, readyState: 4, bufferedAhead: 10 };
+const HEALTHY = { currentTime: 42, paused: false, ended: false, seeking: false, readyState: 4, bufferedAhead: 10 };
 const STARVED = { ...HEALTHY, readyState: 1, bufferedAhead: 0 };
 
 const TICK_MS = 1_000;
@@ -75,6 +75,12 @@ describe("audio stall watch", () => {
     // playhead: the face of the bug where the clock advances in silence.
     const advancing = { ...HEALTHY, readyState: 4, bufferedAhead: 0 };
     expect(run(repeat(GRACE_TICKS + 1, advancing)).recoveries).toBe(1);
+  });
+
+  test("leaves a player that has not started opening its source", () => {
+    // Resolving a source can take several seconds, and the element sits at
+    // zero unpaused throughout: rebuilding there would only restart the wait.
+    expect(run(repeat(120, { ...STARVED, currentTime: 0 })).recoveries).toBe(0);
   });
 
   test("never rebuilds under a paused, ended, or seeking player", () => {

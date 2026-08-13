@@ -16,8 +16,12 @@ const STARVED_BUFFER_SECONDS = 0.25;
 /** HTMLMediaElement.HAVE_FUTURE_DATA, spelled out for non-DOM callers. */
 const HAVE_FUTURE_DATA = 3;
 
-/** How long starvation must last before it stops being ordinary buffering. */
-export const AUDIO_STALL_GRACE_MS = 8_000;
+/**
+ * How long starvation must last before it stops being ordinary buffering.
+ * Short enough to act before a listener gives up and seeks elsewhere, which
+ * only a starting player would reach too easily — hence the guard below.
+ */
+export const AUDIO_STALL_GRACE_MS = 4_000;
 
 /** Recoveries are capped so a source that cannot play never loops forever. */
 export const AUDIO_STALL_RECOVERY_LIMIT = 3;
@@ -34,6 +38,7 @@ export interface BufferedRanges {
 export interface AudioStallSample {
   /** Wall clock of this sample, in milliseconds. */
   at: number;
+  currentTime: number;
   paused: boolean;
   ended: boolean;
   seeking: boolean;
@@ -74,7 +79,11 @@ export function audioStallStep(
   state: AudioStallState,
   sample: AudioStallSample,
 ): { state: AudioStallState; recover: boolean } {
-  const wantsToPlay = !sample.paused && !sample.ended && !sample.seeking;
+  // A player that has not moved off zero is still opening its source, which
+  // can take seconds while yt-dlp resolves; rebuilding it there would only
+  // restart the wait. Starvation is a claim about playback that had begun.
+  const started = sample.currentTime > 0;
+  const wantsToPlay = started && !sample.paused && !sample.ended && !sample.seeking;
   const starved = sample.bufferedAhead < STARVED_BUFFER_SECONDS || sample.readyState < HAVE_FUTURE_DATA;
 
   if (!wantsToPlay || !starved) {
