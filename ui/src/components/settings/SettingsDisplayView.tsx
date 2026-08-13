@@ -70,6 +70,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
     playerCc,
     playerHl,
     playerQuality,
+    playerDefaultSource,
     playerSpeed,
     playerSpeedOptions,
     plugins,
@@ -90,6 +91,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
     setPlayerCc,
     setPlayerHl,
     setPlayerQuality,
+    setPlayerDefaultSource,
     setPlayerSpeed,
     setPlayerSpeedOptions,
     setScreenshotFilename,
@@ -355,6 +357,17 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
               </SettingRow>
             </>
           )}
+          <SettingRow label={t("defaultPlayer")} description={t("defaultPlayerHint")}>
+            <SelectMenu
+              label={t("defaultPlayer")}
+              value={playerDefaultSource}
+              options={[{ value: "youtube", label: t("defaultPlayerYouTube") }, { value: "stream", label: t("defaultPlayerStream") }]}
+              onChange={(next) => {
+                setPlayerDefaultSource(next);
+                savePlayer({ player_default_source: next });
+              }}
+            />
+          </SettingRow>
           <SettingRow label={t("quality")} description={t("qualityHint")}>
             <SelectMenu
               label={t("quality")}
