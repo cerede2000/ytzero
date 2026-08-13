@@ -20,6 +20,7 @@ import { isPlaybackQueueContext, type PlaybackQueueContext } from "../playbackQu
 import { sessionPlayQueueContext, useSessionPlayQueue } from "../sessionPlayQueue";
 import { effectivePlaybackQueue } from "../sessionPlayQueuePlayback";
 import { isContinuousPlaylistQueue, playbackEndAction } from "../playlistPlayback";
+import type { NeighbouringTrack as Track } from "../components/AudioModePlayer";
 import { restoreSidebarVisibility } from "../app-shell/sidebarVisibility";
 import { canAutoArchiveVideo, isMissingVideoError, loadYouTubeApi, resolveShareTimestamp, resolveWatchPlayerTarget } from "./watchRuntime";
 import { useWatchTogetherPlayback } from "./useWatchTogetherPlayback";
@@ -598,8 +599,42 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     entry ? { videoId: entry.videoId, title: entry.title, channelTitle: entry.channelTitle, thumbnail: entry.thumbnail } : null;
   const queueTrack = (entry: Video | null | undefined) =>
     entry ? { videoId: entry.video_id, title: entry.title, channelTitle: entry.channel_title, thumbnail: entry.thumbnail } : null;
-  const nextTrack = trackAt(nextPlaylistVideo) ?? (queueIsPlaylist ? queueTrack(prefetchedQueueVideo) : null);
-  const previousTrack = trackAt(previousPlaylistVideo) ?? (queueIsPlaylist ? queueTrack(precedingQueueVideo) : null);
+  /**
+   * Once the element has moved on by itself, the page is describing the entry
+   * before that one: its neighbours are the wrong neighbours, and offering
+   * them again would replay what is already playing. Ask where the list goes
+   * from where it actually is.
+   */
+  const [advancedVideoId, setAdvancedVideoId] = useState<string | null>(null);
+  const [advancedNeighbours, setAdvancedNeighbours] = useState<{ next: Track | null; previous: Track | null } | null>(null);
+  useEffect(() => {
+    if (!advancedVideoId || !playbackQueue) { setAdvancedNeighbours(null); return; }
+    let cancelled = false;
+    const forward = queueIsPlaylist || settings?.feed_autoplay_direction === "newest" ? "newest" : "oldest";
+    const neighbour = async (direction: "newest" | "oldest"): Promise<Track | null> => {
+      const adjacent = await api.playbackAdjacent(advancedVideoId, direction, playbackQueue).catch(() => null);
+      if (!adjacent?.video_id) return null;
+      const found = await api.video(adjacent.video_id).catch(() => null);
+      return queueTrack(found?.video);
+    };
+    void Promise.all([neighbour(forward), neighbour(forward === "newest" ? "oldest" : "newest")])
+      .then(([next, previous]) => { if (!cancelled) setAdvancedNeighbours({ next, previous }); });
+    return () => { cancelled = true; };
+  }, [advancedVideoId, playbackQueue, queueIsPlaylist, settings?.feed_autoplay_direction]);
+
+  const pageNextTrack = trackAt(nextPlaylistVideo) ?? (queueIsPlaylist ? queueTrack(prefetchedQueueVideo) : null);
+  const pagePreviousTrack = trackAt(previousPlaylistVideo) ?? (queueIsPlaylist ? queueTrack(precedingQueueVideo) : null);
+  // Rebuilt only when the entry itself changes: a fresh object every render
+  // would restart the effect that owns the system playback controls, and with
+  // it overwrite what is showing on the lock screen.
+  const nextTrack = useMemo(
+    () => advancedNeighbours ? advancedNeighbours.next : pageNextTrack,
+    [advancedNeighbours, pageNextTrack?.videoId],
+  );
+  const previousTrack = useMemo(
+    () => advancedNeighbours ? advancedNeighbours.previous : pagePreviousTrack,
+    [advancedNeighbours, pagePreviousTrack?.videoId],
+  );
 
   usePlaylistDownloadPrefetch({ enabled: prefetchNextPlaylistVideo, playlistId, routeNextVideoId: nextPlaylistVideo?.videoId, queue: playbackQueue, queueNextVideoId: prefetchedQueueVideo?.video_id });
 

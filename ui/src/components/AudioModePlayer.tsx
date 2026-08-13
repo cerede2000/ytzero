@@ -414,7 +414,9 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
       try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
     };
-    try {
+    // Whatever the page still believes, the element may have moved on; the
+    // lock screen is showing the entry that is playing and must keep it.
+    if (!advancedRef.current) try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: title ?? "",
         artist: channelTitle ?? "",
