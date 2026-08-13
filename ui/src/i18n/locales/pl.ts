@@ -226,6 +226,8 @@ export const pl: Locale = {
     search: "Szukaj",
     settingsSearchNoResults: "Brak pasujących ustawień",
     searchPlaceholder: "Szukaj...",
+    searchSuggestions: "Podpowiedzi wyszukiwania",
+    searchSuggestionChannel: "Kanał",
     clear: "Wyczyść",
     clearFilters: "Wyczyść filtry",
     showAll: "Wszystkie",

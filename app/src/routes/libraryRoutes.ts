@@ -3,7 +3,7 @@ import { database } from "../database";
 import { childLocalOnly, isChildUser } from "../childTime";
 import { profileDownloadsEnabled } from "../downloadConfig";
 import { cancelAutoDownloadIfUnwanted } from "../downloader";
-import { refreshDiscoveryInBackground } from "../plugins";
+import { refreshDiscoveryInBackground, searchQuerySuggestions } from "../plugins";
 import { searchYouTube } from "../youtube";
 import { feedSortSql, shortsUiVisibilitySql } from "../feedQuery";
 import { buildCleanupWhere, countCleanupMatches, listCleanupVideoIds, snapshotUserVideoState, applyCleanupAction, restoreUserVideoState, saveBulkUndo, loadBulkUndo, clearBulkUndo, type CleanupFilter } from "../cleanup";
@@ -127,6 +127,33 @@ api.get("/search/youtube", async (c) => {
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
   }
+});
+
+// Type-ahead for the search box. The library answers for itself: followed
+// channels are matched locally so the box can jump straight to a channel,
+// without anything leaving the server.
+//
+// `suggestions` carries free-text query completions. Nothing in core produces
+// them — that is a source a plugin supplies, the way TubeArchivist feeds the
+// feed — so it stays empty until one is installed and enabled.
+api.get("/search/suggest", async (c) => {
+  const uid = currentUserId(c);
+  const q = c.req.query("q")?.trim();
+  if (!q) return c.json({ suggestions: [], channels: [] });
+
+  const channels = await database.prepare(
+    `SELECT ch.channel_id, COALESCE(ch.custom_title, ch.title) AS title, ch.thumbnail
+       FROM channels ch
+       JOIN user_channels uc ON uc.channel_id = ch.channel_id AND uc.user_id = ? AND uc.followed = 1
+      WHERE ch.external = 0 AND COALESCE(ch.custom_title, ch.title) LIKE ?
+      ORDER BY COALESCE(ch.custom_title, ch.title) COLLATE NOCASE
+      LIMIT 4`
+  ).all(uid, `%${q}%`);
+
+  // Restricted child profiles never see anything but their own library.
+  const language = c.req.query("hl")?.slice(0, 5) || "en";
+  const suggestions = childLocalOnly(uid) ? [] : await searchQuerySuggestions(uid, q, language);
+  return c.json({ suggestions, channels });
 });
 
 }
