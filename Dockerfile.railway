@@ -40,7 +40,8 @@ RUN apt-get update && \
       cd /opt/bgutil-ytdlp-pot-provider/server && \
       DENO_NO_PROMPT=1 deno install --allow-scripts && \
       DENO_NO_PROMPT=1 deno run --allow-env --allow-net --allow-read --allow-write --allow-ffi --allow-sys \
-        src/generate_once.ts --version ) \
+        src/generate_once.ts --version && \
+      ln -sfn /opt/bgutil-ytdlp-pot-provider "${HOME:-/root}/bgutil-ytdlp-pot-provider" ) \
     || ( echo "PO token provider unavailable at build time; continuing without it" && \
          rm -rf /opt/bgutil-ytdlp-pot-provider /etc/yt-dlp/plugins/bgutil-ytdlp-pot-provider.zip ) && \
     cd /app && \
