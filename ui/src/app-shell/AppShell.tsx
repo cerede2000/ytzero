@@ -36,7 +36,25 @@ export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
 
   const play = useCallback((video: Video, playbackQueue?: PlaybackQueueContext, options?: PlayOptions) => navigate(
     `/watch/${video.video_id}`,
-    playbackQueue || options?.fromStart ? { state: { playbackQueue, fromStart: options?.fromStart } } : undefined,
+    {
+      state: {
+        playbackQueue,
+        fromStart: options?.fromStart,
+        // What the card was already showing. A video that is not in the
+        // library has to be imported before the page knows anything about it,
+        // and that takes as long as it takes — but the title, the channel and
+        // the thumbnail were on screen a moment ago, so there is no reason to
+        // stare at an empty page while it happens.
+        preview: {
+          videoId: video.video_id,
+          title: video.title,
+          channelId: video.channel_id,
+          channelTitle: video.channel_title,
+          thumbnail: video.thumbnail,
+          duration: video.duration ?? null,
+        },
+      },
+    },
   ), [navigate]);
 
   if (!i18nReady || !preferences.ready || !plugins.ready || !profile.ready) {

@@ -87,6 +87,26 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const [videoUnavailable, setVideoUnavailable] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const videoMissing = missingVideoId === id;
+  /**
+   * What the card that was clicked already knew. Not the row — that still has
+   * to be imported — but enough for the page to look like itself while it is.
+   */
+  const routePreview = useMemo<VideoInfo | null>(() => {
+    const preview = (location.state as { preview?: Record<string, unknown> } | null)?.preview;
+    if (!preview || typeof preview.videoId !== "string" || preview.videoId !== id) return null;
+    return {
+      videoId: preview.videoId,
+      title: typeof preview.title === "string" ? preview.title : "",
+      channelId: typeof preview.channelId === "string" ? preview.channelId : "",
+      channelTitle: typeof preview.channelTitle === "string" ? preview.channelTitle : "",
+      description: "",
+      thumbnail: typeof preview.thumbnail === "string" ? preview.thumbnail : "",
+      viewCount: null,
+      publishedAt: null,
+      duration: typeof preview.duration === "string" ? preview.duration : null,
+      liveStatus: "none",
+    };
+  }, [id, location.state]);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [related, setRelated] = useState<Video[]>([]);
   const [copyKey, setCopyKey] = useState(0);
@@ -338,12 +358,12 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     keepStreamingAfterDownload: downloadReadyToReload,
     defaultSource: settings?.player_default_source === "stream" ? "stream" : "youtube",
     iframeFallback,
-    // Nothing to play yet: either a video that has to be imported before the
-    // page knows anything about it, or a remembered audio mode whose
-    // eligibility needs that same row. The embed would fill the wait with an
-    // empty black frame, and in audio mode with a second of video at someone
-    // who asked not to see any.
-    playerPending: (audioModeRequested || videoMissing) && !matchingVideo && !videoUnavailable,
+    // Only audio mode waits. It needs the row twice over — to know whether it
+    // is even allowed, and to ask the server for the track — so the embed
+    // would play a second of video at someone who asked not to see any.
+    // Nothing else needs it: the embed plays from the browser and can start
+    // while the row is still being imported.
+    playerPending: audioModeRequested && !matchingVideo && !videoUnavailable,
   });
   const downloadFeedbackKind = downloadReadyToReload ? "ready" : downloadRequestError || downloadStatus === "error" ? "error" : downloadStatus === "downloading" ? "downloading" : "queued";
   const downloadFeedbackVisible = downloadReadyToReload || downloadRequestError || downloadStatus === "queued" || downloadStatus === "downloading" || downloadStatus === "error";
@@ -1363,7 +1383,8 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
 
   useDocumentTitle((video?.title ?? videoInfo?.title ?? "").trim() || (id ? `Video ${id}` : "Video"));
 
-  if (!video && !videoMissing) return null;
+  // A preview is enough to draw the page: the row can arrive later.
+  if (!video && !videoMissing && !routePreview) return null;
 
   const reload = () => video && api.video(video.video_id).then((r) => setVideo(r.video));
 
@@ -1634,7 +1655,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     usingLocal,
     video,
     videoCreators,
-    videoInfo,
+    videoInfo: videoInfo ?? routePreview,
     videoMissing,
     videoUnavailable,
     retryVideoLoad: () => setLoadAttempt((attempt) => attempt + 1),
