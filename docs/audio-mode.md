@@ -149,6 +149,13 @@ remaining time, volume and mute controls, playback speed where applicable, and
 live-state presentation for broadcasts. Media Session metadata includes the
 video title, channel, and thumbnail.
 
+iOS will not let a page start media until the listener has touched that page,
+and a tap that navigates does not carry its permission across. A remembered
+audio mode therefore arrives on an untouched page and is refused — which looks
+like nothing happening. Until the player has played once, any touch anywhere
+starts it, so the listener's next gesture serves whatever else it was for.
+After that the rule stops applying: a pause is deliberate.
+
 Background and lock-screen playback ultimately depend on browser and operating
 system policy. iOS may still stop playback under memory pressure, after a
 network change, or when a live playlist is temporarily unavailable.
