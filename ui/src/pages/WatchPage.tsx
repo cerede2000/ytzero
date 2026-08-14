@@ -71,6 +71,16 @@ import { useAppliedVideoCardActionConfig } from "../videoCardActionConfig";
 const TranscriptDialog = lazy(() => import("../components/TranscriptDialog"));
 const AudioModePlayer = lazy(() => import("../components/AudioModePlayer"));
 
+/**
+ * Something to look at while there is no row yet. The identifier alone names
+ * the thumbnail, which is better than a black rectangle for as long as an
+ * import takes.
+ */
+function panelBackdrop(thumbnail: string | undefined, videoId: string | undefined): string {
+  if (thumbnail) return img(thumbnail);
+  return videoId ? img(`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`) : "";
+}
+
 export default function WatchPage() {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [audioMode, setAudioMode] = useProfileAudioMode();
@@ -360,7 +370,7 @@ export default function WatchPage() {
                   downloadLabel={t("downloadLocally")}
                 />
               ) : videoUnavailable ? (
-                <div className="wp-panel">
+                <div className="wp-panel" style={{ backgroundImage: `url(${panelBackdrop(video?.thumbnail, id)})` }}>
                   <div className="wp-panel-scrim" />
                   <div className="wp-panel-content">
                     <h3>{t("watchUnavailableTitle")}</h3>
@@ -401,6 +411,12 @@ export default function WatchPage() {
                           {downloadStatus === "queued" ? t("downloadQueued") : t("downloading")}
                         </p>
                       )}
+                    </div>
+                  )}
+                  {playerKind === "loading" && (
+                    <div className="wp-panel-content" aria-busy="true">
+                      <LoaderCircle className="spin" size={30} />
+                      {!video && <p className="wp-panel-sub">{t("watchImportingVideo")}</p>}
                     </div>
                   )}
                   {playerKind === "choice" && (
