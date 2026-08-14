@@ -52,6 +52,46 @@ function factory(overrides: Partial<Parameters<typeof createDownloadStreaming>[0
 
 describe("audio streaming integration", () => {
 
+  test("answers a track's first bytes from what building its playlist read", async () => {
+    // The handover between two entries of a list should not wait on YouTube
+    // for bytes the server held a moment earlier while reading the index.
+    const file = new Uint8Array(400_000).map((_, index) => index % 251);
+    let upstreamReads = 0;
+    const audio = factory({
+      spawn: successfulSpawn(`https://r1.googlevideo.com/audio?expire=${futureExpiry}`),
+      fetchImpl: (async (_input, init) => {
+        upstreamReads++;
+        const header = new Headers(init?.headers).get("range") ?? "";
+        const [start, end] = header.replace("bytes=", "").split("-").map(Number);
+        const last = Math.min(end, file.byteLength - 1);
+        const slice = file.slice(start, last + 1);
+        return new Response(slice, {
+          status: 206,
+          headers: {
+            "Content-Length": String(slice.byteLength),
+            "Content-Range": `bytes ${start}-${last}/${file.byteLength}`,
+          },
+        });
+      }) as unknown as typeof fetch,
+    });
+
+    // Whatever the playlist build reads, the head of the file comes with it.
+    await audio.getAudioVodPlaylist(1, "video");
+    const afterIndex = upstreamReads;
+    expect(afterIndex).toBeGreaterThan(0);
+
+    const first = await audio.getAudioResponse(1, "video", "bytes=0-999");
+    expect(first?.status).toBe(206);
+    expect(first?.headers.get("content-range")).toBe(`bytes 0-999/${file.byteLength}`);
+    expect([...new Uint8Array(await first!.arrayBuffer())]).toEqual([...file.slice(0, 1000)]);
+    expect(upstreamReads).toBe(afterIndex);
+
+    // Past what was kept, it goes upstream as before.
+    const later = await audio.getAudioResponse(1, "video", "bytes=300000-300099");
+    expect(later?.status).toBe(206);
+    expect(upstreamReads).toBeGreaterThan(afterIndex);
+  });
+
   test("stops asking yt-dlp about a source the upstream keeps refusing", async () => {
     // A cookie-authenticated extraction can hand back a URL bound to a token
     // the proxy cannot present, and YouTube answers 403 to everyone else.
