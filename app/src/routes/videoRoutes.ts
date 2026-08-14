@@ -2,6 +2,7 @@ import type { Context, Hono } from "hono";
 import { publishAppEvent } from "../appEvents";
 import { database } from "../database";
 import { getUserSetting } from "../db";
+import { primeAudioSource } from "../downloader";
 import { DeletedVideoError, fetchChannelAbout, fetchChannelFeed, fetchVideoChapters, fetchVideoCreators, fetchVideoInfo, PrivateVideoError } from "../youtube";
 import { discoveryRecommendations, dismissDiscoveryRecommendation, recommendationFeed, refreshDiscoveryInBackground, refreshDiscoveryNow } from "../plugins";
 import { validYouTubeVideoId } from "../youtubeComments";
@@ -15,6 +16,7 @@ import { registerVideoCommentRoutes } from "./videoCommentRoutes";
 import { persistDirectVideoInfo } from "../videoInfoPersistence";
 import { refreshExternalWatchVideo } from "../externalVideoRefresh";
 import { fetchVideoInfoViaYtdlp } from "../videoInfoViaYtdlp";
+import type { AudioSource } from "../audioSourceResolver";
 import { isYouTubeRefusalError, youtubeRefusalGate } from "../youtubeRateLimit";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
@@ -206,8 +208,13 @@ async function fetchVideoInfoForImport(userId: number, videoId: string) {
     return await fetchVideoInfo(videoId);
   } catch (error) {
     if (error instanceof PrivateVideoError || error instanceof DeletedVideoError) throw error;
-    const viaYtdlp = await fetchVideoInfoViaYtdlp(userId, videoId).catch(() => null);
+    const audio: { source: AudioSource | null } = { source: null };
+    const viaYtdlp = await fetchVideoInfoViaYtdlp(userId, videoId, Bun.spawn, audio).catch(() => null);
     if (!viaYtdlp) throw error;
+    // The answer carried the audio track too. Handing it over here is the
+    // difference between a player that starts and one that waits for the same
+    // question to be asked again.
+    if (audio.source) primeAudioSource(userId, videoId, audio.source);
     return viaYtdlp;
   }
 }

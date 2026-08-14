@@ -1,6 +1,9 @@
 import { downloadCookiesConfigured, ytdlpCommand, ytdlpStatus } from "./downloader";
 import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
 import { log } from "./logger";
+import type { AudioSource } from "./audioSourceResolver";
+import { audioSourceHeaders } from "./audioSourceResolver";
+import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import type { VideoInfo } from "./youtube";
 import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
 
@@ -78,6 +81,46 @@ export function videoInfoFromYtdlpJson(videoId: string, json: Record<string, unk
   };
 }
 
+/** googlevideo URLs carry an `expire` unix-second param; keep just under it. */
+function sourceExpiry(url: string): number {
+  const match = url.match(/[?&]expire=(\d+)/);
+  const expiresAt = match ? Number(match[1]) * 1000 : 0;
+  return expiresAt ? Math.max(Date.now(), expiresAt - 300_000) : Date.now() + 3 * 3_600_000;
+}
+
+/**
+ * The audio track hiding in a full description of the video.
+ *
+ * The import asks yt-dlp about the whole video, and the answer already
+ * contains every format with its URL and the headers it expects. Resolving the
+ * audio again, seconds later, is the same six seconds of the same work — so it
+ * is taken from here instead, and the player finds it waiting.
+ */
+export function audioSourceFromYtdlpJson(json: Record<string, unknown>): AudioSource | null {
+  const formats = Array.isArray(json.formats) ? json.formats : [];
+  let best: { url: string; headers?: Record<string, string>; rate: number } | null = null;
+  for (const entry of formats) {
+    const format = entry as Record<string, unknown>;
+    const acodec = typeof format.acodec === "string" ? format.acodec : "";
+    const vcodec = typeof format.vcodec === "string" ? format.vcodec : "";
+    // Audio only, and the AAC-in-MP4 the audio path is built around.
+    if (!acodec.startsWith("mp4a") || (vcodec && vcodec !== "none")) continue;
+    const url = typeof format.url === "string" ? safeGoogleVideoUrl(format.url) : null;
+    if (!url) continue;
+    const rate = Number(format.abr ?? format.tbr ?? 0);
+    if (best && !(rate > best.rate)) continue;
+    best = {
+      url,
+      headers: audioSourceHeaders(
+        format.http_headers ? JSON.stringify(format.http_headers) : undefined,
+      ),
+      rate: Number.isFinite(rate) ? rate : 0,
+    };
+  }
+  if (!best) return null;
+  return { url: best.url, mime: "audio/mp4", expiresAt: sourceExpiry(best.url), headers: best.headers };
+}
+
 async function runAttempt(
   userId: number,
   videoId: string,
@@ -85,6 +128,7 @@ async function runAttempt(
   spawn: typeof Bun.spawn,
   /** Filled in when YouTube turned the caller away rather than the request. */
   refusedRef: { refused: boolean } = { refused: false },
+  audioRef: { source: AudioSource | null } = { source: null },
 ): Promise<VideoInfo | null> {
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
@@ -112,7 +156,10 @@ async function runAttempt(
       refusedRef.refused = callerWasRefused(stderr);
       return null;
     }
-    return videoInfoFromYtdlpJson(videoId, JSON.parse(stdout) as Record<string, unknown>);
+    const json = JSON.parse(stdout) as Record<string, unknown>;
+    const info = videoInfoFromYtdlpJson(videoId, json);
+    if (info) audioRef.source = audioSourceFromYtdlpJson(json);
+    return info;
   } catch {
     return null;
   } finally {
@@ -128,18 +175,22 @@ export async function fetchVideoInfoViaYtdlp(
   userId: number,
   videoId: string,
   spawn: typeof Bun.spawn = Bun.spawn,
+  /** Receives the audio track found alongside, so nobody resolves it twice. */
+  audioRef: { source: AudioSource | null } = { source: null },
 ): Promise<VideoInfo | null> {
   if (!(await ytdlpStatus())) return null;
   const startedAt = Date.now();
   const order = cookieAttemptMemory.order(userId, downloadCookiesConfigured(userId));
   for (const useCookies of order) {
     const refusal = { refused: false };
-    const info = await runAttempt(userId, videoId, useCookies, spawn, refusal);
+    const info = await runAttempt(userId, videoId, useCookies, spawn, refusal, audioRef);
     cookieAttemptMemory.record({
       userId, useCookies, resolved: Boolean(info), refused: refusal.refused,
     });
     if (info) {
-      log.info("video.info_via_ytdlp", { videoId, usedCookies: useCookies, ms: Date.now() - startedAt });
+      log.info("video.info_via_ytdlp", {
+        videoId, usedCookies: useCookies, ms: Date.now() - startedAt, audio: Boolean(audioRef.source),
+      });
       return info;
     }
   }

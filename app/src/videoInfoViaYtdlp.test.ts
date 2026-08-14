@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { videoInfoFromYtdlpJson } from "./videoInfoViaYtdlp";
+import { audioSourceFromYtdlpJson, videoInfoFromYtdlpJson } from "./videoInfoViaYtdlp";
 
 const base = {
   title: "A video",
@@ -66,5 +66,42 @@ describe("video info from yt-dlp", () => {
   test("takes the uploader when the channel name is missing", () => {
     const json = { ...base, channel: undefined, uploader: "Someone" };
     expect(videoInfoFromYtdlpJson("abc", json)?.channelTitle).toBe("Someone");
+  });
+});
+
+describe("audio track taken from the same answer", () => {
+  const format = (extra: Record<string, unknown>) => ({
+    url: "https://r1.googlevideo.com/audio?expire=9999999999",
+    acodec: "mp4a.40.2",
+    vcodec: "none",
+    abr: 129,
+    ...extra,
+  });
+
+  test("finds the AAC track and the headers it expects", () => {
+    const source = audioSourceFromYtdlpJson({
+      formats: [format({ http_headers: { "User-Agent": "Chrome/149", Range: "bytes=0-1" } })],
+    });
+    expect(source?.url).toContain("googlevideo.com/audio");
+    expect(source?.mime).toBe("audio/mp4");
+    expect(source?.headers).toEqual({ "User-Agent": "Chrome/149" });
+    expect(source?.expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  test("prefers the better of two AAC tracks", () => {
+    const source = audioSourceFromYtdlpJson({
+      formats: [
+        format({ abr: 49, url: "https://r1.googlevideo.com/low?expire=9999999999" }),
+        format({ abr: 129, url: "https://r1.googlevideo.com/high?expire=9999999999" }),
+      ],
+    });
+    expect(source?.url).toContain("/high");
+  });
+
+  test("ignores anything that is not an audio-only AAC track", () => {
+    expect(audioSourceFromYtdlpJson({ formats: [format({ acodec: "opus" })] })).toBeNull();
+    expect(audioSourceFromYtdlpJson({ formats: [format({ vcodec: "avc1.4d401f" })] })).toBeNull();
+    expect(audioSourceFromYtdlpJson({ formats: [format({ url: "https://example.com/audio" })] })).toBeNull();
+    expect(audioSourceFromYtdlpJson({})).toBeNull();
   });
 });

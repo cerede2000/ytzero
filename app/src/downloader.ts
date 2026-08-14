@@ -1059,7 +1059,7 @@ const {
   getLiveAudioPlaylist,
   getLiveAudioResource,
   isSegmentName,
-  invalidateAudioSources, retryAudioSource,
+  invalidateAudioSources, primeAudioSource, retryAudioSource,
   liveStreamEnabled,
   resetHlsScratch,
 } = createDownloadStreaming({
@@ -1074,7 +1074,7 @@ const {
   ytdlpStatus,
 });
 
-export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodPlaylist, getHlsPlaylist, getHlsResource, getHlsSegment, getVideoResponse, hasHlsSession, getLiveAudioPlaylist, getLiveAudioResource, invalidateAudioSources, isSegmentName, liveStreamEnabled, retryAudioSource };
+export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodPlaylist, getHlsPlaylist, getHlsResource, getHlsSegment, getVideoResponse, hasHlsSession, getLiveAudioPlaylist, getLiveAudioResource, invalidateAudioSources, isSegmentName, liveStreamEnabled, primeAudioSource, retryAudioSource };
 // ---------- scheduler ----------
 
 let ticking = false;
