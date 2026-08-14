@@ -4,6 +4,7 @@ import { decodeHtmlEntities } from "./htmlEntities";
 import { createYoutubeSearch, parseAbbreviatedCount } from "./youtubeSearch";
 import { isYouTubeRateLimitError, isYouTubeRefusalError, readYouTubeResponse, YouTubeRefusalError, youtubeRefusalGate } from "./youtubeRateLimit";
 import { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError } from "./youtubeVideoAvailability";
+import { videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 import { inferIsShortFromMetadata } from "./shortClassification";
 import { resolveYouTubeLanguage, youtubeRequestHeaders, youtubeRssHeaders, type ResolvedYouTubeLanguage } from "./youtubeRequestLanguage";
 import { MetadataCookieFallbackBudget, retryVideoInfoWithCookies } from "./videoMetadataFallback";
