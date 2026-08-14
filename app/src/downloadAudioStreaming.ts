@@ -37,8 +37,16 @@ const REFUSAL_QUIET_MS = 10_000;
 const REFUSALS_BEFORE_QUIET = 2;
 /** Statuses that say the caller is the problem, so retrying changes nothing. */
 const AUDIO_REFUSAL_STATUSES = new Set([401, 403, 429]);
-/** A refused URL is asked once more after this, before anything is re-resolved. */
-const AUDIO_REFUSAL_RETRY_MS = 400;
+/**
+ * How long to wait before asking a refused URL again, per attempt.
+ *
+ * Measured on a refused address: the same URL, with the same headers, answers
+ * 403 and then 206 a moment later — and a token changes nothing, because the
+ * refusal is of the address rather than of the request. Re-resolving is the
+ * expensive way to wait: six seconds of yt-dlp to obtain a URL that is refused
+ * in exactly the same way. Waiting is the cheap way.
+ */
+const AUDIO_RETRY_DELAYS_MS = [400, 1_200, 2_500];
 
 export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamingDependencies) {
   const {
@@ -155,31 +163,26 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     return null;
   }
 
-  async function waitForFreshUrlRetry(delay: number, signal: AbortSignal): Promise<boolean> {
-    if (signal.aborted) return false;
-    return await new Promise((resolve) => {
-      const timer = setTimeout(() => finish(true), delay);
-      const abort = () => finish(false);
-      const finish = (value: boolean) => {
-        clearTimeout(timer);
-        signal.removeEventListener("abort", abort);
-        resolve(value);
-      };
-      signal.addEventListener("abort", abort, { once: true });
-    });
-  }
-
-  async function retryFreshForbidden(
-    userId: number, videoId: string, source: AudioSource, range: AudioByteRange, signal: AbortSignal,
+  /** Ask for a range, waiting out a refusal rather than paying to re-resolve. */
+  async function askUpstream(
+    userId: number,
+    videoId: string,
+    source: AudioSource,
+    range: AudioByteRange,
+    signal: AbortSignal,
   ): Promise<Response | null> {
-    if (!source.issuedAt || Date.now() - source.issuedAt > FRESH_URL_WINDOW_MS) return null;
-    for (const delay of FRESH_URL_RETRY_DELAYS_MS) {
-      if (!await waitForFreshUrlRetry(delay, signal)) return null;
-      const retry = await fetchAudioUpstream(userId, videoId, source, range, signal);
-      if (!retry || retry.status !== 403) return retry;
-      await retry.body?.cancel().catch(() => {});
+    let response = await fetchAudioUpstream(userId, videoId, source, range, signal);
+    for (const delay of AUDIO_RETRY_DELAYS_MS) {
+      if (!response || !AUDIO_REFUSAL_STATUSES.has(response.status) || signal.aborted) return response;
+      await response.body?.cancel().catch(() => {});
+      await wait(delay);
+      if (signal.aborted) return null;
+      audioDiagnostic("info", "audio.upstream_asked_again", {
+        userId, videoId, status: response.status, afterMs: delay,
+      });
+      response = await fetchAudioUpstream(userId, videoId, source, range, signal);
     }
-    return null;
+    return response;
   }
 
   async function validatedAudioUpstream(
@@ -193,30 +196,17 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     let source = await resolveAudioSource(userId, videoId, signal);
     if (!source) return null;
 
-    let upstream = await fetchAudioUpstream(userId, videoId, source, range, signal);
-    if (upstream?.status === 403) {
-      await upstream.body?.cancel().catch(() => {});
-      upstream = await retryFreshForbidden(userId, videoId, source, range, signal) ?? new Response(null, { status: 403 });
-    }
-    if (upstream && (upstream.status === 403 || upstream.status === 410)) {
+    let upstream = await askUpstream(userId, videoId, source, range, signal);
+    // Every delay spent and still refused: the URL itself may be the problem
+    // after all — an expired one answers the same way — so resolve once more.
+    if (upstream && AUDIO_REFUSAL_STATUSES.has(upstream.status) && !signal.aborted) {
       audioDiagnostic("info", "audio.source_refresh", {
         userId, videoId, reason: "upstream_status", status: upstream.status,
       });
       await upstream.body?.cancel().catch(() => {});
       source = await refreshAudioSource(userId, videoId, source.url, signal);
       if (!source) return null;
-      upstream = await fetchAudioUpstream(userId, videoId, source, range, signal);
-    }
-    // Measured on a refused address: a freshly minted URL answers 403 to its
-    // first request and 206 to the next, on the same URL with the same
-    // headers. Asking again costs nothing; resolving again costs six seconds
-    // and, until now, a failed request the listener had to retry by hand.
-    if (upstream && AUDIO_REFUSAL_STATUSES.has(upstream.status) && !signal.aborted) {
-      await upstream.body?.cancel().catch(() => {});
-      await wait(AUDIO_REFUSAL_RETRY_MS);
-      if (signal.aborted) return null;
-      audioDiagnostic("info", "audio.upstream_second_ask", { userId, videoId, status: upstream.status });
-      upstream = await fetchAudioUpstream(userId, videoId, source.url, range, signal, source.headers);
+      upstream = await askUpstream(userId, videoId, source, range, signal);
     }
     if (!upstream) {
       if (!signal.aborted) discardAudioSource(userId, videoId, source.url);
