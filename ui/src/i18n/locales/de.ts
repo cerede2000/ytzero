@@ -1239,6 +1239,7 @@ export const de: Locale = {
     membersOnlyWatchTitle: "Dieses Video ist nur für Kanalmitglieder verfügbar",
     membersOnlyWatchDescription: "Die Person hinter diesem Kanal hat das Video nur für Mitglieder freigegeben. Wenn du den Kanal unterstützt, öffne es auf YouTube und melde dich mit dem richtigen Konto an.",
     membersOnlyWatchAction: "Auf YouTube öffnen",
+    watchImportingVideo: "Video wird geladen …",
     watchUnavailableTitle: "Dieses Video konnte nicht geladen werden",
     watchUnavailableDescription: "YouTube hat beim Abruf dieses Videos nicht geantwortet. Ein zweiter Versuch klappt meist.",
     watchUnavailableRetry: "Erneut versuchen",

@@ -1,5 +1,5 @@
 import { downloadCookiesConfigured, ytdlpCommand, ytdlpStatus } from "./downloader";
-import { cookieAttemptMemory } from "./cookieAttemptOrder";
+import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
 import { log } from "./logger";
 import type { VideoInfo } from "./youtube";
 import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
@@ -83,6 +83,8 @@ async function runAttempt(
   videoId: string,
   useCookies: boolean,
   spawn: typeof Bun.spawn,
+  /** Filled in when YouTube turned the caller away rather than the request. */
+  refusedRef: { refused: boolean } = { refused: false },
 ): Promise<VideoInfo | null> {
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
@@ -99,12 +101,17 @@ async function runAttempt(
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; try { process.kill(); } catch {} }, INFO_TIMEOUT_MS);
   try {
-    const [stdout, , exitCode] = await Promise.all([
+    const [stdout, stderr, exitCode] = await Promise.all([
       new Response(process.stdout as ReadableStream<Uint8Array>).text(),
       new Response(process.stderr as ReadableStream<Uint8Array>).text(),
       process.exited,
     ]);
-    if (timedOut || exitCode !== 0) return null;
+    if (timedOut || exitCode !== 0) {
+      // What this attempt learned is worth passing on: the audio resolver is
+      // about to ask the same question, and can skip the same doomed attempt.
+      refusedRef.refused = callerWasRefused(stderr);
+      return null;
+    }
     return videoInfoFromYtdlpJson(videoId, JSON.parse(stdout) as Record<string, unknown>);
   } catch {
     return null;
@@ -126,8 +133,11 @@ export async function fetchVideoInfoViaYtdlp(
   const startedAt = Date.now();
   const order = cookieAttemptMemory.order(userId, downloadCookiesConfigured(userId));
   for (const useCookies of order) {
-    const info = await runAttempt(userId, videoId, useCookies, spawn);
-    cookieAttemptMemory.record({ userId, useCookies, resolved: Boolean(info) });
+    const refusal = { refused: false };
+    const info = await runAttempt(userId, videoId, useCookies, spawn, refusal);
+    cookieAttemptMemory.record({
+      userId, useCookies, resolved: Boolean(info), refused: refusal.refused,
+    });
     if (info) {
       log.info("video.info_via_ytdlp", { videoId, usedCookies: useCookies, ms: Date.now() - startedAt });
       return info;

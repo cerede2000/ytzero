@@ -1240,6 +1240,7 @@ export const pl: Locale = {
     membersOnlyWatchTitle: "Ten film jest dostępny dla wspierających",
     membersOnlyWatchDescription: "Osoba tworząca ten kanał udostępniła film tylko wspierającym. Jeśli wspierasz kanał, otwórz film na YouTube i zaloguj się na odpowiednie konto.",
     membersOnlyWatchAction: "Otwórz na YouTube",
+    watchImportingVideo: "Wczytywanie filmu…",
     watchUnavailableTitle: "Nie udało się wczytać tego filmu",
     watchUnavailableDescription: "YouTube nie odpowiedział przy pobieraniu tego filmu. Druga próba zwykle się udaje.",
     watchUnavailableRetry: "Spróbuj ponownie",
