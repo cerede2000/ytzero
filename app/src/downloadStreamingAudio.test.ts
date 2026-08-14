@@ -44,6 +44,8 @@ function factory(overrides: Partial<Parameters<typeof createDownloadStreaming>[0
     readLines: async () => {},
     ytdlpStatus: async () => "test",
     audioDiagnostic: () => {},
+    // Refusals are waited out in production; a test should not sit through it.
+    wait: async () => {},
     ...overrides,
   });
 }
@@ -218,10 +220,10 @@ describe("audio streaming integration", () => {
 
     const response = await audio.getAudioResponse(1, "video", "bytes=0-0");
     expect(response?.status).toBe(206);
+    // The first URL is asked for again before anything is re-resolved, because
+    // waiting out a refusal is cheaper than six seconds of yt-dlp.
     expect(spawns).toBe(2);
-    // Fresh signed URLs may take a moment before Googlevideo accepts them;
-    // retry the same URL before paying for another yt-dlp resolution.
-    expect(fetches).toBe(6);
+    expect(fetches).toBe(5);
   });
 
   test("follows a bounded, revalidated googlevideo redirect and preserves Range", async () => {
@@ -316,7 +318,10 @@ describe("audio streaming integration", () => {
         const url = String(input);
         if (url.includes("version-1")) {
           staleFetches++;
-          await (staleFetches === 1 ? firstStale : lateStale);
+          // The first two are the two requests racing; the rest are the same
+          // request asking again, which needs no holding.
+          if (staleFetches === 1) await firstStale;
+          else if (staleFetches === 2) await lateStale;
           return new Response(null, { status: 403 });
         }
         return rangeResponse([7], 0, 1);
