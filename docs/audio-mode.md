@@ -92,6 +92,12 @@ being turned away, paid before the player is even chosen. The refusal is about
 the address rather than the video, so the first one speaks for the rest until
 something gets through again.
 
+Building a playlist reads the head of the file, and that head is kept for ten
+minutes (`audio.start_served`): the init segment and the start of the first
+fragment are exactly what the player asks for next. Warming the following
+entry of a list therefore leaves its resolution, its index and its first bytes
+all in hand before the track changes.
+
 A freshly signed URL is not usable the instant it is issued: every request in
 the first second or so is answered 403, whatever it looks like, and the same
 URL then serves in forty milliseconds. The proxy asks again on a short ladder
