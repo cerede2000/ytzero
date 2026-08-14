@@ -52,11 +52,10 @@ describe("audio streaming integration", () => {
 
   test("stops asking yt-dlp about a source the upstream keeps refusing", async () => {
     // A cookie-authenticated extraction can hand back a URL bound to a token
-    // the proxy has no way to present, and YouTube answers 403 to everyone
-    // else. Re-resolving produces the same URL, so a player retrying every
-    // couple of seconds becomes a stream of requests aimed at a host that has
-    // already refused us — which is what gets an address blocked in the first
-    // place.
+    // the proxy cannot present, and YouTube answers 403 to everyone else.
+    // One refusal is worth another go — the same video often plays a moment
+    // later — but a player retrying every couple of seconds must not become a
+    // stream of requests aimed at a host that has already said no.
     let resolves = 0;
     let clock = 1_000;
     const audio = factory({
@@ -72,15 +71,21 @@ describe("audio streaming integration", () => {
     const afterFirst = resolves;
     expect(afterFirst).toBeGreaterThan(0);
 
-    expect(await audio.getAudioResponse(1, "video", null)).toBeNull();
-    expect(await audio.getAudioResponse(1, "video", "bytes=0-1")).toBeNull();
-    expect(resolves).toBe(afterFirst);
-
-    // The quiet spell is short: a source that comes back on its own is picked
-    // up again without anyone having to ask.
-    clock += 30_000;
+    // A second attempt is still made: the first refusal alone proves nothing.
     expect(await audio.getAudioResponse(1, "video", null)).toBeNull();
     expect(resolves).toBeGreaterThan(afterFirst);
+
+    // Two in a row do, and the requests that follow cost nothing.
+    const afterSecond = resolves;
+    expect(await audio.getAudioResponse(1, "video", null)).toBeNull();
+    expect(await audio.getAudioResponse(1, "video", "bytes=0-1")).toBeNull();
+    expect(resolves).toBe(afterSecond);
+
+    // The pause is short: a source that comes back is picked up without
+    // anyone having to ask for it.
+    clock += 10_000;
+    expect(await audio.getAudioResponse(1, "video", null)).toBeNull();
+    expect(resolves).toBeGreaterThan(afterSecond);
   });
   test("normalizes a range-less GET to one bounded verified 206 chunk", async () => {
     const ranges: string[] = [];

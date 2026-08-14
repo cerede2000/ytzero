@@ -26,15 +26,32 @@ interface DownloadAudioStreamingDependencies {
 const AUDIO_REQUEST_TIMEOUT_MS = 45_000;
 const AUDIO_REDIRECT_LIMIT = 4;
 const AUDIO_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-/** How long a refused source is left alone before yt-dlp is asked again. */
-const REFUSAL_QUIET_MS = 30_000;
+/**
+ * How long a source that keeps being refused is left alone. Short: a refusal
+ * here is often not final — the same video plays a moment later — so this is
+ * there to stop a storm of retries, not to give up on a track.
+ */
+const REFUSAL_QUIET_MS = 10_000;
+/** A single refusal is worth another go; two in a row are worth pausing on. */
+const REFUSALS_BEFORE_QUIET = 2;
 /** Statuses that say the caller is the problem, so retrying changes nothing. */
 const AUDIO_REFUSAL_STATUSES = new Set([401, 403, 429]);
 
 export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamingDependencies) {
   const { audioDiagnostic = defaultAudioDiagnostic, fetchImpl = fetch, now = Date.now } = dependencies;
-  /** Videos whose upstream just refused us, and when. */
-  const refusals = new Map<string, number>();
+  /** Videos whose upstream refused us: how many times in a row, and when. */
+  const refusals = new Map<string, { at: number; strikes: number }>();
+
+  /** True while a video has been refused often enough to stop asking for now. */
+  function refusalQuiet(userId: number, videoId: string): boolean {
+    const refusal = refusals.get(audioSourceKey(userId, videoId));
+    if (!refusal || refusal.strikes < REFUSALS_BEFORE_QUIET) return false;
+    if (now() - refusal.at >= REFUSAL_QUIET_MS) return false;
+    audioDiagnostic("info", "audio.source_quiet", {
+      userId, videoId, sinceMs: now() - refusal.at, strikes: refusal.strikes,
+    });
+    return true;
+  }
   const {
     discardAudioSource,
     invalidateAudioSources: invalidateResolvedAudioSources,
@@ -82,6 +99,7 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     source: AudioSource,
     range: AudioByteRange,
     signal: AbortSignal,
+    sourceHeaders?: Record<string, string>,
   ): Promise<Response | null> {
     let currentUrl = source.url;
     for (let hop = 0; hop <= AUDIO_REDIRECT_LIMIT; hop++) {
@@ -162,13 +180,7 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     signal: AbortSignal,
   ): Promise<AudioUpstreamResult> {
     const refusedKey = audioSourceKey(userId, videoId);
-    const refusedAt = refusals.get(refusedKey);
-    if (refusedAt !== undefined && now() - refusedAt < REFUSAL_QUIET_MS) {
-      audioDiagnostic("info", "audio.source_quiet", {
-        userId, videoId, sinceMs: now() - refusedAt,
-      });
-      return null;
-    }
+    if (refusalQuiet(userId, videoId)) return null;
     let source = await resolveAudioSource(userId, videoId, signal);
     if (!source) return null;
 
@@ -215,8 +227,12 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
         // is how an address stays refused. Other failures still re-resolve:
         // a server error often means the node, not the caller.
         if (AUDIO_REFUSAL_STATUSES.has(upstream.status)) {
-          for (const [key, at] of refusals) if (now() - at >= REFUSAL_QUIET_MS) refusals.delete(key);
-          refusals.set(refusedKey, now());
+          for (const [key, refusal] of refusals) {
+            if (now() - refusal.at >= REFUSAL_QUIET_MS) refusals.delete(key);
+          }
+          const previous = refusals.get(refusedKey);
+          const strikes = previous && now() - previous.at < REFUSAL_QUIET_MS ? previous.strikes + 1 : 1;
+          refusals.set(refusedKey, { at: now(), strikes });
         }
       }
       return null;
@@ -361,7 +377,11 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
   const audioVod = createDownloadAudioVodStreaming({
     audioDiagnostic,
     readPrefix: readAudioPrefix,
-    resolveAudioSource,
+    // The playlist resolves its source before reading anything, so the quiet
+    // spell has to be honoured here too — otherwise a refused video still pays
+    // yt-dlp in full before being told no.
+    resolveAudioSource: async (userId, videoId, signal) =>
+      refusalQuiet(userId, videoId) ? null : resolveAudioSource(userId, videoId, signal),
   });
 
   function invalidateAudioSources(userId: number): void {

@@ -65,6 +65,12 @@ follows, so an expired cookie costs one resolution rather than a dead player.
 And yt-dlp's cache lives on the data volume, so the player script it solves
 and the tokens it computes survive a restart instead of being paid for again.
 
+A resolved source also carries the headers yt-dlp says its format expects,
+and the proxy fetches with them. A URL minted for a signed-in client is bound
+to that client and answers 403 to a caller that does not look like it — a bare
+user agent included — which reads in the log as a resolution that worked
+followed by an upstream that refused.
+
 A refusal also quiets the video-info lookups for ninety seconds. Opening a
 video refreshes its row first, and that refresh tries the watch page, then
 InnerTube, then the embed — three attempts that all fail while the address is
@@ -72,10 +78,11 @@ being turned away, paid before the player is even chosen. The refusal is about
 the address rather than the video, so the first one speaks for the rest until
 something gets through again.
 
-A source that is refused even after its URL has been resolved again is left
-alone for thirty seconds (`audio.source_quiet`). Retrying a refusal changes
-nothing, and a player asking every couple of seconds is how an address stays
-refused.
+A source refused twice in a row is left alone for ten seconds
+(`audio.source_quiet`), including before its playlist is built. One refusal is
+worth another go — the same video often plays a moment later — but a player
+retrying every couple of seconds must not become a stream of requests aimed at
+a host that has already said no. Asking for a retry by hand clears it.
 
 ## How streaming works
 
