@@ -8,6 +8,7 @@ import { accessControlSnapshot, effectivePermissions, groupMemberCount, updateGr
 import { computeShowFrom, SCHEDULE_BUCKETS } from "../scheduleTime";
 import { configuredTimeZone, isValidTimeZone, timeZoneIsEnvironmentLocked } from "../timeZone";
 import { normalizeKeyboardShortcutSetting } from "../keyboardShortcutSettings";
+import { warmPotProvider } from "../ytdlpPotProvider";
 import { isLanguage } from "../../../shared/uiLanguages";
 import { removeRoleFromExternalMappings } from "../externalRoleMappings";
 import { normalizeYouTubeTitleLanguage } from "../youtubeRequestLanguage";
@@ -220,6 +221,10 @@ api.post("/child-lock/disable", async (c) => {
 
 api.get("/settings", (c) => {
   const uid = currentUserId(c);
+  // Every page begins by asking for these. Computing a proof-of-origin token
+  // takes seconds and belongs nowhere near the first track someone plays, so
+  // it is computed here instead — throttled, and only where one is installed.
+  warmPotProvider();
   const settings: Record<string, string> = {};
   for (const key of Object.keys(SETTING_DEFAULTS)) {
     if (key === "child_lock_pin_hash") continue;
