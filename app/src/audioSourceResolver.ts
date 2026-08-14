@@ -227,6 +227,19 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     return resolveAudioSource(userId, videoId, signal);
   }
 
+  /**
+   * Hand the resolver a source someone else already paid for.
+   *
+   * Importing a video runs yt-dlp over the whole video, formats included, and
+   * the audio one is right there in the answer. Resolving it again seconds
+   * later costs another six seconds of the same work, in front of a listener
+   * waiting for a track to start.
+   */
+  function primeAudioSource(userId: number, videoId: string, source: AudioSource): void {
+    if (audioSources.get(userId, videoId)) return;
+    audioSources.set(userId, videoId, source);
+  }
+
   function discardAudioSource(userId: number, videoId: string, failedUrl: string): void {
     const current = audioSources.get(userId, videoId);
     if (current?.url === failedUrl) audioSources.delete(userId, videoId);
@@ -256,5 +269,8 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     }
   }
 
-  return { discardAudioSource, invalidateAudioSources, refreshAudioSource, resolveAudioSource, retryAudioSource };
+  return {
+    discardAudioSource, invalidateAudioSources, primeAudioSource,
+    refreshAudioSource, resolveAudioSource, retryAudioSource,
+  };
 }
