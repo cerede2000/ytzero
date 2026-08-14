@@ -59,7 +59,7 @@ describe("audio streaming integration", () => {
     let upstreamReads = 0;
     const audio = factory({
       spawn: successfulSpawn(`https://r1.googlevideo.com/audio?expire=${futureExpiry}`),
-      fetchImpl: (async (_input, init) => {
+      fetchImpl: (async (_input: unknown, init?: RequestInit) => {
         upstreamReads++;
         const header = new Headers(init?.headers).get("range") ?? "";
         const [start, end] = header.replace("bytes=", "").split("-").map(Number);
