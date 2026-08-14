@@ -151,9 +151,13 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
    * page is told where playback went and catches up when someone looks at it.
    */
   const trackSource = useCallback((id: string) => {
-    const base = transport === "playlist" ? api.audioPlaylistUrl(id) : api.audioUrl(id);
-    return `${base}${base.includes("?") ? "&" : "?"}c=${callerRef.current}`;
-  }, [transport]);
+    // Swapping a source by hand skips hls.js, so the playlist is only an
+    // option where the platform plays HLS itself — which is the platform this
+    // exists for. Everywhere else the progressive stream plays natively, and
+    // the page rebuilds the entry properly once someone looks at it again.
+    const nativeHls = Boolean(audioRef.current?.canPlayType("application/vnd.apple.mpegurl"));
+    return nativeHls ? api.audioHlsUrl(id) : api.audioUrl(id);
+  }, [audioRef]);
 
   /**
    * Make the next entry ready before it is wanted.
@@ -176,7 +180,6 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
   const switchToTrack = useCallback((track: NeighbouringTrack) => {
     const audio = audioRef.current;
     if (!audio || live) return false;
-    const base = trackSource(track.videoId);
     advancedRef.current = track.videoId;
     playingTrackRef.current = track;
     setPlayingTrack(track);
@@ -184,7 +187,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     startedAtRef.current = 0;
     endedRef.current = false;
     setBuffering(true);
-    audio.src = `${base}${base.includes("?") ? "&" : "?"}c=${callerRef.current}`;
+    audio.src = trackSource(track.videoId);
     audio.load();
     void audio.play().catch(() => {});
     try {
@@ -196,7 +199,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     } catch {}
     onTrackAdvanced?.(track.videoId);
     return true;
-  }, [live, onTrackAdvanced, transport]);
+  }, [audioRef, live, onTrackAdvanced, trackSource]);
 
   const setAudioPosition = useCallback((seconds: number) => {
     const audio = audioRef.current;
