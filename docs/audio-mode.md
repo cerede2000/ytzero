@@ -59,6 +59,12 @@ companion service is needed. Two variables adjust it:
 - `POT_PROVIDER_URL` — the address of a companion provider service, if one is
   preferred to the bundled script.
 
+A token is computed when someone opens a page rather than when a track starts:
+it is about the caller, not about a video, so nothing needs to be playing to
+obtain one, and paying its few seconds in the middle of the first track of the
+day is the worst possible moment. Browsing keeps it fresh (`ytdlp.pot_warmed`),
+and an instance nobody uses stops paying for it.
+
 Two things keep the wait down once an address is being challenged. The
 anonymous attempt is tried first by default, because a logged-in client offers
 fewer formats — but once it has been refused and cookies have carried the same
