@@ -92,6 +92,12 @@ being turned away, paid before the player is even chosen. The refusal is about
 the address rather than the video, so the first one speaks for the rest until
 something gets through again.
 
+A freshly signed URL is not usable the instant it is issued: every request in
+the first second or so is answered 403, whatever it looks like, and the same
+URL then serves in forty milliseconds. The proxy asks again on a short ladder
+(`audio.upstream_not_ready_yet`) rather than resolving another URL, which
+would be just as new and cost six seconds to obtain.
+
 A source refused twice in a row is left alone for ten seconds
 (`audio.source_quiet`), including before its playlist is built. One refusal is
 worth another go — the same video often plays a moment later — but a player
