@@ -11,13 +11,29 @@
   .watch-layout { grid-template-columns: 1fr; }
 }
 @media (max-width: 1120px) {
-  .watch-actions {
+  /* The same line, before its contents exist: reserves the space instead of
+   letting the page jump when the import lands. */
+.watch-row--pending {
+  min-height: 40px;
+  opacity: .55;
+}
+.watch-row--pending .watch-actions { min-height: 34px; }
+
+.watch-actions {
     flex: 0 0 100%;
   }
 }
 @media (max-width: 640px) {
   .watch-action-desktop { display: none !important; }
-  .watch-actions {
+  /* The same line, before its contents exist: reserves the space instead of
+   letting the page jump when the import lands. */
+.watch-row--pending {
+  min-height: 40px;
+  opacity: .55;
+}
+.watch-row--pending .watch-actions { min-height: 34px; }
+
+.watch-actions {
     justify-content: flex-start;
     gap: 8px;
   }
@@ -284,6 +300,14 @@
   gap: 10px;
   margin-bottom: 14px;
 }
+/* The same line, before its contents exist: reserves the space instead of
+   letting the page jump when the import lands. */
+.watch-row--pending {
+  min-height: 40px;
+  opacity: .55;
+}
+.watch-row--pending .watch-actions { min-height: 34px; }
+
 .watch-actions {
   display: flex;
   flex: 0 1 auto;

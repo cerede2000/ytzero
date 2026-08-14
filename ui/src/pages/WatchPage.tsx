@@ -559,6 +559,20 @@ export default function WatchPage() {
             {descOpen ? t("showLess") : t("showMore")}
           </button>
         )}
+        {!video && videoInfo && (
+          // The row is still being imported, and everything on this line hangs
+          // off it. Leaving the line out entirely means the page rearranges
+          // itself under the reader's eyes when the import lands; keeping its
+          // height, with the channel it already knows, means it only fills in.
+          <div className="watch-row watch-row--pending" aria-busy="true">
+            <div className="watch-channel">
+              <Link to={`/channel/${videoInfo.channelId}`} className="name channel-link">
+                {videoInfo.channelTitle}
+              </Link>
+            </div>
+            <div className="watch-actions" />
+          </div>
+        )}
         {video && <div className="watch-row">
           <div className="watch-channel">
             <VideoCreators creators={videoCreators.length > 0 ? videoCreators : [{
