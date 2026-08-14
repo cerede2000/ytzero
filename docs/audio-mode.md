@@ -40,6 +40,28 @@ It is not available for upcoming, private, members-only, or unavailable videos,
 child profiles, or Watch Together sessions. An ended livestream can use the
 regular-video path after YouTube publishes a compatible audio format.
 
+### Proof-of-origin tokens
+
+An address YouTube does not recognise is increasingly answered with "Sign in to
+confirm you're not a bot", and the clients that accept cookies are handed media
+URLs bound to a proof-of-origin token. Cookies alone do not settle this: they
+get the extraction through, and the URL that comes back is then refused with a
+403 to whoever fetches it — which reads in the log as a resolution that
+succeeded followed by `audio.upstream_failed`.
+
+The image carries the `bgutil` provider and its yt-dlp plugin, and runs it
+under the Deno that is already there, so the token is computed locally and no
+companion service is needed. Two variables adjust it:
+
+- `POT_PROVIDER_HOME` — where the provider lives, `off` to ignore it;
+- `POT_PROVIDER_URL` — the address of a companion provider service, if one is
+  preferred to the bundled script.
+
+A source that is refused even after its URL has been resolved again is left
+alone for thirty seconds (`audio.source_quiet`). Retrying a refusal changes
+nothing, and a player asking every couple of seconds is how an address stays
+refused.
+
 ## How streaming works
 
 For a completed download, the audio element reads the existing range-capable
@@ -105,7 +127,8 @@ Useful server log events include:
 - `audio.vod_index_ready` and `audio.vod_index_unavailable`;
 - `audio.live_status_probe_failed`;
 - `video.live_status_corrected`;
-- `downloads.ytdlp_js_runtime_missing` when Deno cannot be executed.
+- `downloads.ytdlp_js_runtime_missing` when Deno cannot be executed;
+- `audio.source_quiet` while a refused source is being left alone.
 
 These diagnostics contain video/profile identifiers and safe failure reasons,
 but do not log signed media URLs or cookie contents.

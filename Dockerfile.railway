@@ -20,7 +20,7 @@ RUN if [ "${YTZERO_CHANGELOG_PREGENERATED}" = "1" ]; then bun run build:prepared
 # ---- runtime ----
 FROM oven/bun:1.3-slim
 ARG DENO_VERSION=2.8.1
-ARG BGUTIL_VERSION=1.3.1
+ARG POT_PROVIDER_VERSION=1.3.1
 WORKDIR /app
 RUN apt-get update && \
     apt-get upgrade -y --no-install-recommends && \
@@ -29,13 +29,21 @@ RUN apt-get update && \
     chmod a+rx /usr/local/bin/yt-dlp && \
     curl -fsSL https://deno.land/install.sh -o /tmp/install-deno.sh && \
     DENO_INSTALL=/usr/local sh /tmp/install-deno.sh "v${DENO_VERSION}" && \
-    mkdir -p /opt/ytzero/yt-dlp-plugins /opt/ytzero && \
-    curl -fsSL "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/download/${BGUTIL_VERSION}/bgutil-ytdlp-pot-provider.zip" -o /opt/ytzero/yt-dlp-plugins/bgutil-ytdlp-pot-provider.zip && \
-    curl -fsSL "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/${BGUTIL_VERSION}.tar.gz" -o /tmp/bgutil.tar.gz && \
-    tar -xzf /tmp/bgutil.tar.gz -C /opt/ytzero && mv "/opt/ytzero/bgutil-ytdlp-pot-provider-${BGUTIL_VERSION}" /opt/ytzero/bgutil && \
-    cd /opt/ytzero/bgutil/server && deno install --allow-scripts=npm:canvas --frozen && \
     deno --version && \
-    rm /tmp/install-deno.sh /tmp/bgutil.tar.gz && \
+    rm /tmp/install-deno.sh && \
+    mkdir -p /etc/yt-dlp/plugins /opt/bgutil-ytdlp-pot-provider && \
+    ( curl -fsSL "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/download/${POT_PROVIDER_VERSION}/bgutil-ytdlp-pot-provider.zip" \
+        -o /etc/yt-dlp/plugins/bgutil-ytdlp-pot-provider.zip && \
+      curl -fsSL "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/${POT_PROVIDER_VERSION}.tar.gz" \
+        | tar -xz -C /opt/bgutil-ytdlp-pot-provider --strip-components=1 && \
+      python3 -c "import json, pathlib; p = pathlib.Path('/opt/bgutil-ytdlp-pot-provider/server/package.json'); d = json.loads(p.read_text()); d.pop('devDependencies', None); p.write_text(json.dumps(d))" && \
+      cd /opt/bgutil-ytdlp-pot-provider/server && \
+      DENO_NO_PROMPT=1 deno install --allow-scripts && \
+      DENO_NO_PROMPT=1 deno run --allow-env --allow-net --allow-read --allow-write --allow-ffi --allow-sys \
+        src/generate_once.ts --version ) \
+    || ( echo "PO token provider unavailable at build time; continuing without it" && \
+         rm -rf /opt/bgutil-ytdlp-pot-provider /etc/yt-dlp/plugins/bgutil-ytdlp-pot-provider.zip ) && \
+    cd /app && \
     apt-get purge -y curl unzip && apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 COPY app/package.json app/bun.lock* ./
@@ -57,6 +65,7 @@ ENV PORT=3001 \
     IMG_CACHE_TTL_DAYS=7 \
     DOWNLOADS_DIR=/data/downloads \
     DENO_DIR=/data/deno-cache \
+    POT_PROVIDER_HOME=/opt/bgutil-ytdlp-pot-provider/server \
     DOWNLOAD_COOKIES_DIR=/data/download-cookies \
     YTDLP_BGUTIL_PLUGIN_DIR=/opt/ytzero/yt-dlp-plugins \
     YTDLP_BGUTIL_SERVER_HOME=/opt/ytzero/bgutil/server \

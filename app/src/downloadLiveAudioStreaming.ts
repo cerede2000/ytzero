@@ -2,7 +2,7 @@ import { AudioSourceCache, audioSourceKey } from "./audioSourceCache";
 import { fetchGoogleVideoResponse, safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { downloadCookieAttempts } from "./downloadStrategy";
 import { rewriteLiveAudioPlaylist } from "./liveAudioPlaylist";
-import { ytdlpAttemptArgs } from "./downloadConfig";
+import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
 
 interface DownloadLiveAudioDependencies {
   YTDLP: string;
@@ -93,6 +93,7 @@ export function createDownloadLiveAudioStreaming(dependencies: DownloadLiveAudio
       "--ignore-config", "--no-playlist", "--no-warnings",
       "-f", LIVE_AUDIO_FORMAT,
       "--get-url",
+      ...POT_PROVIDER_ARGS,
     ];
     if (signal.aborted) return null;
     let process: ReturnType<typeof Bun.spawn>;

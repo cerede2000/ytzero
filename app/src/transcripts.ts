@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { downloadCookiesConfigured, ytdlpCommand } from "./downloadConfig";
 import { log } from "./logger";
 import { TranscriptCache } from "./transcriptCache";
+import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
 
 export type TranscriptFailure = "not_found" | "timeout" | "ytdlp_missing" | "rate_limited" | "unavailable";
 
@@ -74,6 +75,7 @@ async function fetchTranscriptFresh(userId: number, videoId: string, language: s
       "--write-subs",
       "--write-auto-subs",
       "--sub-langs", language,
+      ...POT_PROVIDER_ARGS,
       "--sub-format", "vtt",
       "-o", join(directory, "transcript.%(ext)s"),
       `https://www.youtube.com/watch?v=${videoId}`,
