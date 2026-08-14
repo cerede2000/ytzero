@@ -1,4 +1,5 @@
 import { callerWasRefused } from "./cookieAttemptOrder";
+import { log } from "./logger";
 
 /**
  * When YouTube is refusing this address, every video-info lookup costs the
@@ -24,22 +25,42 @@ export interface RefusalQuiet {
 export function createRefusalQuiet({
   now = Date.now,
   quietMs = QUIET_MS,
-}: { now?: () => number; quietMs?: number } = {}): RefusalQuiet {
+  onChange = () => {},
+}: {
+  now?: () => number;
+  quietMs?: number;
+  /** Called only when the answer changes, so a log says it once. */
+  onChange?: (refusing: boolean) => void;
+} = {}): RefusalQuiet {
   let refusedAt = 0;
+  const quiet = () => refusedAt > 0 && now() - refusedAt < quietMs;
   return {
-    quiet: () => refusedAt > 0 && now() - refusedAt < quietMs,
+    quiet,
     note(error: unknown): void {
       const message = error instanceof Error ? error.message : String(error);
-      if (callerWasRefused(message)) refusedAt = now();
+      if (!callerWasRefused(message)) return;
+      const was = quiet();
+      refusedAt = now();
+      if (!was) onChange(true);
     },
     clear(): void {
+      const was = quiet();
       refusedAt = 0;
+      if (was) onChange(false);
     },
   };
 }
 
-/** Shared: the refusal is of the whole address, so it is not per video. */
-export const videoInfoRefusalQuiet = createRefusalQuiet();
+/**
+ * Shared: the refusal is of the whole address, so it is not per video — and
+ * saying so once is the whole point. Reporting every skipped lookup instead
+ * turns one piece of news into a page of it.
+ */
+export const videoInfoRefusalQuiet = createRefusalQuiet({
+  onChange: (refusing) => log.info(refusing ? "youtube.address_refused" : "youtube.address_accepted", {
+    detail: refusing ? "video lookups are being skipped for now" : "video lookups have resumed",
+  }),
+});
 
 /** Thrown instead of asking again while the refusal stands. */
 export class YouTubeRefusingError extends Error {

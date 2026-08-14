@@ -1170,14 +1170,16 @@ export async function refreshVideoMetadataBatch(limit = 10) {
       const delayMs = Math.min(DURATION_RETRY_BASE_MS * 2 ** (attempts - 1), DURATION_RETRY_MAX_MS);
       durationRetry.set(video_id, { attempts, nextAt: Date.now() + delayMs });
       // A lookup we decided to skip is not news: the refusal that caused it
-      // was reported once already, and repeating it as a warning per video
-      // buries the failures that do need reading.
-      log[e instanceof YouTubeRefusingError ? "info" : "warn"]("video.metadata_failed", {
-        videoId: video_id,
-        error: e instanceof Error ? e.message : String(e),
-        attempts,
-        retryInMin: Math.round(delayMs / 60_000),
-      });
+      // was reported once already, and repeating it per video buries the
+      // failures that do need reading. The batch summary still counts them.
+      if (!(e instanceof YouTubeRefusingError)) {
+        log.warn("video.metadata_failed", {
+          videoId: video_id,
+          error: e instanceof Error ? e.message : String(e),
+          attempts,
+          retryInMin: Math.round(delayMs / 60_000),
+        });
+      }
     }
     if (i < rows.length - 1) await Bun.sleep(800);
   }

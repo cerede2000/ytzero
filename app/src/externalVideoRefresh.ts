@@ -25,7 +25,8 @@ export async function refreshExternalWatchVideo(row: VideoRow, userId: number): 
     }
     return refreshed;
   } catch (error) {
-    log[error instanceof YouTubeRefusingError ? "info" : "warn"]("video.metadata_refresh_failed", {
+    if (error instanceof YouTubeRefusingError) return row;
+    log.warn("video.metadata_refresh_failed", {
       videoId: row.video_id,
       source: "watch_open",
       error: error instanceof Error ? error.message : String(error),
