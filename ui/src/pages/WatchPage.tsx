@@ -25,6 +25,7 @@ import {
   Pin,
   PinOff,
   Play,
+  RefreshCw,
   Share2,
   SkipForward,
   ThumbsUp,
@@ -204,6 +205,8 @@ export default function WatchPage() {
     videoInfo,
     routePreview,
     videoMissing,
+    videoUnavailable,
+    retryVideoLoad,
     videoPlaylists,
     waitError,
     waitProgress,
@@ -356,6 +359,26 @@ export default function WatchPage() {
                   onDownload={playerKind === "direct" && downloadsEnabled && downloadStatus !== "queued" && downloadStatus !== "downloading" ? requestDownload : undefined}
                   downloadLabel={t("downloadLocally")}
                 />
+              ) : videoUnavailable ? (
+                <div className="wp-panel">
+                  <div className="wp-panel-scrim" />
+                  <div className="wp-panel-content">
+                    <h3>{t("watchUnavailableTitle")}</h3>
+                    <p className="wp-panel-sub">{t("watchUnavailableDescription")}</p>
+                    <div className="wp-choice-buttons">
+                      <Button variant="primary" onClick={retryVideoLoad}>
+                        <RefreshCw size={15} /> {t("watchUnavailableRetry")}
+                      </Button>
+                      <ButtonAnchor
+                        href={markYouTubeUrl(`https://www.youtube.com/watch?v=${id}`)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <MonitorPlay size={15} /> {t("membersOnlyWatchAction")}
+                      </ButtonAnchor>
+                    </div>
+                  </div>
+                </div>
               ) : playerKind === "youtube" ? (
                 <div ref={ytWrapRef} className="watch-player-yt" />
               ) : playerKind === "loading" ? (
