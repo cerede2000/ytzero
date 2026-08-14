@@ -36,13 +36,14 @@ export function resolvePlayerKind(input: {
   defaultSource?: "youtube" | "stream";
   // The YouTube embed reported it can't play (embedding disabled / unavailable).
   iframeFallback?: boolean;
-  // Audio mode is wanted but the loaded video it is judged against is not here yet.
-  audioModePending?: boolean;
+  // The row this page is about is not here yet, and is being fetched.
+  playerPending?: boolean;
 }): PlayerKind {
-  // Every branch below falls through to the embed when there is no video, so a
-  // remembered audio mode would play a second of video before the audio player
-  // takes over — the one thing that mode exists to avoid. Wait instead.
-  if (input.audioModePending) return "loading";
+  // Every branch below falls through to the embed when there is no row, and
+  // the embed is the wrong answer twice over: it mounts an empty black frame
+  // while an import runs, and it plays a second of video at a listener whose
+  // audio mode cannot be judged yet. Wait instead — the panel says so.
+  if (input.playerPending) return "loading";
   const canStream = input.hasVideo && input.streamingEnabled && input.playerSource === "auto" && input.sourceChoice !== "youtube";
   // A live broadcast has no stable local file. When streaming is on we play it in
   // the native player (via YouTube's own rolling HLS), which — unlike the iframe —
