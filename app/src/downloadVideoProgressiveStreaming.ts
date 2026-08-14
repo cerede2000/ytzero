@@ -4,8 +4,9 @@ import { downloadCookieAttempts, isAnonymousAddressRefusal, recordDownloadAttemp
 import { ytdlpAttemptArgs } from "./downloadConfig";
 import { parseYtdlpHttpHeaders, rangedYtdlpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
 
+import { potArgsFor } from "./ytdlpPotProvider";
+
 interface Dependencies {
-import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
   YTDLP: string;
   downloadCookiesConfigured: (userId: number) => boolean;
   downloadCookiesFile: (userId: number) => string;
@@ -70,7 +71,7 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
       "-f", "22/18/best[ext=mp4][vcodec^=avc1][acodec^=mp4a][height<=720]",
       "--print", "urls", "--print", "%(ext)s", "--print", "%(vcodec)s", "--print", "%(acodec)s",
       "--print", "%(http_headers)j",
-      ...POT_PROVIDER_ARGS,
+      ...potArgsFor(downloadCookiesConfigured(userId)),
     ];
     let proc: ReturnType<typeof Bun.spawn>;
     try {

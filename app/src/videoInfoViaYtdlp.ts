@@ -5,7 +5,7 @@ import type { AudioSource } from "./audioSourceResolver";
 import { audioSourceHeaders } from "./audioSourceResolver";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import type { VideoInfo } from "./youtube";
-import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
+import { potArgsFor } from "./ytdlpPotProvider";
 
 /**
  * Read a video's details through yt-dlp when YouTube will not answer directly.
@@ -142,7 +142,7 @@ async function runAttempt(
     "--print", "%(http_headers)j",
     "--print", "%(acodec)s",
     "--print", "%(vcodec)s",
-    ...POT_PROVIDER_ARGS,
+    ...potArgsFor(useCookies),
   ];
   let process: ReturnType<typeof Bun.spawn>;
   try {

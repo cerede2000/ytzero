@@ -216,7 +216,7 @@ async function fetchSubtitleSidecars(userId: number, videoId: string, langs: str
     "--no-warnings",
     "--skip-download",
     "-o", join(DOWNLOADS_DIR, `${base}.%(ext)s`),
-    ...POT_PROVIDER_ARGS,
+    ...potArgsFor(downloadCookiesConfigured(userId)),
   ];
   if (options.manual) args.push("--write-subs");
   if (options.automatic) args.push("--write-auto-subs");
@@ -858,7 +858,6 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
     "--no-warnings",
     "--no-mtime",
     "--retry-sleep", "http:exp=1:20",
-    ...POT_PROVIDER_ARGS,
     // Chunked, concurrent range download — defeats YouTube's per-connection
     // throttling so files land in seconds, not near real time.
     "--http-chunk-size", "10M",
@@ -885,7 +884,8 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
 
   for (let attemptIndex = 0; attemptIndex < cookieAttempts.length; attemptIndex++) {
     const useCookies = cookieAttempts[attemptIndex];
-    const args = [...baseArgs];
+    const args = [...baseArgs, ...potArgsFor(useCookies)];
+    if (useCookies) args.push("--cookies", downloadCookiesFile(userId));
 
     let proc: ReturnType<typeof Bun.spawn>;
     try {
