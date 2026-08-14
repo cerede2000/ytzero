@@ -14,6 +14,7 @@ import { videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSuppo
 import { registerVideoCommentRoutes } from "./videoCommentRoutes";
 import { importExternalVideoInfo, type VideoInfoImportResult } from "../externalVideoInfoImport";
 import { refreshExternalWatchVideo } from "../externalVideoRefresh";
+import { fetchVideoInfoViaYtdlp } from "../videoInfoViaYtdlp";
 import { isYouTubeRefusalError, youtubeRefusalGate } from "../youtubeRateLimit";
 import { AsyncTtlCache } from "../asyncTtlCache";
 import { resolveYouTubeLanguage } from "../youtubeRequestLanguage";
@@ -196,6 +197,25 @@ api.delete("/external/:id", async (c) => {
   `).run();
   return c.json({ deleted: res.changes });
 });
+
+/**
+ * Read a video's details for an import, through yt-dlp if YouTube will not
+ * answer us directly. A video that is not in the library cannot be opened at
+ * all until this succeeds, and yt-dlp — with the profile's cookies and a
+ * proof-of-origin token — gets an answer where a plain request is refused.
+ * Only a refusal is worth the second attempt: a video that is private or gone
+ * says so consistently, and asking twice would just be slower.
+ */
+async function fetchVideoInfoForImport(userId: number, videoId: string) {
+  try {
+    return await fetchVideoInfo(videoId);
+  } catch (error) {
+    if (error instanceof PrivateVideoError || error instanceof DeletedVideoError) throw error;
+    const viaYtdlp = await fetchVideoInfoViaYtdlp(userId, videoId).catch(() => null);
+    if (!viaYtdlp) throw error;
+    return viaYtdlp;
+  }
+}
 
 api.get("/videos/:id/info", async (c) => {
   const uid = currentUserId(c);
