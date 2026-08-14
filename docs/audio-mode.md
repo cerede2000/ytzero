@@ -57,6 +57,14 @@ companion service is needed. Two variables adjust it:
 - `POT_PROVIDER_URL` — the address of a companion provider service, if one is
   preferred to the bundled script.
 
+Two things keep the wait down once an address is being challenged. The
+anonymous attempt is tried first by default, because a logged-in client offers
+fewer formats — but once it has been refused and cookies have carried the same
+profile through, cookies go first for fifteen minutes. The other attempt still
+follows, so an expired cookie costs one resolution rather than a dead player.
+And yt-dlp's cache lives on the data volume, so the player script it solves
+and the tokens it computes survive a restart instead of being paid for again.
+
 A source that is refused even after its URL has been resolved again is left
 alone for thirty seconds (`audio.source_quiet`). Retrying a refusal changes
 nothing, and a player asking every couple of seconds is how an address stays

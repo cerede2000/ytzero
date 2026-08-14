@@ -66,6 +66,7 @@ ENV PORT=3001 \
     DOWNLOADS_DIR=/data/downloads \
     DENO_DIR=/data/deno-cache \
     POT_PROVIDER_HOME=/opt/bgutil-ytdlp-pot-provider/server \
+    XDG_CACHE_HOME=/data/cache \
     DOWNLOAD_COOKIES_DIR=/data/download-cookies \
     YTDLP_BGUTIL_PLUGIN_DIR=/opt/ytzero/yt-dlp-plugins \
     YTDLP_BGUTIL_SERVER_HOME=/opt/ytzero/bgutil/server \
