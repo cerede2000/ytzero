@@ -82,6 +82,10 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     watchTogether: Boolean(watchTogetherRoomId),
   }), [id, routePlaybackQueue, sessionQueue, video?.playback_context, watchTogetherRoomId]);
   const [missingVideoId, setMissingVideoId] = useState<string | null>(null);
+  // The row could not be loaded and could not be imported either. The page has
+  // nothing to describe, so it says so instead of leaving an orphan embed.
+  const [videoUnavailable, setVideoUnavailable] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const videoMissing = missingVideoId === id;
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [related, setRelated] = useState<Video[]>([]);
@@ -334,6 +338,11 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     keepStreamingAfterDownload: downloadReadyToReload,
     defaultSource: settings?.player_default_source === "stream" ? "stream" : "youtube",
     iframeFallback,
+    // Audio mode is remembered before the page knows which video it applies
+    // to. Showing the embed meanwhile plays a second of video at someone who
+    // asked not to see any — and leaves them on a page with no way back to
+    // audio, since the control needs the row too.
+    audioModePending: audioModeRequested && !matchingVideo && !videoUnavailable,
   });
   const downloadFeedbackKind = downloadReadyToReload ? "ready" : downloadRequestError || downloadStatus === "error" ? "error" : downloadStatus === "downloading" ? "downloading" : "queued";
   const downloadFeedbackVisible = downloadReadyToReload || downloadRequestError || downloadStatus === "queued" || downloadStatus === "downloading" || downloadStatus === "error";
@@ -714,6 +723,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     setWaitProgress(null);
     setWaitError(null);
     archivedRef.current = false;
+    setVideoUnavailable(false);
     window.scrollTo(0, 0);
     api
       .video(id)
@@ -748,8 +758,9 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
                 setVideoInfo(null);
               });
             })
-            .catch(() => {});
+            .catch(() => { if (!cancelled) setVideoUnavailable(true); });
         } else {
+          if (!cancelled) setVideoUnavailable(true);
           console.error(e);
         }
       });
@@ -760,7 +771,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       api.watch(id, routePlaybackQueue ?? undefined).catch(() => {});
     }
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, loadAttempt]);
 
   // When a video finishes: record completion, advance the playlist if any.
   const handleEnded = useCallback(() => {
@@ -1608,6 +1619,8 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     videoCreators,
     videoInfo,
     videoMissing,
+    videoUnavailable,
+    retryVideoLoad: () => setLoadAttempt((attempt) => attempt + 1),
     videoPlaylists,
     waitError,
     waitProgress,
