@@ -83,7 +83,19 @@ export function useAudioMediaSource({
         if (!attachProgressive()) fatal();
         return;
       }
-      const instance = new Hls(audioHlsBufferConfig(live));
+      const instance = new Hls({
+        backBufferLength: 30,
+        lowLatencyMode: live,
+        // A recording can be read as far ahead as it likes; a broadcast cannot
+        // go past its own edge. Four minutes of audio is a few megabytes and
+        // covers a tunnel, a lift, a dead spot on a train line — the moments
+        // where thirty seconds runs out and the music stops. A listener who
+        // seeks away wastes what was fetched, which is why this is measured in
+        // minutes rather than in the ten it could be.
+        maxBufferLength: live ? 30 : 60,
+        maxBufferSize: live ? 8 * 1024 * 1024 : 24 * 1024 * 1024,
+        maxMaxBufferLength: live ? 60 : 240,
+      });
       hls = instance;
       source = "hls-js";
       instance.loadSource(playlistSrc);

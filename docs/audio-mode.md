@@ -119,10 +119,12 @@ bounded, validated byte-range proxy; there is no transcoding and signed upstream
 URLs are never exposed to the browser. Sources without a usable index fall back
 to the regular byte-range audio stream.
 
-Safari consumes the VOD playlist through its native HLS support. Other
-supported browsers use the same lazily loaded `hls.js` path as live audio. VOD
-keeps up to about four minutes ahead of the playhead, while live audio retains
-its short buffer so it stays close to the broadcast edge.
+Safari consumes the VOD playlist through its native HLS support, and decides
+its own buffering. Other supported browsers use the same lazily loaded
+`hls.js` path as live audio, reading up to four minutes ahead of a recording —
+a few megabytes at the 129 kbps the AAC track carries, enough to cross a
+tunnel or a dead spot without stopping. A broadcast keeps the shorter window:
+it cannot read past its own edge.
 
 For active livestreams, yt-dlp resolves an HLS audio rendition. YT Zero rewrites
 the rolling playlist and proxies its manifests and segments through opaque,
