@@ -49,6 +49,39 @@ function factory(overrides: Partial<Parameters<typeof createDownloadStreaming>[0
 }
 
 describe("audio streaming integration", () => {
+
+  test("stops asking yt-dlp about a source the upstream keeps refusing", async () => {
+    // A cookie-authenticated extraction can hand back a URL bound to a token
+    // the proxy has no way to present, and YouTube answers 403 to everyone
+    // else. Re-resolving produces the same URL, so a player retrying every
+    // couple of seconds becomes a stream of requests aimed at a host that has
+    // already refused us — which is what gets an address blocked in the first
+    // place.
+    let resolves = 0;
+    let clock = 1_000;
+    const audio = factory({
+      now: () => clock,
+      spawn: (() => {
+        resolves++;
+        return fakeProcess(`https://r1.googlevideo.com/audio?expire=${futureExpiry}\nm4a\n`);
+      }) as unknown as typeof Bun.spawn,
+      fetchImpl: (async () => new Response(null, { status: 403 })) as unknown as typeof fetch,
+    });
+
+    expect(await audio.getAudioResponse(1, "video", null)).toBeNull();
+    const afterFirst = resolves;
+    expect(afterFirst).toBeGreaterThan(0);
+
+    expect(await audio.getAudioResponse(1, "video", null)).toBeNull();
+    expect(await audio.getAudioResponse(1, "video", "bytes=0-1")).toBeNull();
+    expect(resolves).toBe(afterFirst);
+
+    // The quiet spell is short: a source that comes back on its own is picked
+    // up again without anyone having to ask.
+    clock += 30_000;
+    expect(await audio.getAudioResponse(1, "video", null)).toBeNull();
+    expect(resolves).toBeGreaterThan(afterFirst);
+  });
   test("normalizes a range-less GET to one bounded verified 206 chunk", async () => {
     const ranges: string[] = [];
     const agents: string[] = [];

@@ -6,6 +6,7 @@ import {
   type AudioByteRange,
 } from "./audioRange";
 import { defaultAudioDiagnostic, type AudioDiagnostic } from "./audioDiagnostics";
+import { audioSourceKey } from "./audioSourceCache";
 import { createAudioSourceResolver, type AudioSource } from "./audioSourceResolver";
 import { googleVideoHost, safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { createDownloadAudioVodStreaming } from "./downloadAudioVodStreaming";
@@ -19,16 +20,21 @@ interface DownloadAudioStreamingDependencies {
   audioDiagnostic?: AudioDiagnostic;
   fetchImpl?: typeof fetch;
   spawn?: typeof Bun.spawn;
+  now?: () => number;
 }
 
 const AUDIO_REQUEST_TIMEOUT_MS = 45_000;
 const AUDIO_REDIRECT_LIMIT = 4;
 const AUDIO_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-const FRESH_URL_WINDOW_MS = 5_000;
-const FRESH_URL_RETRY_DELAYS_MS = [250, 400, 650, 1_000];
+/** How long a refused source is left alone before yt-dlp is asked again. */
+const REFUSAL_QUIET_MS = 30_000;
+/** Statuses that say the caller is the problem, so retrying changes nothing. */
+const AUDIO_REFUSAL_STATUSES = new Set([401, 403, 429]);
 
 export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamingDependencies) {
-  const { audioDiagnostic = defaultAudioDiagnostic, fetchImpl = fetch } = dependencies;
+  const { audioDiagnostic = defaultAudioDiagnostic, fetchImpl = fetch, now = Date.now } = dependencies;
+  /** Videos whose upstream just refused us, and when. */
+  const refusals = new Map<string, number>();
   const {
     discardAudioSource,
     invalidateAudioSources: invalidateResolvedAudioSources,
@@ -155,6 +161,14 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     range: AudioByteRange,
     signal: AbortSignal,
   ): Promise<AudioUpstreamResult> {
+    const refusedKey = audioSourceKey(userId, videoId);
+    const refusedAt = refusals.get(refusedKey);
+    if (refusedAt !== undefined && now() - refusedAt < REFUSAL_QUIET_MS) {
+      audioDiagnostic("info", "audio.source_quiet", {
+        userId, videoId, sinceMs: now() - refusedAt,
+      });
+      return null;
+    }
     let source = await resolveAudioSource(userId, videoId, signal);
     if (!source) return null;
 
@@ -192,7 +206,19 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
         rangeEnd: range.end,
       });
       await upstream.body?.cancel().catch(() => {});
-      if (!signal.aborted) discardAudioSource(userId, videoId, source.url);
+      if (!signal.aborted) {
+        discardAudioSource(userId, videoId, source.url);
+        // A refusal that survived a re-resolve is not a stale URL — it is a
+        // refusal of us, and asking yt-dlp again produces the same one. A
+        // player retrying every couple of seconds would turn that into a
+        // stream of requests aimed at a host that has already said no, which
+        // is how an address stays refused. Other failures still re-resolve:
+        // a server error often means the node, not the caller.
+        if (AUDIO_REFUSAL_STATUSES.has(upstream.status)) {
+          for (const [key, at] of refusals) if (now() - at >= REFUSAL_QUIET_MS) refusals.delete(key);
+          refusals.set(refusedKey, now());
+        }
+      }
       return null;
     }
 
@@ -339,11 +365,16 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
   });
 
   function invalidateAudioSources(userId: number): void {
+    const prefix = `${userId}:`;
+    for (const key of refusals.keys()) if (key.startsWith(prefix)) refusals.delete(key);
     audioVod.invalidateAudioVodSources(userId);
     invalidateResolvedAudioSources(userId);
   }
 
   async function retryAudioSource(userId: number, videoId: string, signal?: AbortSignal): Promise<boolean> {
+    // Someone asked for this by hand: whatever we decided to stop asking about
+    // is exactly what they want tried again.
+    refusals.delete(audioSourceKey(userId, videoId));
     audioVod.invalidateAudioVodSource(userId, videoId);
     return retryResolvedAudioSource(userId, videoId, signal);
   }

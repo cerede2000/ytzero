@@ -1,6 +1,7 @@
 import { downloadCookiesConfigured, ytdlpCommand } from "./downloader";
 import { downloadCookieAttempts, isAnonymousAddressRefusal, recordDownloadAttempt } from "./downloadStrategy";
 import { log } from "./logger";
+import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
 
 const COMMENTS_TTL_MS = 5 * 60_000;
 const COMMENTS_TIMEOUT_MS = 60_000;
@@ -141,6 +142,7 @@ async function runYtdlp(userId: number, videoId: string, sort: VideoCommentSort,
     // Keep the payload bounded while allowing yt-dlp to follow reply chains at
     // every depth: total, parents, replies, replies/thread, depth.
     "--extractor-args", videoCommentsExtractorArgs(sort),
+    ...POT_PROVIDER_ARGS,
     "--print", "%(comments)j",
     `https://www.youtube.com/watch?v=${videoId}`,
   ];

@@ -16,6 +16,7 @@ interface DownloadStreamingDependencies {
   readLines: (stream: ReadableStream<Uint8Array>, onLine: (line: string) => void) => Promise<void>;
   ytdlpStatus: () => Promise<string | null>;
   audioDiagnostic?: import("./audioDiagnostics").AudioDiagnostic;
+  now?: () => number;
   fetchImpl?: typeof fetch;
   spawn?: typeof Bun.spawn;
 }
