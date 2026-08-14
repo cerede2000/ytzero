@@ -17,6 +17,7 @@ interface DownloadStreamingDependencies {
   ytdlpStatus: () => Promise<string | null>;
   audioDiagnostic?: import("./audioDiagnostics").AudioDiagnostic;
   now?: () => number;
+  wait?: (milliseconds: number) => Promise<void>;
   fetchImpl?: typeof fetch;
   spawn?: typeof Bun.spawn;
 }
