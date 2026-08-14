@@ -53,7 +53,9 @@ The image carries the `bgutil` provider and its yt-dlp plugin, and runs it
 under the Deno that is already there, so the token is computed locally and no
 companion service is needed. Two variables adjust it:
 
-- `POT_PROVIDER_HOME` — where the provider lives, `off` to ignore it;
+- `POT_PROVIDER_HOME` — where the provider lives, `off` to ignore it. The
+  image also links it to the path the plugin looks at by default, so a yt-dlp
+  run by hand finds it without being told;
 - `POT_PROVIDER_URL` — the address of a companion provider service, if one is
   preferred to the bundled script.
 
