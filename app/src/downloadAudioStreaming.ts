@@ -40,16 +40,19 @@ const AUDIO_REFUSAL_STATUSES = new Set([401, 403, 429]);
 /**
  * How long to wait before asking a refused URL again, per attempt.
  *
- * Measured on a refused address: the same URL, with the same headers, answers
- * 403 and then 206 a moment later — and a token changes nothing, because the
- * refusal is of the address rather than of the request. Re-resolving is the
- * expensive way to wait: six seconds of yt-dlp to obtain a URL that is refused
- * in exactly the same way. Waiting is the cheap way.
+ * A freshly signed googlevideo URL is not usable the instant it is issued.
+ * Measured in the container: every request in the first second is answered 403
+ * — sequentially, concurrently, with or without a user agent, whatever range —
+ * and the same URL then serves 206 in forty milliseconds. A first bench missed
+ * this by spending four seconds resolving a second value before it fetched,
+ * which is exactly the pause that made it work.
  *
- * The moment it opens is not on a schedule: measured across three tracks, one
- * was through after 1.6 s and two after 4.1. So the ladder is dense at the
- * start — asking often costs a request nobody reads, while waiting costs the
- * listener silence.
+ * So there is nothing to fix in the request: there is a moment to wait for.
+ * Re-resolving is the expensive way to wait — six seconds of yt-dlp for a URL
+ * that will be just as new — and asking again is the cheap way. The ladder is
+ * dense at the start because the opening is measured in hundreds of
+ * milliseconds, and a request nobody reads costs a few kilobytes while waiting
+ * costs the listener silence.
  */
 const AUDIO_RETRY_DELAYS_MS = [250, 400, 650, 1_000, 1_500, 2_200];
 
@@ -182,7 +185,7 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
       await response.body?.cancel().catch(() => {});
       await wait(delay);
       if (signal.aborted) return null;
-      audioDiagnostic("info", "audio.upstream_asked_again", {
+      audioDiagnostic("info", "audio.upstream_not_ready_yet", {
         userId, videoId, status: response.status, afterMs: delay,
       });
       response = await fetchAudioUpstream(userId, videoId, source, range, signal);
