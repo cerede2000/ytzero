@@ -159,7 +159,9 @@ Useful server log events include:
 - `audio.live_status_probe_failed`;
 - `video.live_status_corrected`;
 - `downloads.ytdlp_js_runtime_missing` when Deno cannot be executed;
-- `audio.source_quiet` while a refused source is being left alone.
+- `audio.source_quiet` while a refused source is being left alone;
+- `youtube.address_refused` and `youtube.address_accepted`, said once each
+  rather than per skipped lookup.
 
 These diagnostics contain video/profile identifiers and safe failure reasons,
 but do not log signed media URLs or cookie contents.
