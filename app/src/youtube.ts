@@ -4,6 +4,7 @@ import { decodeHtmlEntities } from "./htmlEntities";
 import { createYoutubeSearch, parseAbbreviatedCount } from "./youtubeSearch";
 import { isYouTubeRateLimitError, isYouTubeRefusalError, readYouTubeResponse, youtubeRefusalGate } from "./youtubeRateLimit";
 import { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError } from "./youtubeVideoAvailability";
+import { videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 import { inferIsShortFromMetadata } from "./shortClassification";
 import { resolveYouTubeLanguage, youtubeRequestHeaders, youtubeRssHeaders, type ResolvedYouTubeLanguage } from "./youtubeRequestLanguage";
 export { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError, videoOEmbedAvailabilityFromStatus } from "./youtubeVideoAvailability";
@@ -1049,6 +1050,9 @@ export async function fetchVideoInfo(videoId: string, options: { force?: boolean
   if (options.force) videoInfoCache.delete(cacheKey);
   const cached = videoInfoCache.get(cacheKey);
   if (cached && Date.now() - cached.at < VIDEO_INFO_TTL) return cached.data;
+  // Three attempts that are all going to be refused cost seconds, and they are
+  // spent in front of someone opening a video. One refusal speaks for the rest.
+  if (videoInfoRefusalQuiet.quiet()) throw new YouTubeRefusingError();
 
   youtubeRefusalGate.enter();
 
@@ -1082,11 +1086,14 @@ export async function fetchVideoInfo(videoId: string, options: { force?: boolean
         const primary = htmlError instanceof Error ? htmlError.message : String(htmlError);
         const fallback = innerTubeError instanceof Error ? innerTubeError.message : String(innerTubeError);
         const embed = embedError instanceof Error ? embedError.message : String(embedError);
-        throw new Error(`video info failed: html=${primary}; innertube=${fallback}; embed=${embed}`);
+        const failure = new Error(`video info failed: html=${primary}; innertube=${fallback}; embed=${embed}`);
+        videoInfoRefusalQuiet.note(failure);
+        throw failure;
       }
     }
   }
   videoInfoCache.set(cacheKey, { at: Date.now(), data: result });
+  videoInfoRefusalQuiet.clear();
   youtubeRefusalGate.answered();
   return result;
 }

@@ -65,6 +65,13 @@ follows, so an expired cookie costs one resolution rather than a dead player.
 And yt-dlp's cache lives on the data volume, so the player script it solves
 and the tokens it computes survive a restart instead of being paid for again.
 
+A refusal also quiets the video-info lookups for ninety seconds. Opening a
+video refreshes its row first, and that refresh tries the watch page, then
+InnerTube, then the embed — three attempts that all fail while the address is
+being turned away, paid before the player is even chosen. The refusal is about
+the address rather than the video, so the first one speaks for the rest until
+something gets through again.
+
 A source that is refused even after its URL has been resolved again is left
 alone for thirty seconds (`audio.source_quiet`). Retrying a refusal changes
 nothing, and a player asking every couple of seconds is how an address stays
