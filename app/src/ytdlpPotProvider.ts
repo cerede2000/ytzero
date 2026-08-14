@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { log } from "./logger";
 import { join } from "node:path";
 
@@ -26,6 +26,8 @@ export interface PotProviderEnvironment {
   /** Base URL of a companion provider service, if one is run instead. */
   url?: string;
   exists?: (path: string) => boolean;
+  /** Resolves links, because the runtime it is handed to does not. */
+  real?: (path: string) => string;
 }
 
 /**
@@ -38,13 +40,18 @@ export function potProviderArgs(environment: PotProviderEnvironment = {}): strin
     home = process.env.POT_PROVIDER_HOME ?? DEFAULT_POT_PROVIDER_HOME,
     url = process.env.POT_PROVIDER_URL ?? "",
     exists = existsSync,
+    real = (path: string) => { try { return realpathSync(path); } catch { return path; } },
   } = environment;
   const args: string[] = [];
   const trimmedUrl = url.trim();
   if (trimmedUrl) args.push("--extractor-args", `youtubepot-bgutilhttp:base_url=${trimmedUrl}`);
   const trimmedHome = home.trim();
   if (trimmedHome && trimmedHome !== "off" && exists(join(trimmedHome, "src", "generate_once.ts"))) {
-    args.push("--extractor-args", `youtubepot-bgutilscript:server_home=${trimmedHome}`);
+    // The real directory, not a link to it: the script is run under a runtime
+    // whose file permissions are granted per path, and it compares the path it
+    // resolves against the one it was granted. A link makes those differ, and
+    // the script dies reading its own dependencies.
+    args.push("--extractor-args", `youtubepot-bgutilscript:server_home=${real(trimmedHome)}`);
   }
   return args;
 }
@@ -59,7 +66,12 @@ export const potProviderConfigured = POT_PROVIDER_ARGS.length > 0;
 function scriptProviderHome(): string | null {
   const home = (process.env.POT_PROVIDER_HOME ?? DEFAULT_POT_PROVIDER_HOME).trim();
   if (!home || home === "off") return null;
-  return existsSync(join(home, "src", "generate_once.ts")) ? home : null;
+  if (!existsSync(join(home, "src", "generate_once.ts"))) return null;
+  try {
+    return realpathSync(home);
+  } catch {
+    return home;
+  }
 }
 
 /**
