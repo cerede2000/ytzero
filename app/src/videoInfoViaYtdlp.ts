@@ -24,6 +24,10 @@ import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
 
 const INFO_TIMEOUT_MS = 45_000;
 
+/** Exactly what the import needs, as one JSON line whatever the text holds. */
+const INFO_FIELDS = "%(.{id,title,channel_id,channel,uploader,description,thumbnail,"
+  + "view_count,duration,upload_date,timestamp,release_timestamp,live_status,is_live,was_live})j";
+
 /** yt-dlp's own vocabulary for what a video is doing. */
 function liveStatusFrom(json: Record<string, unknown>): VideoInfo["liveStatus"] {
   const status = typeof json.live_status === "string" ? json.live_status : "";
@@ -89,36 +93,33 @@ function sourceExpiry(url: string): number {
 }
 
 /**
- * The audio track hiding in a full description of the video.
+ * The audio track that came with the description.
  *
- * The import asks yt-dlp about the whole video, and the answer already
- * contains every format with its URL and the headers it expects. Resolving the
- * audio again, seconds later, is the same six seconds of the same work — so it
- * is taken from here instead, and the player finds it waiting.
+ * The import asks for one format and prints it alongside the fields it needs,
+ * so the track the player is about to want is already resolved — URL, and the
+ * headers that URL expects. Resolving it again, seconds later, is the same
+ * work twice.
  */
-export function audioSourceFromYtdlpJson(json: Record<string, unknown>): AudioSource | null {
-  const formats = Array.isArray(json.formats) ? json.formats : [];
-  let best: { url: string; headers?: Record<string, string>; rate: number } | null = null;
-  for (const entry of formats) {
-    const format = entry as Record<string, unknown>;
-    const acodec = typeof format.acodec === "string" ? format.acodec : "";
-    const vcodec = typeof format.vcodec === "string" ? format.vcodec : "";
-    // Audio only, and the AAC-in-MP4 the audio path is built around.
-    if (!acodec.startsWith("mp4a") || (vcodec && vcodec !== "none")) continue;
-    const url = typeof format.url === "string" ? safeGoogleVideoUrl(format.url) : null;
-    if (!url) continue;
-    const rate = Number(format.abr ?? format.tbr ?? 0);
-    if (best && !(rate > best.rate)) continue;
-    best = {
-      url,
-      headers: audioSourceHeaders(
-        format.http_headers ? JSON.stringify(format.http_headers) : undefined,
-      ),
-      rate: Number.isFinite(rate) ? rate : 0,
-    };
-  }
-  if (!best) return null;
-  return { url: best.url, mime: "audio/mp4", expiresAt: sourceExpiry(best.url), headers: best.headers };
+export function audioSourceFromPrinted(printed: {
+  url?: string;
+  headers?: string;
+  acodec?: string;
+  vcodec?: string;
+}): AudioSource | null {
+  const acodec = printed.acodec ?? "";
+  const vcodec = printed.vcodec ?? "";
+  // Audio only, and the AAC-in-MP4 the audio path is built around: anything
+  // else would play as silence, or not at all.
+  if (!acodec.startsWith("mp4a")) return null;
+  if (vcodec && vcodec !== "none" && vcodec !== "NA") return null;
+  const url = printed.url ? safeGoogleVideoUrl(printed.url) : null;
+  if (!url) return null;
+  return {
+    url,
+    mime: "audio/mp4",
+    expiresAt: sourceExpiry(url),
+    headers: audioSourceHeaders(printed.headers),
+  };
 }
 
 async function runAttempt(
@@ -133,7 +134,14 @@ async function runAttempt(
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
     "--ignore-config", "--no-playlist", "--no-warnings",
-    "--skip-download", "--dump-single-json",
+    // One format rather than all of them: every format URL costs a signature
+    // to decipher, and we want exactly one — the one the player will ask for.
+    "-f", "bestaudio[acodec^=mp4a]/bestaudio[ext=m4a]/140/bestaudio/best",
+    "--print", INFO_FIELDS,
+    "--print", "urls",
+    "--print", "%(http_headers)j",
+    "--print", "%(acodec)s",
+    "--print", "%(vcodec)s",
     ...POT_PROVIDER_ARGS,
   ];
   let process: ReturnType<typeof Bun.spawn>;
@@ -156,9 +164,9 @@ async function runAttempt(
       refusedRef.refused = callerWasRefused(stderr);
       return null;
     }
-    const json = JSON.parse(stdout) as Record<string, unknown>;
-    const info = videoInfoFromYtdlpJson(videoId, json);
-    if (info) audioRef.source = audioSourceFromYtdlpJson(json);
+    const [fields, url, headers, acodec, vcodec] = stdout.split(/\r?\n/);
+    const info = videoInfoFromYtdlpJson(videoId, JSON.parse(fields ?? "{}") as Record<string, unknown>);
+    if (info) audioRef.source = audioSourceFromPrinted({ url, headers, acodec, vcodec });
     return info;
   } catch {
     return null;
