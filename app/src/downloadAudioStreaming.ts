@@ -21,6 +21,7 @@ interface DownloadAudioStreamingDependencies {
   fetchImpl?: typeof fetch;
   spawn?: typeof Bun.spawn;
   now?: () => number;
+  wait?: (milliseconds: number) => Promise<void>;
 }
 
 const AUDIO_REQUEST_TIMEOUT_MS = 45_000;
@@ -36,9 +37,16 @@ const REFUSAL_QUIET_MS = 10_000;
 const REFUSALS_BEFORE_QUIET = 2;
 /** Statuses that say the caller is the problem, so retrying changes nothing. */
 const AUDIO_REFUSAL_STATUSES = new Set([401, 403, 429]);
+/** A refused URL is asked once more after this, before anything is re-resolved. */
+const AUDIO_REFUSAL_RETRY_MS = 400;
 
 export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamingDependencies) {
-  const { audioDiagnostic = defaultAudioDiagnostic, fetchImpl = fetch, now = Date.now } = dependencies;
+  const {
+    audioDiagnostic = defaultAudioDiagnostic,
+    fetchImpl = fetch,
+    now = Date.now,
+    wait = (milliseconds: number) => Bun.sleep(milliseconds),
+  } = dependencies;
   /** Videos whose upstream refused us: how many times in a row, and when. */
   const refusals = new Map<string, { at: number; strikes: number }>();
 
@@ -197,6 +205,17 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
       source = await refreshAudioSource(userId, videoId, source.url, signal);
       if (!source) return null;
       upstream = await fetchAudioUpstream(userId, videoId, source, range, signal);
+    }
+    // Measured on a refused address: a freshly minted URL answers 403 to its
+    // first request and 206 to the next, on the same URL with the same
+    // headers. Asking again costs nothing; resolving again costs six seconds
+    // and, until now, a failed request the listener had to retry by hand.
+    if (upstream && AUDIO_REFUSAL_STATUSES.has(upstream.status) && !signal.aborted) {
+      await upstream.body?.cancel().catch(() => {});
+      await wait(AUDIO_REFUSAL_RETRY_MS);
+      if (signal.aborted) return null;
+      audioDiagnostic("info", "audio.upstream_second_ask", { userId, videoId, status: upstream.status });
+      upstream = await fetchAudioUpstream(userId, videoId, source.url, range, signal, source.headers);
     }
     if (!upstream) {
       if (!signal.aborted) discardAudioSource(userId, videoId, source.url);

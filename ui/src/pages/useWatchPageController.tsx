@@ -338,11 +338,12 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     keepStreamingAfterDownload: downloadReadyToReload,
     defaultSource: settings?.player_default_source === "stream" ? "stream" : "youtube",
     iframeFallback,
-    // Audio mode is remembered before the page knows which video it applies
-    // to. Showing the embed meanwhile plays a second of video at someone who
-    // asked not to see any — and leaves them on a page with no way back to
-    // audio, since the control needs the row too.
-    audioModePending: audioModeRequested && !matchingVideo && !videoUnavailable,
+    // Nothing to play yet: either a video that has to be imported before the
+    // page knows anything about it, or a remembered audio mode whose
+    // eligibility needs that same row. The embed would fill the wait with an
+    // empty black frame, and in audio mode with a second of video at someone
+    // who asked not to see any.
+    playerPending: (audioModeRequested || videoMissing) && !matchingVideo && !videoUnavailable,
   });
   const downloadFeedbackKind = downloadReadyToReload ? "ready" : downloadRequestError || downloadStatus === "error" ? "error" : downloadStatus === "downloading" ? "downloading" : "queued";
   const downloadFeedbackVisible = downloadReadyToReload || downloadRequestError || downloadStatus === "queued" || downloadStatus === "downloading" || downloadStatus === "error";

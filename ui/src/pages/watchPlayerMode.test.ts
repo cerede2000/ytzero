@@ -21,10 +21,10 @@ describe("resolvePlayerKind", () => {
     expect(resolvePlayerKind({ ...base, playbackPolicyReady: false })).toBe("loading");
   });
 
-  test("holds the player back rather than flashing video at a remembered audio mode", () => {
-    expect(resolvePlayerKind({ ...base, hasVideo: false, audioModePending: true })).toBe("loading");
-    expect(resolvePlayerKind({ ...base, hasVideo: false, audioModePending: false })).toBe("youtube");
-    expect(resolvePlayerKind({ ...base, audioModePending: false })).toBe("youtube");
+  test("holds the player back while the row it is about is still coming", () => {
+    expect(resolvePlayerKind({ ...base, hasVideo: false, playerPending: true })).toBe("loading");
+    expect(resolvePlayerKind({ ...base, hasVideo: false, playerPending: false })).toBe("youtube");
+    expect(resolvePlayerKind({ ...base, playerPending: false })).toBe("youtube");
   });
 
   test("shows the source choice when ask mode is ready", () => {
