@@ -32,6 +32,19 @@ describe("PO token provider arguments", () => {
     ]);
   });
 
+  test("names the real directory, not a link to it", () => {
+    // The script runs under a runtime that grants file access per path and
+    // compares the path it resolves against the path it was granted: handed a
+    // link, it dies reading its own dependencies.
+    const args = potProviderArgs({
+      home: "/root/provider",
+      url: "",
+      exists: allFiles,
+      real: (path) => path.replace("/root", "/opt"),
+    });
+    expect(args).toEqual(["--extractor-args", "youtubepot-bgutilscript:server_home=/opt/provider"]);
+  });
+
   test("lets an operator turn the bundled script off", () => {
     // The image always carries the script; an operator who prefers the
     // companion service should not have both consulted on every call.
