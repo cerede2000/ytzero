@@ -774,6 +774,22 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     return () => { cancelled = true; };
   }, [id, loadAttempt]);
 
+  /**
+   * Start resolving the track the moment the page opens.
+   *
+   * The player asks for it when it mounts, which is a second or two later:
+   * the row has to arrive, the component has to be fetched and rendered, and
+   * only then does the request leave. The server coalesces identical asks, so
+   * making it here costs nothing and the player finds the work already under
+   * way — or done.
+   */
+  const warmedAudioRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id || !audioModeRequested || warmedAudioRef.current === id) return;
+    warmedAudioRef.current = id;
+    void fetch(api.audioHlsUrl(id), { method: "HEAD" }).catch(() => {});
+  }, [audioModeRequested, id]);
+
   // When a video finishes: record completion, advance the playlist if any.
   const handleEnded = useCallback(() => {
     if (!id) return;
