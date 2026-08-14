@@ -5,7 +5,7 @@ import { downloadCookieAttempts } from "./downloadStrategy";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { ytdlpAttemptArgs } from "./downloadConfig";
 import { parseYtdlpHttpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
-import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
+import { potArgsFor } from "./ytdlpPotProvider";
 
 export interface AudioSource {
   url: string;
@@ -71,7 +71,7 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
       "--print", "urls",
       "--print", "%(ext)s",
       "--print", "%(http_headers)j",
-      ...POT_PROVIDER_ARGS,
+      ...potArgsFor(useCookies),
     ];
     if (signal.aborted) return { source: null, anonymousRefused: false };
 

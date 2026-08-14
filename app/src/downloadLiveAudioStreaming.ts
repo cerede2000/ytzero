@@ -101,7 +101,7 @@ export function createDownloadLiveAudioStreaming(dependencies: DownloadLiveAudio
       "--ignore-config", "--no-playlist", "--no-warnings",
       "-f", await formatSelector(userId),
       "--get-url",
-      ...POT_PROVIDER_ARGS,
+      ...potArgsFor(useCookies),
     ];
     if (signal.aborted) return null;
     let process: ReturnType<typeof Bun.spawn>;

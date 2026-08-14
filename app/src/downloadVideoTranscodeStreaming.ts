@@ -4,7 +4,7 @@ import { database } from "./database";
 import { log } from "./logger";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import type { DlSettings } from "./downloader";
-import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
+import { potArgsFor } from "./ytdlpPotProvider";
 
 interface DownloadVideoStreamingDependencies {
   DOWNLOADS_DIR: string;
@@ -170,7 +170,7 @@ export function createDownloadVideoTranscodeStreaming(dependencies: DownloadVide
       "--print", "%(duration)s",
       "--print", "%(fps)s",
       "--print", "urls",
-      ...POT_PROVIDER_ARGS,
+      ...potArgsFor(downloadCookiesConfigured(userId)),
     ];
     if (downloadCookiesConfigured(userId)) args.push("--cookies", downloadCookiesFile(userId));
     if (signal?.aborted) return null;

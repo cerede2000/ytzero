@@ -13,7 +13,7 @@ import {
   type VideoVodPresentation,
 } from "./videoVodPlaylist";
 import type { DlSettings } from "./downloader";
-import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
+import { potArgsFor } from "./ytdlpPotProvider";
 
 interface DownloadVideoDirectStreamingDependencies {
   YTDLP: string;
