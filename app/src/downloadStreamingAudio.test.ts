@@ -220,10 +220,10 @@ describe("audio streaming integration", () => {
 
     const response = await audio.getAudioResponse(1, "video", "bytes=0-0");
     expect(response?.status).toBe(206);
-    // The first URL is asked for again before anything is re-resolved, because
-    // waiting out a refusal is cheaper than six seconds of yt-dlp.
+    // The first URL is asked for again, several times, before anything is
+    // re-resolved: waiting out a refusal is cheaper than six seconds of yt-dlp.
     expect(spawns).toBe(2);
-    expect(fetches).toBe(5);
+    expect(fetches).toBe(8);
   });
 
   test("follows a bounded, revalidated googlevideo redirect and preserves Range", async () => {

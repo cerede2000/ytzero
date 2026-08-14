@@ -45,8 +45,13 @@ const AUDIO_REFUSAL_STATUSES = new Set([401, 403, 429]);
  * refusal is of the address rather than of the request. Re-resolving is the
  * expensive way to wait: six seconds of yt-dlp to obtain a URL that is refused
  * in exactly the same way. Waiting is the cheap way.
+ *
+ * The moment it opens is not on a schedule: measured across three tracks, one
+ * was through after 1.6 s and two after 4.1. So the ladder is dense at the
+ * start — asking often costs a request nobody reads, while waiting costs the
+ * listener silence.
  */
-const AUDIO_RETRY_DELAYS_MS = [400, 1_200, 2_500];
+const AUDIO_RETRY_DELAYS_MS = [250, 400, 650, 1_000, 1_500, 2_200];
 
 export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamingDependencies) {
   const {
