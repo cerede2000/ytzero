@@ -35,6 +35,20 @@ const AUDIO_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const REFUSAL_QUIET_MS = 10_000;
 /** A single refusal is worth another go; two in a row are worth pausing on. */
 const REFUSALS_BEFORE_QUIET = 2;
+/**
+ * How much of a track's start is kept once it has been read.
+ *
+ * Building the playlist already reads the head of the file — the init segment
+ * and the beginning of the first fragment — and then throws it away, so the
+ * player fetches the same bytes again a moment later. Keeping a little more
+ * than that means the first requests of a track are answered from memory: the
+ * handover between two entries of a list stops waiting on YouTube for a
+ * resolution it has, an index it has, and bytes it just held.
+ */
+const AUDIO_START_BYTES = 256 * 1024;
+const AUDIO_START_TTL_MS = 10 * 60_000;
+const AUDIO_START_ENTRIES = 6;
+
 /** Statuses that say the caller is the problem, so retrying changes nothing. */
 const AUDIO_REFUSAL_STATUSES = new Set([401, 403, 429]);
 /**
@@ -63,6 +77,42 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     now = Date.now,
     wait = (milliseconds: number) => Bun.sleep(milliseconds),
   } = dependencies;
+  /** The first bytes of a track, kept from the read that built its playlist. */
+  const starts = new Map<string, { bytes: Uint8Array; total: number; expiresAt: number }>();
+
+  function rememberStart(userId: number, videoId: string, bytes: Uint8Array, total: number): void {
+    const now_ = now();
+    for (const [key, entry] of starts) if (entry.expiresAt <= now_) starts.delete(key);
+    while (starts.size >= AUDIO_START_ENTRIES) {
+      const oldest = starts.keys().next().value as string | undefined;
+      if (!oldest) break;
+      starts.delete(oldest);
+    }
+    starts.set(audioSourceKey(userId, videoId), { bytes, total, expiresAt: now_ + AUDIO_START_TTL_MS });
+  }
+
+  /** The answer to a range that lies entirely inside what we kept, or nothing. */
+  function startResponse(userId: number, videoId: string, range: AudioByteRange): Response | null {
+    const entry = starts.get(audioSourceKey(userId, videoId));
+    if (!entry || entry.expiresAt <= now()) return null;
+    const end = Math.min(range.end, entry.total - 1);
+    if (range.start < 0 || end < range.start || end >= entry.bytes.byteLength) return null;
+    const slice = entry.bytes.slice(range.start, end + 1);
+    audioDiagnostic("info", "audio.start_served", {
+      userId, videoId, rangeStart: range.start, rangeEnd: end,
+    });
+    return new Response(slice, {
+      status: 206,
+      headers: {
+        "Content-Type": "audio/mp4",
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-store",
+        "Content-Length": String(slice.byteLength),
+        "Content-Range": `bytes ${range.start}-${end}/${entry.total}`,
+      },
+    });
+  }
+
   /** Videos whose upstream refused us: how many times in a row, and when. */
   const refusals = new Map<string, { at: number; strikes: number }>();
 
@@ -290,6 +340,10 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
   ): Promise<Response | null> {
     const parsed = parseAudioRange(range);
     if (!parsed) return rangeNotSatisfiable();
+    if (parsed.requested) {
+      const kept = startResponse(userId, videoId, parsed);
+      if (kept) return kept;
+    }
     const operation = requestAbortSignal(signal);
     try {
       const result = await validatedAudioUpstream(userId, videoId, parsed, operation.signal);
@@ -334,7 +388,11 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     if (!Number.isSafeInteger(bytes) || bytes <= 0) return null;
     const operation = requestAbortSignal(signal);
     try {
-      const range: AudioByteRange = { start: 0, end: bytes - 1, requested: true };
+      // Read a little past what the index needs. The extra is the start of the
+      // first fragment — bytes the player asks for moments later anyway — so
+      // this costs no request and saves the one that would have followed.
+      const wanted = Math.max(bytes, AUDIO_START_BYTES);
+      const range: AudioByteRange = { start: 0, end: wanted - 1, requested: true };
       const result = await validatedAudioUpstream(userId, videoId, range, operation.signal);
       if (!result || result.kind === "response") return null;
       const { source, response, contentRange, contentLength } = result.value;
@@ -352,7 +410,9 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
         }
         return null;
       }
-      return { bytes: new Uint8Array(body), source, total: contentRange.total };
+      const read = new Uint8Array(body);
+      rememberStart(userId, videoId, read, contentRange.total);
+      return { bytes: read, source, total: contentRange.total };
     } finally {
       operation.dispose();
     }
