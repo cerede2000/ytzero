@@ -36,3 +36,17 @@ describe("video info refusal quiet", () => {
     expect(quiet.quiet()).toBe(false);
   });
 });
+
+describe("saying it once", () => {
+  test("announces the refusal and the recovery, not every lookup between", () => {
+    const changes: boolean[] = [];
+    const quiet = createRefusalQuiet({ now: () => 1_000, quietMs: 100, onChange: (r) => changes.push(r) });
+    quiet.note(REFUSAL);
+    quiet.note(REFUSAL);
+    quiet.note(REFUSAL);
+    expect(changes).toEqual([true]);
+    quiet.clear();
+    quiet.clear();
+    expect(changes).toEqual([true, false]);
+  });
+});
