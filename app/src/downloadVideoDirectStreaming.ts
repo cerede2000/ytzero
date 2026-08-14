@@ -11,7 +11,7 @@ import {
   type VideoVodPresentation,
 } from "./videoVodPlaylist";
 import type { DlSettings } from "./downloader";
-import { POT_PROVIDER_ARGS } from "./ytdlpPotProvider";
+import { potArgsFor } from "./ytdlpPotProvider";
 
 interface DownloadVideoDirectStreamingDependencies {
   YTDLP: string;
@@ -292,7 +292,7 @@ export function createDownloadVideoDirectStreaming(dependencies: DownloadVideoDi
       "--ignore-config", "--no-playlist", "--no-warnings",
       "-f", await formatSelector(userId),
       "--dump-single-json",
-      ...POT_PROVIDER_ARGS,
+      ...potArgsFor(useCookies),
     ];
     let process: ReturnType<typeof Bun.spawn>;
     try {

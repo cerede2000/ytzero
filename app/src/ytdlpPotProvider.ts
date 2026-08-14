@@ -62,6 +62,19 @@ export const POT_PROVIDER_ARGS: string[] = potProviderArgs();
 /** Whether a provider is configured at all, for the runtime status panel. */
 export const potProviderConfigured = POT_PROVIDER_ARGS.length > 0;
 
+/**
+ * The arguments an attempt should carry, given how it authenticates.
+ *
+ * A token is what an unrecognised caller offers in place of an account, and
+ * computing one costs a second and a half — measured on a refused address:
+ * with cookies, 4.5 s without it and 6.0 s with, for the same answer. An
+ * attempt that already carries cookies has nothing to gain from it and pays
+ * for it on every track, so it goes without.
+ */
+export function potArgsFor(useCookies: boolean): string[] {
+  return useCookies ? [] : POT_PROVIDER_ARGS;
+}
+
 /** The script provider's home, when the bundled script is the one in use. */
 function scriptProviderHome(): string | null {
   const home = (process.env.POT_PROVIDER_HOME ?? DEFAULT_POT_PROVIDER_HOME).trim();

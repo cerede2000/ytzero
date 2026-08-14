@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { potProviderArgs } from "./ytdlpPotProvider";
+import { potArgsFor, potProviderArgs } from "./ytdlpPotProvider";
 
 const noFiles = () => false;
 const allFiles = () => true;
@@ -54,5 +54,13 @@ describe("PO token provider arguments", () => {
 
   test("ignores blank configuration rather than passing an empty URL", () => {
     expect(potProviderArgs({ home: "/opt/provider", url: "   ", exists: noFiles })).toEqual([]);
+  });
+});
+
+describe("who needs a token", () => {
+  test("an attempt carrying cookies goes without one", () => {
+    // Measured on a refused address: 4.5 s with cookies alone, 6.0 s with a
+    // token as well, for the same answer. The account is the proof already.
+    expect(potArgsFor(true)).toEqual([]);
   });
 });
