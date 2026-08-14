@@ -102,6 +102,8 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [playing, setPlaying] = useState(false);
+  /** Whether this element has ever played: a pause after that is deliberate. */
+  const everPlayedRef = useRef(false);
   const [buffering, setBuffering] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -200,6 +202,25 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     onTrackAdvanced?.(track.videoId);
     return true;
   }, [audioRef, live, onTrackAdvanced, trackSource]);
+
+  /**
+   * Take the next touch as the permission iOS is waiting for.
+   *
+   * A tap that navigates does not carry its permission to the page it opens,
+   * so a remembered audio mode arrives on a page the listener has not touched
+   * yet and the element is refused the right to start. It looks like nothing
+   * happened, and the way out is to find the play button.
+   *
+   * So while the element has never played, any touch anywhere starts it — the
+   * listener's next gesture, whatever it was for, is a gesture. Once it has
+   * played, this stops: a pause after that is deliberate and must be obeyed.
+   */
+  useEffect(() => {
+    if (playing || status === "error" || everPlayedRef.current) return;
+    const start = () => { void audioRef.current?.play().catch(() => {}); };
+    document.addEventListener("pointerdown", start, { capture: true });
+    return () => document.removeEventListener("pointerdown", start, { capture: true });
+  }, [audioRef, playing, status]);
 
   const setAudioPosition = useCallback((seconds: number) => {
     const audio = audioRef.current;
@@ -571,7 +592,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
         onCanPlay={() => { setStatus("ready"); setBuffering(false); setRetryAttempts(0); }}
         onPlaying={() => { setStatus("ready"); setPlaying(true); setBuffering(false); setRetryAttempts(0); endedRef.current = false; }}
         onPlay={() => {
-          playbackStartedRef.current = true;
+          everPlayedRef.current = true;
           setPlaying(true);
           try { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"; } catch {}
         }}
