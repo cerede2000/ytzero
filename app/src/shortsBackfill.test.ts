@@ -1,50 +1,60 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { runIsolatedTestFile } from "../tests/isolatedTestFile";
 
-const root = mkdtempSync(resolve(tmpdir(), "ytzero-shorts-backfill-"));
-let result: Record<string, any> = {};
-
-beforeAll(async () => {
-  const process = Bun.spawn(["bun", "app/tests/shortsBackfillHarness.ts"], {
-    cwd: resolve(import.meta.dir, "../.."),
-    env: { ...Bun.env, DB_PATH: resolve(root, "db", "source.db") },
-    stdout: "pipe",
-    stderr: "pipe",
+const ISOLATION_FLAG = "YTZERO_SHORTS_BACKFILL_TEST_ISOLATED";
+if (process.env[ISOLATION_FLAG] !== "1") {
+  test("shorts backfill suite runs in an isolated application runtime", async () => {
+    await runIsolatedTestFile("src/shortsBackfill.test.ts", ISOLATION_FLAG);
   });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-  if (exitCode !== 0) throw new Error(`Shorts backfill harness failed:\n${stderr}\n${stdout}`);
-  const line = stdout.split("\n").find((entry) => entry.startsWith("RESULT "));
-  if (!line) throw new Error(`Shorts backfill harness returned no result:\n${stdout}`);
-  result = JSON.parse(line.slice("RESULT ".length));
-});
+} else {
+  const root = mkdtempSync(resolve(tmpdir(), "ytzero-shorts-"));
+  process.env.DB_PATH = resolve(root, "shorts.db");
+  const { db } = await import("./db");
+  const { database } = await import("./database");
+  const { backfillShorts, shortCheckBackoffMs } = await import("./refresher");
 
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+  db.prepare("INSERT INTO channels(channel_id,title) VALUES('UCshorts','Shorts')").run();
+  for (const id of ["unknown0001", "settled0001"]) {
+    db.prepare(`INSERT INTO videos(video_id,channel_id,title,published_at,live_status)
+      VALUES(?, 'UCshorts', 'A video', datetime('now'), 'none')`).run(id);
+  }
 
-describe("Shorts backfill", () => {
-  test("settles long videos locally and backs off unknown answers", () => {
-    expect(result.long).toEqual({ is_short: 0, short_check_attempts: 0 });
-    expect(result.afterFirst.is_short).toBeNull();
-    expect(result.afterFirst.short_check_attempts).toBe(1);
-    expect(result.afterFirst.short_check_next_attempt_at).toBeTruthy();
-    expect(result.fetchesBeforeDue).toBe(result.fetchesAfterFirst);
+  afterAll(async () => {
+    db.close();
+    await database.close();
+    rmSync(root, { recursive: true, force: true });
   });
 
-  test("retries when due and retains the recorded attempt after resolution", () => {
-    expect(result.afterResolved).toEqual({ is_short: 0, short_check_attempts: 2, short_check_next_attempt_at: null });
-  });
+  describe("working out which videos are shorts", () => {
+    test("stops asking about one YouTube will not settle", async () => {
+      // An unknown stays unknown on purpose — writing "not a short" on a guess
+      // would let an automatic job act on it. But the row was left exactly as
+      // it was, so the same video came back every refresh, for ever.
+      const asked: string[] = [];
+      const classify = async (videoId: string) => {
+        asked.push(videoId);
+        return videoId === "settled0001" ? true : null;
+      };
 
-  test("atomically claims a request, respects a supplied limit, and records refusal", () => {
-    expect(result.concurrent).toEqual({ short_check_attempts: 1 });
-    expect(result.concurrentFetches).toBe(1);
-    expect(result.limitFetches).toBe(1);
-    expect(result.limited.map((row: any) => row.short_check_attempts).sort()).toEqual([0, 1]);
-    expect(result.refused.short_check_attempts).toBe(1);
-    expect(result.refused.short_check_attempted_at).toBeTruthy();
+      const first = await backfillShorts(undefined, 10, classify);
+      expect(first).toEqual({ checked: 2, resolved: 1, postponed: 1 });
+      expect(asked.sort()).toEqual(["settled0001", "unknown0001"]);
+
+      // The settled one is written and gone from the queue; the unsettled one
+      // is left alone rather than asked about again a minute later.
+      const second = await backfillShorts(undefined, 10, classify);
+      expect(second).toEqual({ checked: 0, resolved: 0, postponed: 0 });
+      expect(asked).toHaveLength(2);
+    });
+
+    test("waits longer each time, and not for ever", () => {
+      expect(shortCheckBackoffMs(1)).toBe(30 * 60_000);
+      expect(shortCheckBackoffMs(2)).toBe(60 * 60_000);
+      expect(shortCheckBackoffMs(3)).toBe(2 * 60 * 60_000);
+      expect(shortCheckBackoffMs(99)).toBe(24 * 60 * 60_000);
+    });
   });
-});
+}

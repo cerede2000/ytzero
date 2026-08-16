@@ -452,12 +452,37 @@ export async function refreshChannel(channelId: string, userId?: number): Promis
 }
 
 /**
- * Resolve is_short for videos that haven't been classified yet. Unknowns stay
- * NULL so automatic jobs cannot mistake them for regular videos, but network
- * retries are durably rate-limited.
+ * How long to leave a video alone after an answer that settled nothing.
+ *
+ * An unknown stays unknown on purpose — writing "not a short" on a guess
+ * would let an automatic job act on it — but leaving the row as it was meant
+ * the same video came back every refresh, for ever, one request at a time.
  */
-export async function backfillShorts(videoIds?: string[], limit = 50) {
-  let rows: StoredShortCandidate[];
+const SHORT_RETRY_BASE_MS = 30 * 60_000;
+const SHORT_RETRY_MAX_MS = 24 * 60 * 60_000;
+const shortRetry = new Map<string, { attempts: number; nextAt: number }>();
+
+export function shortCheckBackoffMs(attempts: number): number {
+  return Math.min(SHORT_RETRY_BASE_MS * 2 ** (Math.max(1, attempts) - 1), SHORT_RETRY_MAX_MS);
+}
+
+export interface ShortsBackfillSummary {
+  checked: number;
+  resolved: number;
+  postponed: number;
+}
+
+/**
+ * Resolve is_short for videos that haven't been checked yet (is_short IS NULL).
+ * Limited per call to stay polite to YouTube; unknowns remain pending so an
+ * automatic job cannot mistake them for regular videos.
+ */
+export async function backfillShorts(
+  videoIds?: string[],
+  limit = 50,
+  classify: (videoId: string, title: string) => Promise<boolean | null> = classifyIsShort,
+): Promise<ShortsBackfillSummary> {
+  let rows: { video_id: string; title: string }[];
   if (videoIds && videoIds.length > 0) {
     const ph = videoIds.map(() => "?").join(",");
     rows = await database
@@ -480,20 +505,31 @@ export async function backfillShorts(videoIds?: string[], limit = 50) {
                 LIMIT ?`)
       .all(VIDEO_MAINTENANCE_CUTOFF, limit) as StoredShortCandidate[];
   }
-  let checked = 0;
-  for (const r of rows) {
-    try {
-      const result = await resolveStoredShort(r);
-      if (result.attempted) checked++;
-    } catch (error) {
-      if (isYouTubeRefusalError(error)) {
-        log.info("video.shorts_backfill_halted", { checked, skipped: rows.length - checked });
-        break;
-      }
-      throw error;
+  const setShort = database.prepare("UPDATE videos SET is_short = ? WHERE video_id = ?");
+  const now = Date.now();
+  // A video asked about recently and not settled is left where it was. Asking
+  // again on the next tick is a request every few minutes, for ever, about a
+  // question YouTube has already declined to answer.
+  const due = rows.filter((r) => (shortRetry.get(r.video_id)?.nextAt ?? 0) <= now);
+  let resolved = 0;
+  let postponed = 0;
+  for (const r of due) {
+    const short = await classify(r.video_id, r.title);
+    if (short !== null) {
+      await setShort.run(short ? 1 : 0, r.video_id);
+      shortRetry.delete(r.video_id);
+      resolved++;
+    } else {
+      const attempts = (shortRetry.get(r.video_id)?.attempts ?? 0) + 1;
+      const delayMs = shortCheckBackoffMs(attempts);
+      shortRetry.set(r.video_id, { attempts, nextAt: Date.now() + delayMs });
+      postponed++;
+      log.info("video.short_unknown", { videoId: r.video_id, attempts, retryInMin: Math.round(delayMs / 60_000) });
     }
+    if (short !== null) log.info("video.short_checked", { videoId: r.video_id, isShort: short });
     await Bun.sleep(120);
   }
+  return { checked: due.length, resolved, postponed };
 }
 
 interface StoredShortCandidate {
