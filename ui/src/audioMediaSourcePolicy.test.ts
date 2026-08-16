@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { audioHlsBufferConfig, shouldFallbackFromHlsJs, shouldFallbackFromNativeHls } from "./audioMediaSourcePolicy";
+import { shouldFallbackFromHlsJs, shouldFallbackFromNativeHls, shouldStartProgressive } from "./audioMediaSourcePolicy";
 
 describe("audio media source fallback policy", () => {
   test("keeps recordings buffered for four minutes without delaying live audio", () => {
@@ -30,5 +30,27 @@ describe("audio media source fallback policy", () => {
     expect(shouldFallbackFromNativeHls({ hasProgressiveSource: true, live: false, sourceReady: false })).toBe(true);
     expect(shouldFallbackFromNativeHls({ hasProgressiveSource: true, live: false, sourceReady: true })).toBe(false);
     expect(shouldFallbackFromNativeHls({ hasProgressiveSource: true, live: true, sourceReady: false })).toBe(false);
+  });
+});
+
+describe("where an audio track is read from", () => {
+  test("plays a file already on disk as itself", () => {
+    // A downloaded video has the track in it. Asking YouTube for one it
+    // already has costs a resolution and a network it does not need.
+    expect(shouldStartProgressive({ live: false, playlistSrc: "", progressiveSrc: "/api/videos/abc/stream" })).toBe(true);
+  });
+
+  test("reads a track coming from YouTube through its playlist", () => {
+    expect(shouldStartProgressive({
+      live: false,
+      playlistSrc: "/api/videos/abc/audio/index.m3u8",
+      progressiveSrc: "/api/videos/abc/audio",
+    })).toBe(false);
+  });
+
+  test("never skips the playlist of a broadcast", () => {
+    // A broadcast has no whole file to read: it is a playlist by nature.
+    expect(shouldStartProgressive({ live: true, playlistSrc: "", progressiveSrc: "/api/videos/abc/stream" })).toBe(false);
+    expect(shouldStartProgressive({ live: false, playlistSrc: "", progressiveSrc: undefined })).toBe(false);
   });
 });

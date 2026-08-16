@@ -1,17 +1,21 @@
-export function audioHlsBufferConfig(live: boolean): {
-  backBufferLength: number;
-  lowLatencyMode: boolean;
-  maxBufferLength: number;
-  maxBufferSize: number;
-  maxMaxBufferLength: number;
-} {
-  return {
-    backBufferLength: 30,
-    lowLatencyMode: live,
-    maxBufferLength: live ? 30 : 240,
-    maxBufferSize: 8 * 1024 * 1024,
-    maxMaxBufferLength: live ? 60 : 240,
-  };
+/**
+ * Whether to go straight to the plain file instead of a playlist.
+ *
+ * A video that has been downloaded is already on disk, whole: it needs no
+ * index to seek through and nothing from YouTube to play. The playlist is for
+ * a track being read from YouTube as it goes.
+ */
+export function shouldStartProgressive({
+  live,
+  playlistSrc,
+  progressiveSrc,
+}: {
+  live: boolean;
+  playlistSrc: string;
+  progressiveSrc?: string;
+}): boolean {
+  // A broadcast has no whole file to read: it is a playlist by nature.
+  return !live && !playlistSrc && Boolean(progressiveSrc);
 }
 
 export function shouldFallbackFromHlsJs({
