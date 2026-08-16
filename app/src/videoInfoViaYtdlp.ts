@@ -260,6 +260,16 @@ export async function fetchVideoInfoViaYtdlp(
       return info;
     }
   }
-  log.warn("video.info_via_ytdlp_failed", { videoId, ms: Date.now() - startedAt });
+  // Which profile asked, and whether it had anything to ask with. A failure
+  // here is the last thing standing between somebody and the video, and the
+  // usual cause is a profile whose cookie jar is missing or no longer good —
+  // which is invisible unless the line says so.
+  log.warn("video.info_via_ytdlp_failed", {
+    videoId,
+    userId,
+    cookiesConfigured: downloadCookiesConfigured(userId),
+    attempted: order,
+    ms: Date.now() - startedAt,
+  });
   return null;
 }
