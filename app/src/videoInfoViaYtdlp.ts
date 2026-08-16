@@ -1,5 +1,6 @@
 import { downloadCookiesConfigured, ytdlpCommand, ytdlpStatus } from "./downloader";
 import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
+import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { log } from "./logger";
 import type { AudioSource } from "./audioSourceResolver";
 import { audioSourceHeaders } from "./audioSourceResolver";
@@ -188,7 +189,7 @@ export async function fetchVideoInfoViaYtdlp(
 ): Promise<VideoInfo | null> {
   if (!(await ytdlpStatus())) return null;
   const startedAt = Date.now();
-  const order = cookieAttemptMemory.order(userId, downloadCookiesConfigured(userId));
+  const order = cookieAttemptMemory.order(userId, downloadCookiesConfigured(userId), videoInfoRefusalQuiet.quiet());
   for (const useCookies of order) {
     const refusal = { refused: false };
     const info = await runAttempt(userId, videoId, useCookies, spawn, refusal, audioRef);

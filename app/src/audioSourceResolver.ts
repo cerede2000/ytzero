@@ -1,6 +1,7 @@
 import { AudioSourceCache, audioSourceKey } from "./audioSourceCache";
 import { defaultAudioDiagnostic, type AudioDiagnostic } from "./audioDiagnostics";
 import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
+import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { downloadCookieAttempts } from "./downloadStrategy";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { ytdlpAttemptArgs } from "./downloadConfig";
@@ -140,7 +141,7 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     let attempts = 0;
     const cookiesConfigured = downloadCookiesConfigured(userId);
     const order = cookiesConfigured
-      ? cookieAttemptMemory.order(userId, true)
+      ? cookieAttemptMemory.order(userId, true, videoInfoRefusalQuiet.quiet())
       : downloadCookieAttempts(false);
     for (const useCookies of order) {
       attempts++;

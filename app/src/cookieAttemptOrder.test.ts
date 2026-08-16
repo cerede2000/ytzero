@@ -68,6 +68,30 @@ describe("cookie attempt order", () => {
     expect(memory.order(1, true)).toEqual([false, true]);
   });
 
+  test("does not spend the first attempt on an address already being refused", () => {
+    // The plain lookups have just been told to sign in. An attempt that offers
+    // no account is answering that with nothing, and its two to three seconds
+    // are paid in front of someone who pressed play.
+    const memory = memoryAt({ value: 1_000 });
+    expect(memory.order(1, true, true)).toEqual([true, false]);
+    expect(memory.order(1, true, false)).toEqual([false, true]);
+    // Nothing is dropped: an expired cookie still costs one resolution.
+    expect(memory.order(1, true, true)).toContain(false);
+    // A profile with no cookies has nothing else to offer either way.
+    expect(memory.order(1, false, true)).toEqual([false]);
+  });
+
+  test("believes the anonymous attempt over the lookups when it has just worked", () => {
+    // yt-dlp gets through where a plain read does not, so a resolution that
+    // succeeded a moment ago settles the question better than the refusal.
+    const clock = { value: 1_000 };
+    const memory = memoryAt(clock);
+    memory.record({ userId: 1, useCookies: false, resolved: true });
+    expect(memory.order(1, true, true)).toEqual([false, true]);
+    clock.value += 1_001;
+    expect(memory.order(1, true, true)).toEqual([true, false]);
+  });
+
   test("keeps profiles apart", () => {
     // Cookies belong to a profile: what one profile learns says nothing about
     // another, which may have none configured at all.
