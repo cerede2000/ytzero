@@ -38,4 +38,17 @@ export const keyboardShortcutMessages = {
     shortcutToggleFullscreen: "Vollbild umschalten", shortcutToggleTheater: "Kinomodus umschalten", shortcutTogglePictureInPicture: "Bild-in-Bild umschalten", shortcutClose: "Aktuellen Modus schließen",
     shortcutToggleMute: "Stummschalten", shortcutScreenshot: "Bildschirmfoto speichern",
   },
+  fr: {
+    keyboardShortcuts: "Raccourcis clavier", keyboardShortcutsHint: "Cliquez sur un raccourci, puis appuyez sur la nouvelle combinaison. Les changements valent pour les deux lecteurs.",
+    shortcutPlayback: "Lecture", shortcutSubtitles: "Sous-titres", shortcutGeneral: "Général",
+    shortcutPressKeys: "Appuyez sur les touches…", shortcutClear: "Désactiver le raccourci", shortcutReset: "Rétablir par défaut", shortcutResetAll: "Tout rétablir par défaut",
+    shortcutConflict: "Cette combinaison est déjà attribuée dans le même contexte.", shortcutSaveFailed: "Les raccourcis clavier n'ont pas pu être enregistrés.",
+    shortcutTogglePlay: "Lecture / pause", shortcutTemporaryBoost: "Maintenir pour la vitesse 2×", shortcutSeekBack10: "Reculer de 10 secondes", shortcutSeekForward10: "Avancer de 10 secondes",
+    shortcutPreviousVideo: "Vidéo précédente", shortcutNextVideo: "Vidéo suivante", shortcutPreviousFrame: "Image précédente en pause", shortcutNextFrame: "Image suivante en pause",
+    shortcutSpeedDown: "Réduire la vitesse de lecture", shortcutSpeedUp: "Augmenter la vitesse de lecture", shortcutSeekPercent: "Aller à 0–90 %", shortcutPreviousChapter: "Chapitre précédent",
+    shortcutNextChapter: "Chapitre suivant", shortcutSeekBack: "Reculer", shortcutSeekForward: "Avancer", shortcutVolumeUp: "Monter le volume", shortcutVolumeDown: "Baisser le volume",
+    shortcutToggleCaptions: "Afficher / masquer les sous-titres", shortcutSubtitleLarger: "Agrandir les sous-titres", shortcutSubtitleSmaller: "Réduire les sous-titres",
+    shortcutToggleFullscreen: "Basculer en plein écran", shortcutToggleTheater: "Basculer en mode cinéma", shortcutTogglePictureInPicture: "Basculer en image dans l'image", shortcutClose: "Quitter le mode actuel",
+    shortcutToggleMute: "Couper / rétablir le son", shortcutScreenshot: "Enregistrer une capture",
+  },
 } as const;
