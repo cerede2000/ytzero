@@ -280,6 +280,15 @@ export default function WatchPage() {
                   })}
                     key={`${video.video_id}-${video.live_status}-audio-${sharedStartSeconds}`}
                     ref={playerRef}
+                    // A downloaded video plays its own file here too: the
+                    // track is in it, and asking YouTube for one it already
+                    // has is several seconds and a network it does not need.
+                    playlistSrc={video.live_status === "live"
+                      ? api.liveAudioUrl(video.video_id)
+                      : playerKind === "local" ? "" : api.audioHlsUrl(video.video_id)}
+                    progressiveSrc={video.live_status === "live"
+                      ? undefined
+                      : playerKind === "local" ? api.streamUrl(video.video_id) : api.audioUrl(video.video_id)}
                     live={video.live_status === "live"} videoId={video.video_id}
                     title={video.title} channelTitle={video.channel_title}
                     artworkUrl={img(video.thumbnail)}

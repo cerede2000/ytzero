@@ -55,6 +55,16 @@ if (process.env[ISOLATION_FLAG] !== "1") {
       expect(await response.text()).toContain("WEBVTT");
     });
 
+    test("hands back what is on disk even when the menu asks it to look", async () => {
+      // Opening the menu asks the server to find out what this video has. For
+      // a video whose subtitles are already here, there is nothing to find.
+      const response = await request(`/videos/${videoId}/subtitles?resolve=1`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        subtitles: [{ lang: "en", url: `/api/videos/${videoId}/subtitles/en` }],
+      });
+    });
+
     test("accepts a request to fetch another language", async () => {
       // The download requirement used to answer 404 before anything else was
       // read, so asking for captions on a streamed video never got as far as
