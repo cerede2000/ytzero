@@ -111,20 +111,16 @@ export function subtitleTracksFromMaps(
   automatic: CaptionMap,
   supported: ReadonlySet<string> = SUBTITLE_LANGUAGE_CODES,
 ): SubtitleTrack[] {
-  const byLang = new Map<string, SubtitleTrack>();
-  // A code YouTube used verbatim keeps it: only a language nobody claimed
-  // exactly is worth answering to under its plain name.
-  const claimed = new Set([...Object.keys(subtitles ?? {}), ...Object.keys(automatic ?? {})]);
+  const tracks: SubtitleTrack[] = [];
   const take = (map: CaptionMap, automaticTrack: boolean) => {
     for (const [code, entries] of Object.entries(map ?? {})) {
-      const asked = askedLanguage(code);
-      const lang = asked !== code && claimed.has(asked) ? code : asked;
-      if (!Array.isArray(entries) || byLang.has(lang)) continue;
+      const lang = askedLanguage(code);
+      if (!Array.isArray(entries)) continue;
       if (automaticTrack && !supported.has(lang)) continue;
       const picked = pickSubtitleEntry(entries);
       if (!picked) continue;
       const named = entries.find((entry) => typeof entry.name === "string" && entry.name);
-      byLang.set(lang, {
+      tracks.push({
         lang,
         name: typeof named?.name === "string" ? named.name : lang,
         url: picked.url,
@@ -133,9 +129,22 @@ export function subtitleTracksFromMaps(
       });
     }
   };
+  // What the author wrote first, so it is the one tried first for a language.
   take(subtitles, false);
   take(automatic, true);
-  return [...byLang.values()].sort((a, b) => a.lang.localeCompare(b.lang));
+  return tracks.sort((a, b) => a.lang.localeCompare(b.lang));
+}
+
+/**
+ * The languages to put in the menu.
+ *
+ * A video with several audio tracks has a caption track for each, all in the
+ * same language. They are the same language to whoever is choosing, so the
+ * menu says it once; which of them actually answers is settled when one is
+ * asked for.
+ */
+export function subtitleLanguages(tracks: readonly SubtitleTrack[]): string[] {
+  return [...new Set(tracks.map((track) => track.lang))];
 }
 
 export function createSubtitleTracks({
@@ -230,20 +239,40 @@ export function createSubtitleTracks({
 
 export const { subtitleTracks, knownSubtitleTracks, invalidateSubtitleTracks } = createSubtitleTracks();
 
+/**
+ * Asking for several tracks in a row is answered with 429, and it clears in
+ * about a second and a half — measured against a track that came back empty
+ * and then returned fifteen kilobytes. A listener choosing a language sees
+ * that as "this one leads nowhere", so it is worth waiting out rather than
+ * reporting.
+ */
+const RATE_LIMIT_DELAYS_MS = [400, 900, 1_500];
+
 /** Read one track through, as the WebVTT a `<track>` element plays. */
 export async function readSubtitleTrack(
   track: SubtitleTrack,
   signal?: AbortSignal,
   fetchImpl: typeof fetch = fetch,
+  wait: (ms: number) => Promise<void> = (ms) => Bun.sleep(ms),
 ): Promise<string | null> {
   const url = safeSubtitleUrl(track.url);
   if (!url) return null;
-  const response = await fetchImpl(url, { signal }).catch(() => null);
-  if (!response?.ok) {
-    await response?.body?.cancel().catch(() => {});
-    return null;
+  for (const delay of [0, ...RATE_LIMIT_DELAYS_MS]) {
+    if (delay) await wait(delay);
+    if (signal?.aborted) return null;
+    const response = await fetchImpl(url, { signal }).catch(() => null);
+    if (response?.status === 429) {
+      await response.body?.cancel().catch(() => {});
+      log.info("subtitles.rate_limited", { lang: track.lang, afterMs: delay });
+      continue;
+    }
+    if (!response?.ok) {
+      await response?.body?.cancel().catch(() => {});
+      return null;
+    }
+    const text = await response.text().catch(() => null);
+    if (!text?.trim()) return null;
+    return track.ext === "srt" ? srtToVtt(text) : text;
   }
-  const text = await response.text().catch(() => null);
-  if (!text?.trim()) return null;
-  return track.ext === "srt" ? srtToVtt(text) : text;
+  return null;
 }
