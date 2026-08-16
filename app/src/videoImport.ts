@@ -3,6 +3,7 @@ import { childHidesLive } from "./childTime";
 import { database } from "./database";
 import { primeAudioSource, primeVideoSource } from "./downloader";
 import { log } from "./logger";
+import { askWithBorrowedCredentials } from "./metadataCredentials";
 import { persistDirectVideoInfo } from "./videoInfoPersistence";
 import { saveRelatedVideos } from "./relatedVideoStore";
 import type { RelatedVideo } from "./relatedVideos";
@@ -31,6 +32,19 @@ export class LiveDisabledForProfileError extends Error {
  * proof-of-origin token — gets an answer where a plain request is refused.
  * Only a refusal is worth the second attempt: a video that is private or gone
  * says so consistently, and asking twice would just be slower.
+ *
+ * "The profile's cookies" is the part that fails quietly. A profile with no
+ * jar makes one anonymous attempt, is refused in two seconds, and the video
+ * will not open — while the same video opens for the profile next door. On an
+ * instance where one person set up cookies and the second profile did not, the
+ * second profile simply cannot open anything outside the library, and nothing
+ * on screen says why.
+ *
+ * So the instance falls back on the credentials it already borrows elsewhere:
+ * the background metadata jobs and the suggestion panel both do this, and this
+ * is the one that decides whether somebody can watch. The cost is one more
+ * yt-dlp run, paid only when the first found nothing, and only when a
+ * different profile has a jar to lend.
  */
 async function fetchVideoInfoForImport(userId: number, videoId: string, related: { videos: RelatedVideo[] }): Promise<VideoInfo> {
   try {
@@ -39,11 +53,18 @@ async function fetchVideoInfoForImport(userId: number, videoId: string, related:
     if (error instanceof PrivateVideoError || error instanceof DeletedVideoError) throw error;
     const audio: { source: AudioSource | null } = { source: null };
     const video: { source: ProgressiveVideoSource | null } = { source: null };
-    const viaYtdlp = await fetchVideoInfoViaYtdlp(userId, videoId, Bun.spawn, audio, video).catch(() => null);
+    const viaYtdlp = await askWithBorrowedCredentials(
+      userId,
+      (asUserId) => fetchVideoInfoViaYtdlp(asUserId, videoId, Bun.spawn, audio, video).catch(() => null),
+      undefined,
+      (lender) => log.info("video.import_via_borrowed_credentials", { videoId, userId, lender }),
+    );
     if (!viaYtdlp) throw error;
     // The answer carried both playable tracks too. Handing them over here is
     // the difference between a player that starts and one that waits for the
     // same question to be asked again, whichever of the two the page picks.
+    // They are primed for whoever is watching: the tracks are the video's, not
+    // the account's, whichever account got them handed over.
     if (audio.source) primeAudioSource(userId, videoId, audio.source);
     if (video.source) primeVideoSource(userId, videoId, video.source);
     return viaYtdlp;
