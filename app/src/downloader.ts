@@ -3,6 +3,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { database, databaseConfig } from "./database";
 import { DB_PATH, getSetting, setSetting } from "./db";
 import { downloadCookieAttempts, downloadFormat, isAnonymousAddressRefusal, recordDownloadAttempt, renderDownloadOutputTemplate } from "./downloadStrategy";
+import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
+import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { log } from "./logger";
 import { beginMutation, maintenanceActive } from "./maintenance";
 import { publishAppEvent, subscribeToAppEvents } from "./appEvents";
@@ -876,7 +878,14 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
   notifyDownloadChanged(videoId);
   log.info("downloads.start", { videoId, quality: s.quality, compatibleFormat: s.compatible_format === 1, base });
 
-  const cookieAttempts = downloadCookieAttempts(downloadCookiesConfigured(userId), userId);
+  // The same order every other resolver here follows: anonymous first, which
+  // offers more formats, unless the address is being turned away — in which
+  // case that attempt is two or three seconds of certain refusal in front of
+  // someone waiting for a file.
+  const cookiesConfigured = downloadCookiesConfigured(userId);
+  const cookieAttempts = cookiesConfigured
+    ? cookieAttemptMemory.order(userId, true, videoInfoRefusalQuiet.quiet())
+    : downloadCookieAttempts(false);
   let job: ActiveDownload | null = null;
   let code = 1;
   let stderrTail: string[] = [];
@@ -966,12 +975,13 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
     }
     stderrTail = attemptStderr;
 
-    if (!useCookies && code !== 0) anonymousRefused ||= isAnonymousAddressRefusal(stderrTail.at(-1) ?? "");
-    if (code === 0) recordDownloadAttempt(userId, useCookies, true, anonymousRefused);
-
+    cookieAttemptMemory.record({
+      userId, useCookies, resolved: code === 0, refused: callerWasRefused(stderrTail.join("\n")),
+    });
     if (code === 0 || job.cancelled || job.preempted) break;
-    if (cookieAttempts[attemptIndex + 1]) {
-      log.info("downloads.retry_with_cookies", {
+    const next = cookieAttempts[attemptIndex + 1];
+    if (next !== undefined) {
+      log.info(next ? "downloads.retry_with_cookies" : "downloads.retry_without_cookies", {
         videoId,
         reason: stderrTail.at(-1) ?? `yt-dlp exited with code ${code}`,
       });

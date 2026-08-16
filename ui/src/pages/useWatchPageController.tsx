@@ -809,9 +809,13 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const warmedAudioRef = useRef<string | null>(null);
   useEffect(() => {
     if (!id || !audioModeRequested || warmedAudioRef.current === id) return;
+    // Not for a video that is here: its track is in the file the player is
+    // about to read, and warming would send YouTube a question about a video
+    // nobody is going to ask it for.
+    if (!matchingVideo || downloadStatus === "done") return;
     warmedAudioRef.current = id;
     void fetch(api.audioHlsUrl(id), { method: "HEAD" }).catch(() => {});
-  }, [audioModeRequested, id]);
+  }, [audioModeRequested, downloadStatus, id, matchingVideo]);
 
   // When a video finishes: record completion, advance the playlist if any.
   const handleEnded = useCallback(() => {
