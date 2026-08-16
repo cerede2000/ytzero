@@ -1,6 +1,7 @@
 import { AudioSourceCache, audioSourceKey } from "./audioSourceCache";
 import { fetchGoogleVideoResponse, safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { cookieAttemptMemory } from "./cookieAttemptOrder";
+import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { downloadCookieAttempts } from "./downloadStrategy";
 import { rewriteLiveAudioPlaylist } from "./liveAudioPlaylist";
 import { potArgsFor } from "./ytdlpPotProvider";
@@ -131,7 +132,9 @@ export function createDownloadLiveAudioStreaming(dependencies: DownloadLiveAudio
   async function resolveFresh(userId: number, videoId: string, signal: AbortSignal): Promise<LiveAudioSession | null> {
     if (!(await ytdlpStatus()) || signal.aborted) return null;
     const cookiesConfigured = downloadCookiesConfigured(userId);
-    const order = cookiesConfigured ? cookieAttemptMemory.order(userId, true) : downloadCookieAttempts(false);
+    const order = cookiesConfigured
+      ? cookieAttemptMemory.order(userId, true, videoInfoRefusalQuiet.quiet())
+      : downloadCookieAttempts(false);
     for (const useCookies of order) {
       const playlistUrl = await resolveAttempt(userId, videoId, useCookies, signal);
       if (signal.aborted) return null;

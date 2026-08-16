@@ -30,8 +30,16 @@ export function callerWasRefused(stderr: string): boolean {
 }
 
 export interface CookieAttemptMemory {
-  /** The attempts to make for a profile, in order, as `useCookies` flags. */
-  order(userId: number, cookiesConfigured: boolean): boolean[];
+  /**
+   * The attempts to make for a profile, in order, as `useCookies` flags.
+   *
+   * `addressRefused` says YouTube is turning this address away right now, as
+   * the plain lookups have just found out. An attempt that offers no account
+   * is answering that refusal with nothing, so it goes second — unless the
+   * anonymous attempt has itself worked recently, which settles the question
+   * more directly than anything the lookups can say.
+   */
+  order(userId: number, cookiesConfigured: boolean, addressRefused?: boolean): boolean[];
   /**
    * Report how an attempt went, so the next order can learn from it.
    * `refused` means YouTube turned the caller away, not that yt-dlp failed.
@@ -43,25 +51,26 @@ export function createCookieAttemptMemory({
   now = Date.now,
   memoryMs = MEMORY_MS,
 }: { now?: () => number; memoryMs?: number } = {}): CookieAttemptMemory {
-  /** Per profile, because cookies are per profile: {anonymousFailedAt, cookiesWorkedAt}. */
-  const seen = new Map<number, { anonymousFailedAt: number; cookiesWorkedAt: number }>();
+  /** Per profile, because cookies are per profile. */
+  const seen = new Map<number, { anonymousFailedAt: number; anonymousWorkedAt: number; cookiesWorkedAt: number }>();
 
   const entry = (userId: number) => {
     const existing = seen.get(userId);
     if (existing) return existing;
-    const created = { anonymousFailedAt: 0, cookiesWorkedAt: 0 };
+    const created = { anonymousFailedAt: 0, anonymousWorkedAt: 0, cookiesWorkedAt: 0 };
     seen.set(userId, created);
     return created;
   };
 
   return {
-    order(userId: number, cookiesConfigured: boolean): boolean[] {
+    order(userId: number, cookiesConfigured: boolean, addressRefused = false): boolean[] {
       if (!cookiesConfigured) return [false];
-      const { anonymousFailedAt, cookiesWorkedAt } = entry(userId);
-      if (!anonymousFailedAt || !cookiesWorkedAt) return [false, true];
+      const { anonymousFailedAt, anonymousWorkedAt, cookiesWorkedAt } = entry(userId);
       const current = now();
-      const fresh = current - anonymousFailedAt < memoryMs && current - cookiesWorkedAt < memoryMs;
-      return fresh && cookiesWorkedAt >= anonymousFailedAt ? [true, false] : [false, true];
+      const recent = (at: number) => at > 0 && current - at < memoryMs;
+      if (recent(anonymousWorkedAt)) return [false, true];
+      const learned = recent(anonymousFailedAt) && recent(cookiesWorkedAt) && cookiesWorkedAt >= anonymousFailedAt;
+      return learned || addressRefused ? [true, false] : [false, true];
     },
     record({ userId, useCookies, resolved, refused = false }): void {
       const state = entry(userId);
@@ -72,7 +81,11 @@ export function createCookieAttemptMemory({
         // and the anonymous attempt is the one that may come back first.
         else state.cookiesWorkedAt = 0;
       }
-      if (!useCookies && resolved) state.anonymousFailedAt = 0;
+      if (!useCookies && resolved) {
+        state.anonymousFailedAt = 0;
+        state.anonymousWorkedAt = now();
+      }
+      if (!useCookies && !resolved) state.anonymousWorkedAt = 0;
     },
   };
 }
