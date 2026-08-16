@@ -939,6 +939,8 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
             preferredLanguages={preferredSubtitleLanguages}
             loadingLanguage={subLoading}
             errorLanguage={subError}
+            discovering={subDiscovering}
+            onOpen={discoverSubtitles}
             onSelect={pickSubLang}
             onToggle={toggleSubtitles}
           />

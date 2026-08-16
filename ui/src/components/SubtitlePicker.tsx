@@ -11,6 +11,9 @@ interface SubtitlePickerProps {
   preferredLanguages: string[];
   loadingLanguage: string | null;
   errorLanguage: string | null;
+  /** Asked once when the menu opens: which languages does this video have? */
+  discovering?: boolean;
+  onOpen?: () => void;
   onSelect: (language: string | null) => void;
   onToggle: () => void;
 }
@@ -22,6 +25,8 @@ export default function SubtitlePicker({
   preferredLanguages,
   loadingLanguage,
   errorLanguage,
+  discovering = false,
+  onOpen,
   onSelect,
   onToggle,
 }: SubtitlePickerProps) {
@@ -57,7 +62,7 @@ export default function SubtitlePicker({
     <div className="lp-sub-menu-wrap">
       <FloatingPopover
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={(next) => { setOpen(next); if (next) onOpen?.(); }}
         align="end"
         className="lp-sub-menu"
         trigger={
@@ -97,8 +102,10 @@ export default function SubtitlePicker({
             >
                 {language.label}
               </MenuItem>
-            ))}
-            {available.length === 0 && <MenuItem disabled>{t("subtitlesNoneAvailable")}</MenuItem>}
+            )}
+            {!discovering && subtitles.length === 0 && (
+              <MenuItem disabled>{t("subtitlesNone")}</MenuItem>
+            )}
           </Menu>
           </ScrollArea>
       </FloatingPopover>

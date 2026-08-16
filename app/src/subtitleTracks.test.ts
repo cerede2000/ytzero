@@ -75,6 +75,34 @@ describe("the languages a video offers", () => {
     expect(tracks[0]).toMatchObject({ name: "English", automatic: false });
   });
 
+  test("answers to the language, not to the machine's name for the track", () => {
+    // A video with more than one track in a language names them apart with an
+    // opaque id. Picking "Français" then found nothing, while "fr-gqnk0mWVyHo"
+    // sat below it in the menu and worked.
+    const tracks = subtitleTracksFromMaps({ "fr-gqnk0mWVyHo": [track("fr", "vtt")] }, {}, supported);
+    expect(tracks.map((t) => t.lang)).toEqual(["fr"]);
+  });
+
+  test("leaves a real regional language alone", () => {
+    // Portuguese and Brazilian Portuguese are two entries in the menu, and
+    // collapsing one onto the other would hand over the wrong captions.
+    const tracks = subtitleTracksFromMaps(
+      { "pt-BR": [track("pt", "vtt")], "zh-Hans": [track("zh", "vtt")] },
+      {},
+      new Set(["pt-BR", "zh-Hans"]),
+    );
+    expect(tracks.map((t) => t.lang)).toEqual(["pt-BR", "zh-Hans"]);
+  });
+
+  test("keeps both apart when the plain language is taken as well", () => {
+    const tracks = subtitleTracksFromMaps(
+      { fr: [track("fr", "vtt")], "fr-gqnk0mWVyHo": [track("fr2", "vtt")] },
+      {},
+      supported,
+    );
+    expect(tracks.map((t) => t.lang).sort()).toEqual(["fr", "fr-gqnk0mWVyHo"]);
+  });
+
   test("drops a language it has no readable file for", () => {
     expect(subtitleTracksFromMaps({ en: [track("en", "json3")] }, {}, supported)).toEqual([]);
     expect(subtitleTracksFromMaps({}, {}, supported)).toEqual([]);
