@@ -13,6 +13,7 @@ import { ageMs, CHAPTERS_DB_TTL, CREATORS_DB_TTL } from "../routeCache";
 import { attachLibraryState, videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSupport";
 import { selectRelatedForPanel } from "../relatedVideos";
 import { readRelatedVideos } from "../relatedVideoStore";
+import { fetchRelatedVideos } from "../relatedVideoFetch";
 import { registerVideoCommentRoutes } from "./videoCommentRoutes";
 import { refreshExternalWatchVideo } from "../externalVideoRefresh";
 import type { AudioSource } from "../audioSourceResolver";
@@ -428,11 +429,11 @@ api.get("/videos/:id/creators", async (c) => {
  * goes to YouTube: a suggestion is a title and a thumbnail until somebody
  * acts on it.
  */
-async function suggestedVideos(uid: number, videoId: string) {
+async function suggestedVideos(uid: number, videoId: string, fetchMissing = false) {
   if (!pluginEnabled("related")) return [];
   const { settings } = await getPluginSettings(uid, "related");
   const limit = Number(settings.related_count ?? 12);
-  const stored = await readRelatedVideos(videoId, 25);
+  const stored = fetchMissing ? await fetchRelatedVideos(videoId) : await readRelatedVideos(videoId, 25);
   if (stored.length === 0) return [];
   const known = await attachLibraryState(uid, stored);
   const inLibrary = new Set(known.filter((video) => video.in_library === 1).map((video) => video.videoId));
@@ -541,11 +542,24 @@ api.get("/videos/:id", async (c) => {
   (video as any).channel_caption_mode = channelPlayerRow?.caption_mode ?? null;
   (video as any).channel_caption_language = channelPlayerRow?.caption_language ?? null;
 
+  const suggested = await suggestedVideos(uid, row.video_id);
   return c.json({
     video,
     related: await attachTags(uid, related),
-    related_external: await suggestedVideos(uid, row.video_id),
+    related_external: suggested,
+    // The panel was never read for this video. Saying so lets the page open on
+    // what it has and ask for the rest, rather than wait a second for it.
+    related_pending: suggested.length === 0 && pluginEnabled("related"),
   });
+});
+
+// The panel for a video that has none stored: one request to YouTube, once,
+// and only because somebody is looking at the video right now.
+api.get("/videos/:id/suggestions", async (c) => {
+  const uid = currentUserId(c);
+  const videoId = c.req.param("id");
+  if (childLocalOnly(uid) || !validYouTubeVideoId(videoId)) return c.json({ suggestions: [] });
+  return c.json({ suggestions: await suggestedVideos(uid, videoId, true) });
 });
 
 }

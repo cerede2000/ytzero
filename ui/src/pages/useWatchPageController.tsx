@@ -129,6 +129,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   }, [id, location.state]);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [related, setRelated] = useState<Video[]>([]);
+  const [relatedPending, setRelatedPending] = useState(false);
   const [copyKey, setCopyKey] = useState(0);
   const [scheduleToast, setScheduleToast] = useState<{ id: number; message: string; variant: "default" | "danger"; anchor: "desktop" | "overflow" } | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -760,6 +761,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     setDescOpen(false);
     setVideo(null);
     setMissingVideoId(null);
+    setRelatedPending(false);
     setVideoInfo(null);
     setPlayerSource("auto");
     setSourceChoice("undecided");
@@ -775,6 +777,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
         if (cancelled) return;
         setVideo(r.video);
         setRelated(withSuggestions(r.related, r.related_external));
+        setRelatedPending(Boolean(r.related_pending));
         // External video already in DB but its RSS siblings were cleared:
         // refresh them in the background so the "related" panel refills.
         if (r.video.external && r.related.length === 0) {
@@ -798,6 +801,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
                 if (cancelled) return;
                 setVideo(full.video);
                 setRelated(withSuggestions(full.related, full.related_external));
+                setRelatedPending(Boolean(full.related_pending));
                 setMissingVideoId(null);
                 setVideoInfo(null);
               });
@@ -836,6 +840,27 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     warmedAudioRef.current = id;
     void fetch(api.audioHlsUrl(id), { method: "HEAD" }).catch(() => {});
   }, [audioModeRequested, downloadStatus, id, matchingVideo]);
+
+
+  /**
+   * The panel for a video that never had one.
+   *
+   * Reading it is free at import time, and a video already in the library was
+   * imported long before there was anywhere to put it — which for a library of
+   * any size is most of what gets opened. The page does not wait for it: it
+   * opens on the suggestions it has, and these arrive in front of them.
+   */
+  useEffect(() => {
+    if (!id || !relatedPending) return;
+    let cancelled = false;
+    api.videoSuggestions(id)
+      .then((result) => {
+        if (cancelled || !result.suggestions.length) return;
+        setRelated((current) => withSuggestions(current, result.suggestions));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [id, relatedPending]);
 
   // When a video finishes: record completion, advance the playlist if any.
   const handleEnded = useCallback(() => {
