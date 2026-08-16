@@ -803,7 +803,7 @@ export interface SearchResult {
   title: string;
   thumbnail: string;
   duration: string;
-  channelId: string;
+  channelId: string | null;
   channelTitle: string;
   channelAvatar: string | null;
   viewCount: number | null;

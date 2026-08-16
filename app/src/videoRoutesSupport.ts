@@ -50,6 +50,26 @@ export async function attachWatchedState<T>(uid: number, items: T[], videoId: (i
   });
 }
 
+/**
+ * What this profile already holds of these videos.
+ *
+ * Search answers with videos that may well be in the library already, and one
+ * of them being downloaded is the difference between a card offering a copy
+ * and a card saying it has one.
+ */
+export async function attachDownloadState<T extends { videoId: string }>(uid: number, items: T[]) {
+  if (items.length === 0) return items.map((item) => ({ ...item, download_status: null }));
+  const ids = [...new Set(items.map((item) => item.videoId))];
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = await database.prepare(
+    `SELECT d.video_id, d.status FROM downloads d
+     JOIN download_owners owner ON owner.video_id = d.video_id AND owner.user_id = ?
+     WHERE d.video_id IN (${placeholders}) AND d.status != 'deleted'`
+  ).all(uid, ...ids) as { video_id: string; status: string }[];
+  const status = new Map(rows.map((row) => [row.video_id, row.status]));
+  return items.map((item) => ({ ...item, download_status: status.get(item.videoId) ?? null }));
+}
+
 export async function attachTags(uid: number, videos: VideoRow[], profileDownloadsEnabled: (userId: number) => Promise<boolean>) {
   if (videos.length === 0) return [];
   // downloads_allowed: the profile may use downloads at all (not a child);

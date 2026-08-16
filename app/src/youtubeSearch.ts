@@ -96,7 +96,7 @@ function searchVideoFromLockup(vm: any): SearchResult | null {
     title: decodeHtmlEntities(title),
     thumbnail: bestSourceUrl(vm?.contentImage) || `https://i.ytimg.com/vi/${vm.contentId}/hqdefault.jpg`,
     duration: badges.find((text: string) => /^\d+(?::\d+)+$/.test(text)) ?? "",
-    channelId: String(channelPart?.text?.commandRuns?.[0]?.onTap?.innertubeCommand?.browseEndpoint?.browseId ?? ""),
+    channelId: String(channelPart?.text?.commandRuns?.[0]?.onTap?.innertubeCommand?.browseEndpoint?.browseId ?? "") || null,
     channelTitle: decodeHtmlEntities(channelPart?.text?.content ?? ""),
     channelAvatar: bestSourceUrl(metadata?.image) || null,
     viewCount: viewPart ? parseAbbreviatedCount(String(viewPart.text.content)) : null,
@@ -136,8 +136,12 @@ function collectSearchVideos(data: any): SearchResult[] {
       title: decodeHtmlEntities(r.title?.runs?.[0]?.text ?? r.title?.simpleText ?? ""),
       thumbnail: r.thumbnail?.thumbnails?.at(-1)?.url ?? `https://i.ytimg.com/vi/${r.videoId}/hqdefault.jpg`,
       duration: r.lengthText?.simpleText ?? "",
-      channelId: String(owner?.runs?.find((part: any) => part?.navigationEndpoint?.browseEndpoint?.browseId)?.navigationEndpoint?.browseEndpoint?.browseId ?? ""),
-      channelTitle: decodeHtmlEntities(owner?.runs?.[0]?.text ?? ""),
+      channelId: String(
+        r.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId
+        ?? r.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId
+        ?? "",
+      ) || null,
+      channelTitle: decodeHtmlEntities(r.shortBylineText?.runs?.[0]?.text ?? ""),
       channelAvatar: r.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer
         ?.thumbnail?.thumbnails?.at(-1)?.url ?? null,
       viewCount: viewStr ? parseAbbreviatedCount(viewStr) : null,

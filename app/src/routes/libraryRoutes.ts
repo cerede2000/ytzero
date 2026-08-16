@@ -7,7 +7,7 @@ import { refreshDiscoveryInBackground, searchQuerySuggestions } from "../plugins
 import { searchYouTube } from "../youtube";
 import { feedSortSql, shortsUiVisibilitySql } from "../feedQuery";
 import { buildCleanupWhere, countCleanupMatches, listCleanupVideoIds, snapshotUserVideoState, applyCleanupAction, restoreUserVideoState, saveBulkUndo, loadBulkUndo, clearBulkUndo, type CleanupFilter } from "../cleanup";
-import { videoSelect, type VideoRow } from "../videoRoutesSupport";
+import { attachDownloadState, videoSelect, type VideoRow } from "../videoRoutesSupport";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
@@ -114,15 +114,11 @@ api.get("/search/youtube", async (c) => {
     ).all(uid, ...ids) as { video_id: string; status: string }[];
     const downloadStatus = new Map(downloads.map((download) => [download.video_id, download.status]));
     const downloadsAllowed = !await isChildUser(uid);
-    const downloadsEnabled = downloadsAllowed && await profileDownloadsEnabled(uid);
     return c.json({
-      results: watched.map((result) => ({
-        ...result,
-        download_status: downloadStatus.get(result.videoId) ?? null,
-        downloads_allowed: downloadsAllowed,
-        downloads_enabled: downloadsEnabled,
-      })),
+      results: await attachDownloadState(uid, await attachWatchedState(uid, search.results, (result) => result.videoId)),
       channels: search.channels,
+      downloads_allowed: downloadsAllowed,
+      downloads_enabled: downloadsAllowed && await profileDownloadsEnabled(uid),
     });
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
