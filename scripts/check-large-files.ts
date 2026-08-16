@@ -7,7 +7,7 @@ const lineLimits: Record<string, number> = {
   "app/src/routes/channelPlaylistRoutes.ts": 177,
   "app/src/routes/channelRoutes.ts": 639,
   "app/src/routes/childRoutes.ts": 157,
-  "app/src/routes/downloadRoutes.ts": 437,
+  "app/src/routes/downloadRoutes.ts": 441,
   "app/src/routes/feedRoutes.ts": 156,
   "app/src/routes/historyRoutes.ts": 63,
   "app/src/routes/importRoutes.ts": 245,

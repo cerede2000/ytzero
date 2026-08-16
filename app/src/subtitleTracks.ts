@@ -81,6 +81,24 @@ export function pickSubtitleEntry(entries: CaptionMap[string]): { url: string; e
   return chosen ? { url: chosen.url, ext: chosen.ext } : null;
 }
 
+/** A region (`BR`), a script (`Hans`) or a UN area code — a real place. */
+const REAL_SUBTAG = /^([A-Za-z]{2}|[A-Za-z]{4}|\d{3})$/;
+
+/**
+ * The language someone would ask for.
+ *
+ * A video with more than one track in a language names them apart with an
+ * opaque id — `fr-gqnk0mWVyHo` alongside `fr` — and that is not a language
+ * anyone recognises: picking "Français" found nothing while an entry with a
+ * machine's name for it sat below, and worked. A genuine regional code
+ * (`pt-BR`, `zh-Hans`) is a language of its own and is left alone.
+ */
+export function askedLanguage(lang: string): string {
+  const [base, ...rest] = lang.split("-");
+  if (!base || rest.length === 0) return lang;
+  return rest.every((subtag) => REAL_SUBTAG.test(subtag)) ? lang : base;
+}
+
 /**
  * What yt-dlp printed, reduced to one track per language.
  *
@@ -94,8 +112,13 @@ export function subtitleTracksFromMaps(
   supported: ReadonlySet<string> = SUBTITLE_LANGUAGE_CODES,
 ): SubtitleTrack[] {
   const byLang = new Map<string, SubtitleTrack>();
+  // A code YouTube used verbatim keeps it: only a language nobody claimed
+  // exactly is worth answering to under its plain name.
+  const claimed = new Set([...Object.keys(subtitles ?? {}), ...Object.keys(automatic ?? {})]);
   const take = (map: CaptionMap, automaticTrack: boolean) => {
-    for (const [lang, entries] of Object.entries(map ?? {})) {
+    for (const [code, entries] of Object.entries(map ?? {})) {
+      const asked = askedLanguage(code);
+      const lang = asked !== code && claimed.has(asked) ? code : asked;
       if (!Array.isArray(entries) || byLang.has(lang)) continue;
       if (automaticTrack && !supported.has(lang)) continue;
       const picked = pickSubtitleEntry(entries);
