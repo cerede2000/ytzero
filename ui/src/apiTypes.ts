@@ -382,6 +382,8 @@ export interface SearchResult {
   watch_position: number | null;
   watch_duration: number | null;
   download_status?: DownloadStatus | null;
+  /** The video already has a library row, so acting on it need not import it. */
+  in_library?: number;
 }
 
 export interface ChannelSearchResult {

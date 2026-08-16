@@ -37,6 +37,7 @@ import { videoCardSwipeEnabled } from "../videoCardSwipeRuntime";
 import { useAppliedVideoCardActionConfig, type VideoCardActionConfig, type VideoCardActionId } from "../videoCardActionConfig";
 import { otherPlaybackModeIsAudioOnly, playVideoInOtherPlaybackMode } from "../videoCardPlaybackMode";
 import { claimVideoCardPreview, readVideoCardPreviewMode, releaseVideoCardPreview } from "../videoCardPreview";
+import { addToSessionQueue, entryFromVideo, removeFromSessionQueue, useInSessionQueue } from "../sessionQueue";
 import "./VideoGrid.css";
 import "./VideoCard.css";
 import "./VideoCardActionsBar.css";
@@ -145,6 +146,7 @@ export function VideoCard({
   entering = false,
   showFoundTime = false,
   processing = video.published_at == null || video.published_at === "",
+  inLibrary = true,
   actionPreview,
 }: {
   video: Video;
@@ -174,6 +176,12 @@ export function VideoCard({
   showFoundTime?: boolean;
   /** Metadata is still being enriched; blur the thumbnail and show progress. */
   processing?: boolean;
+  /**
+   * The video has a row in the library. A search result does not until
+   * something is done with it, so queueing one imports it in the background —
+   * by the time the queue is played, the entry is a video like any other.
+   */
+  inLibrary?: boolean;
   /** Settings-only mode: preserve the real card markup while replacing mutations with configurable drag handles. */
   actionPreview?: {
     config: VideoCardActionConfig;
@@ -201,6 +209,7 @@ export function VideoCard({
   const [loadedThumbnailSrc, setLoadedThumbnailSrc] = useState<string | null>(null);
   const [previewActive, setPreviewActive] = useState(false);
   const canDownloadLocally = video.live_status !== "live" && video.live_status !== "upcoming";
+  const queued = useInSessionQueue(video.video_id);
   const publishedTime = formatTimeAgo(video.published_at, language);
   const foundTime = formatTimeAgo(video.found_at ? `${video.found_at.replace(" ", "T")}Z` : null, language);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -289,6 +298,21 @@ export function VideoCard({
     api.requestDownload(video.video_id)
       .then((result) => setDownloadStatus(result.download?.status ?? "queued"))
       .catch(() => setDownloadStatus(video.download_status ?? null));
+  };
+
+  /**
+   * Put this video in the session queue, or take it back out.
+   *
+   * The list is the tab's own, so the card answers immediately. A video that
+   * is not in the library yet is imported behind that: the queue plays through
+   * rows, and one deliberate act is the right moment to pay for one.
+   */
+  const toggleInPlayQueue = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (queued) { removeFromSessionQueue(video.video_id); return; }
+    addToSessionQueue(entryFromVideo(video));
+    if (!inLibrary) api.videoInfo(video.video_id).catch(() => {});
   };
 
   const cancelLocalDownload = (e: MouseEvent) => {
@@ -530,6 +554,15 @@ export function VideoCard({
             }
           }}
         />;
+      case "queue":
+        return <Tooltip key={id} text={queued ? t("removeFromPlayQueue") : t("addToPlayQueue")} portal={actionsInBar}>
+          <button
+            className={`action-btn${queued ? " active" : ""}`}
+            aria-pressed={queued}
+            aria-label={queued ? t("removeFromPlayQueue") : t("addToPlayQueue")}
+            onClick={toggleInPlayQueue}
+          >{queued ? <ListX /> : <ListPlus />}</button>
+        </Tooltip>;
       case "download":
         if (video.is_private === 1 || !canDownloadLocally) return null;
         if (video.downloads_enabled && (downloadStatus === "queued" || downloadStatus === "downloading")) {

@@ -26,31 +26,25 @@ describe("when a search result was published", () => {
   });
 
   test("has nothing to say about a result that gave no date", () => {
-    expect(approximatePublishedAt(null, now)).toBeNull();
+    expect(approximatePublishedAt(null, now)).toBe(null);
   });
 });
 
 describe("showing a search result as a card", () => {
+  const card = videoFromSearchResult(result, { downloadsAllowed: true, downloadsEnabled: true, now });
+
   test("carries everything a card reads, so nothing has to be fetched", () => {
-    const video = videoFromSearchResult(result, { downloadsAllowed: true, downloadsEnabled: true, now });
-    expect(video).toMatchObject({
-      video_id: "XVFUtEh9zrY",
-      channel_id: "UCSJ4gkVC6NrvII8umztf0Ow",
-      channel_title: "Lofi Girl",
-      channel_thumbnail: "https://yt3/avatar.jpg",
-      duration: "1:01:01",
-      views: 4_700_000,
-      published_at: "2026-08-14T12:00:00.000Z",
-      downloads_enabled: true,
-    });
+    expect([card.video_id, card.channel_id, card.channel_title, card.channel_thumbnail, card.duration]).toEqual([
+      "XVFUtEh9zrY", "UCSJ4gkVC6NrvII8umztf0Ow", "Lofi Girl", "https://yt3/avatar.jpg", "1:01:01",
+    ]);
+    expect([card.views, card.downloads_enabled, card.downloads_allowed]).toEqual([4_700_000, true, true]);
   });
 
   test("says a date it could work out, so the card is not left looking unfinished", () => {
     // An empty published_at is what the card reads as "still being imported":
     // it blurs the thumbnail and spins. A result is not being imported at all.
-    const video = videoFromSearchResult(result, { downloadsAllowed: true, downloadsEnabled: true, now });
-    expect(video.published_at).toBeTruthy();
-    expect(video.published_at_approximate).toBe(1);
+    expect(card.published_at).toBe("2026-08-14T12:00:00.000Z");
+    expect(card.published_at_approximate).toBe(1);
   });
 
   test("says what is already downloaded, so nothing offers to fetch it twice", () => {

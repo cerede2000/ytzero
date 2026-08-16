@@ -23,6 +23,11 @@ describe("playback context adjacency", () => {
     }
     expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "session", "newest", "previous")).toBe("a");
     expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "history", "oldest")).toBe("a");
+    // A queue someone assembled in a tab is a list like the others: it runs
+    // to the end rather than stepping backwards into what came before.
+    expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "session", "oldest")).toBe("c");
+    expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "session", "previous")).toBe("a");
+    expect(adjacentFromPlaybackOrder(["a", "b", "c"], "c", "session", "newest")).toBeNull();
   });
 
   test("hands back the entry before when it is asked for by name", () => {

@@ -51,23 +51,31 @@ export async function attachWatchedState<T>(uid: number, items: T[], videoId: (i
 }
 
 /**
- * What this profile already holds of these videos.
+ * What the library already knows about these videos.
  *
- * Search answers with videos that may well be in the library already, and one
- * of them being downloaded is the difference between a card offering a copy
- * and a card saying it has one.
+ * Search answers with videos that may well be here already. Whether one is
+ * downloaded is the difference between a card offering a copy and a card
+ * saying it has one; whether one has a row at all is the difference between
+ * an action that must import first and an action that must not.
  */
-export async function attachDownloadState<T extends { videoId: string }>(uid: number, items: T[]) {
-  if (items.length === 0) return items.map((item) => ({ ...item, download_status: null }));
+export async function attachLibraryState<T extends { videoId: string }>(uid: number, items: T[]) {
+  if (items.length === 0) return [];
   const ids = [...new Set(items.map((item) => item.videoId))];
   const placeholders = ids.map(() => "?").join(",");
-  const rows = await database.prepare(
+  const downloads = await database.prepare(
     `SELECT d.video_id, d.status FROM downloads d
      JOIN download_owners owner ON owner.video_id = d.video_id AND owner.user_id = ?
      WHERE d.video_id IN (${placeholders}) AND d.status != 'deleted'`
   ).all(uid, ...ids) as { video_id: string; status: string }[];
-  const status = new Map(rows.map((row) => [row.video_id, row.status]));
-  return items.map((item) => ({ ...item, download_status: status.get(item.videoId) ?? null }));
+  const known = await database.prepare(`SELECT video_id FROM videos WHERE video_id IN (${placeholders})`)
+    .all(...ids) as { video_id: string }[];
+  const status = new Map(downloads.map((row) => [row.video_id, row.status]));
+  const inLibrary = new Set(known.map((row) => row.video_id));
+  return items.map((item) => ({
+    ...item,
+    download_status: status.get(item.videoId) ?? null,
+    in_library: inLibrary.has(item.videoId) ? 1 : 0,
+  }));
 }
 
 export async function attachTags(uid: number, videos: VideoRow[], profileDownloadsEnabled: (userId: number) => Promise<boolean>) {

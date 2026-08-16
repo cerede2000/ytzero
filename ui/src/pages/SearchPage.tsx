@@ -98,10 +98,13 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   // action's own cost, not the price of scrolling past twenty videos.
   const ytVideos = useMemo(() => {
     const now = Date.now();
-    return ytResults.map((result) => videoFromSearchResult(result, {
-      downloadsAllowed: ytDownloads.allowed,
-      downloadsEnabled: ytDownloads.enabled,
-      now,
+    return ytResults.map((result) => ({
+      video: videoFromSearchResult(result, {
+        downloadsAllowed: ytDownloads.allowed,
+        downloadsEnabled: ytDownloads.enabled,
+        now,
+      }),
+      inLibrary: result.in_library === 1,
     }));
   }, [ytResults, ytDownloads]);
 
@@ -184,7 +187,7 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
           <div className="search-results-header">{t("youtubeResults")}</div>
           {ytLoading ? <VideoGridSkeleton count={4} gridSize="sm" /> : ytVideos.length === 0 ? null : (
             <div className="search-local-video-list">
-              {ytVideos.map((video) => (
+              {ytVideos.map(({ video, inLibrary }) => (
                 <VideoCard
                   key={video.video_id}
                   video={video}
@@ -194,6 +197,7 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
                   allowReject={false}
                   allowMarkWatched={false}
                   processing={false}
+                  inLibrary={inLibrary}
                 />
               ))}
             </div>

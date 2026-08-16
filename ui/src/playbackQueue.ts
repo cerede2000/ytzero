@@ -47,5 +47,7 @@ export function isPlaybackQueueContext(value: unknown): value is PlaybackQueueCo
   if (queue.kind === "channel-playlist") return typeof queue.playlistId === "string" && queue.playlistId.length > 0
     && (PLAYLIST_SORTS as readonly unknown[]).includes(queue.sort);
   if (queue.kind === "watchlist") return typeof queue.dueOnly === "boolean" && (WATCHLIST_SORTS as readonly unknown[]).includes(queue.sort);
+  if (queue.kind === "session") return Array.isArray(queue.ids) && queue.ids.length > 0
+    && queue.ids.every((id) => typeof id === "string" && id.length > 0);
   return queue.kind === "history" || queue.kind === "archive" || queue.kind === "recommendations" || queue.kind === "in-progress";
 }
