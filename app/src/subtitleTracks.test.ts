@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { pickSubtitleEntry, readSubtitleTrack, safeSubtitleUrl, subtitleLanguages, subtitleTracksFromMaps } from "./subtitleTracks";
+import { pickSubtitleEntry, readSubtitleTrack, safeSubtitleUrl, subtitleLanguages, subtitleTracksFromMaps, wantedSubtitleLanguages } from "./subtitleTracks";
 
 const timedtext = (lang: string, fmt: string) =>
   `https://www.youtube.com/api/timedtext?v=abc&expire=9999999999&signature=sig&lang=${lang}&fmt=${fmt}`;
@@ -54,11 +54,11 @@ describe("the languages a video offers", () => {
     expect(tracks[0]).toMatchObject({ lang: "ja", automatic: false });
   });
 
-  test("keeps machine captions only in the languages the app offers", () => {
-    // YouTube lists a hundred and sixty translations of them, which is a menu
-    // nobody reads.
+  test("keeps machine captions only where they were asked for", () => {
+    // One video offered seventy-one of them, of which the listener wanted
+    // one: they are a machine's translation of a machine's transcription.
     const automatic = Object.fromEntries(
-      ["en", "fr", "zu", "yo", "xh"].map((lang) => [lang, [track(lang, "vtt")]]),
+      ["en", "fr", "zu", "yo", "xh", "et", "kk"].map((lang) => [lang, [track(lang, "vtt")]]),
     );
     const tracks = subtitleTracksFromMaps({}, automatic, supported);
     expect(tracks.map((t) => t.lang)).toEqual(["en", "fr"]);
@@ -152,5 +152,17 @@ describe("reading a track that YouTube is rate-limiting", () => {
     const fetchImpl = (async () => { asks++; return new Response("", { status: 404 }); }) as unknown as typeof fetch;
     expect(await readSubtitleTrack(track, undefined, fetchImpl, async () => {})).toBeNull();
     expect(asks).toBe(1);
+  });
+});
+
+describe("the languages a profile has any use for", () => {
+  test("gathers what has been said out loud, however it was written", () => {
+    expect([...wantedSubtitleLanguages(["fr", "en", "fr", "de,pt-BR", " es  it "])].sort())
+      .toEqual(["de", "en", "es", "fr", "it", "pt-BR"]);
+  });
+
+  test("falls back to English when nothing has been chosen", () => {
+    expect([...wantedSubtitleLanguages([null, undefined, "", "   "])]).toEqual(["en"]);
+    expect([...wantedSubtitleLanguages([])]).toEqual(["en"]);
   });
 });
