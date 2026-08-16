@@ -16,13 +16,26 @@ import type { RelatedVideo } from "./relatedVideos";
  */
 const MAX_STORED = 25;
 
+/**
+ * A panel belongs to a video the library has, and says so by foreign key.
+ *
+ * Suggestions can now be fetched for a video that has no row — somebody opened
+ * one from a panel, and the page asks for its panel before the import that
+ * would create it has finished, or at all. Writing it then fails the key, once
+ * per open, loudly, for something that was never a problem: the import stores
+ * the panel itself the moment the row exists.
+ *
+ * So the row is a condition of the write rather than a hope, and the panel
+ * that could not be stored is still the one being returned to the page.
+ */
 export async function saveRelatedVideos(videoId: string, videos: readonly RelatedVideo[]): Promise<void> {
   if (videos.length === 0) return;
   try {
     await database.prepare(
-      `INSERT INTO video_related (video_id, payload, fetched_at) VALUES (?, ?, datetime('now'))
+      `INSERT INTO video_related (video_id, payload, fetched_at)
+       SELECT ?, ?, datetime('now') WHERE EXISTS (SELECT 1 FROM videos WHERE video_id = ?)
        ON CONFLICT(video_id) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at`
-    ).run(videoId, JSON.stringify(videos.slice(0, MAX_STORED)));
+    ).run(videoId, JSON.stringify(videos.slice(0, MAX_STORED)), videoId);
   } catch (error) {
     // A panel nobody has yet asked for is not worth failing an import over.
     log.warn("related.save_failed", { videoId, error: error instanceof Error ? error.message : String(error) });
