@@ -5,7 +5,7 @@ import { scheduleSettingWrite } from "../settingsWriteQueue";
 import { flushProgressWrite, queueProgressWrite } from "../progressWriteQueue";
 import { isIncognitoMode } from "../incognitoMode";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, type AppSettings, type Bucket, type PlaylistVideo, type SponsorSegment, type UserPlaylist, type Video, type VideoChapter, type VideoChannelPlaylist, type VideoCreator, type VideoInfo } from "../api";
+import { api, type AppSettings, type Bucket, type PlaylistVideo, type SponsorSegment, type UserPlaylist, type Video, type VideoChapter, type VideoChannelPlaylist, type VideoCreator, type VideoInfo, type SearchResult } from "../api";
 import { useI18n } from "../i18n";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { parseVideoDurationSeconds } from "../components/VideoCard";
@@ -35,6 +35,26 @@ import { useYouTubeMediaSession } from "./useYouTubeMediaSession";
 import { resolveShortcutBindings, SHORTCUT_CLOSE_EVENT, shortcutActionMatches } from "../keyboardShortcuts";
 
 const CINEMA_MODE_KEY = "watchCinemaMode";
+
+/**
+ * The panel, with YouTube's own suggestions in front of the library's.
+ *
+ * They are not library rows — nothing was imported to show them — but the card
+ * the panel draws reads a video, and a search result already knows how to
+ * become one. Acting on a suggestion imports it, exactly as it does in search.
+ */
+function withSuggestions(local: Video[], suggested: SearchResult[] | undefined): Video[] {
+  if (!suggested?.length) return local;
+  const now = Date.now();
+  const seen = new Set(suggested.map((result) => result.videoId));
+  const cards = suggested.map((result) => videoFromSearchResult(result, {
+    downloadsAllowed: false,
+    downloadsEnabled: false,
+    now,
+  }));
+  return [...cards, ...local.filter((video) => !seen.has(video.video_id))];
+}
+
 const DESCRIPTION_COLLAPSED_HEIGHT = 148;
 export function useWatchPageController(audioModeRequested: boolean = false) {
   const { t, language, locale, timeZone } = useI18n();
@@ -754,13 +774,13 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       .then((r) => {
         if (cancelled) return;
         setVideo(r.video);
-        setRelated(r.related);
+        setRelated(withSuggestions(r.related, r.related_external));
         // External video already in DB but its RSS siblings were cleared:
         // refresh them in the background so the "related" panel refills.
         if (r.video.external && r.related.length === 0) {
           api.videoInfo(id, true)
             .then(() => api.video(id))
-            .then((r2) => { if (!cancelled) setRelated(r2.related); })
+            .then((r2) => { if (!cancelled) setRelated(withSuggestions(r2.related, r2.related_external)); })
             .catch(() => {});
         }
       })
@@ -777,7 +797,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
               return api.video(id).then((full) => {
                 if (cancelled) return;
                 setVideo(full.video);
-                setRelated(full.related);
+                setRelated(withSuggestions(full.related, full.related_external));
                 setMissingVideoId(null);
                 setVideoInfo(null);
               });

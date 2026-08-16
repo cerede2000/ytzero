@@ -23,6 +23,7 @@ import {
   DISCOVERY_SETTINGS,
   PLUGINS,
   PLUGIN_TEXT,
+  RELATED_SETTINGS,
   SEARCH_SUGGEST_SETTINGS,
   SOCIAL_SETTINGS,
   TUBE_ARCHIVIST_SETTINGS,
@@ -123,6 +124,7 @@ function settingDefs(pluginId: string): PluginSettingSource[] {
   if (pluginId === "social") return SOCIAL_SETTINGS;
   if (pluginId === "tubearchivist") return TUBE_ARCHIVIST_SETTINGS;
   if (pluginId === "search-suggest") return SEARCH_SUGGEST_SETTINGS;
+  if (pluginId === "related") return RELATED_SETTINGS;
   return [];
 }
 

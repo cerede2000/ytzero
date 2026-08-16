@@ -207,6 +207,31 @@ export const DISCOVERY_SETTINGS: PluginSettingSource[] = [
 ];
 
 
+export const RELATED_SETTINGS: PluginSettingSource[] = [
+  {
+    key: "related_count",
+    min: 0, max: 25, step: 1,
+    label: { en: "Suggestions from YouTube", pl: "Propozycje z YouTube", de: "Vorschläge von YouTube" },
+    description: {
+      en: "How many of YouTube's own suggestions to show before the library's. 0 keeps the panel local.",
+      pl: "Ile propozycji YouTube pokazać przed pozycjami z biblioteki. 0 zostawia panel lokalny.",
+      de: "Wie viele YouTube-Vorschläge vor denen aus der Bibliothek erscheinen. 0 lässt das Panel lokal.",
+    },
+    defaultValue: 12,
+  },
+  {
+    key: "related_hide_known",
+    type: "toggle",
+    label: { en: "Skip videos already in the library", pl: "Pomijaj filmy już w bibliotece", de: "Videos aus der Bibliothek überspringen" },
+    description: {
+      en: "A suggestion you already have is usually listed below by the library's own matching; this keeps it from appearing twice.",
+      pl: "Propozycja, którą już masz, zwykle i tak pojawia się niżej z dopasowania biblioteki — to nie pokaże jej dwa razy.",
+      de: "Ein Vorschlag, den du schon hast, steht meist ohnehin weiter unten; so erscheint er nicht doppelt.",
+    },
+    defaultValue: 1,
+  },
+];
+
 export const PLUGINS: PluginManifest[] = [
   {
     id: "discovery",
@@ -244,6 +269,14 @@ export const PLUGINS: PluginManifest[] = [
     permissions: ["read:tubearchivist", "write:watched", "read:library"],
     settingsScope: "global",
   },
+  {
+    id: "related",
+    name: "Related videos",
+    version: "0.1.0",
+    description: "Shows the suggestions YouTube lists beside a video, read from the page its import already downloaded.",
+    icon: "Shuffle",
+    permissions: ["read:library"],
+  },
 ];
 
 export const PLUGIN_TEXT: Record<string, { name: LocalizedText; description: LocalizedText; permissions: Record<string, LocalizedText> }> = {
@@ -270,6 +303,21 @@ export const PLUGIN_TEXT: Record<string, { name: LocalizedText; description: Loc
       "read:profiles": { en: "shows participating profile names and avatars", pl: "pokazuje nazwy i avatary uczestniczących profili", de: "zeigt Namen und Avatare teilnehmender Profile" },
       "read:library": { en: "reads videos from the local library", pl: "czyta filmy z lokalnej biblioteki", de: "liest Videos aus der lokalen Bibliothek" },
       "write:social": { en: "stores posts, reactions, mentions and comments locally", pl: "zapisuje lokalnie posty, reakcje, oznaczenia i komentarze", de: "speichert Beiträge, Reaktionen, Erwähnungen und Kommentare lokal" },
+    },
+  },
+  related: {
+    name: { en: "Related videos", pl: "Powiązane filmy", de: "Ähnliche Videos" },
+    description: {
+      en: "Shows the suggestions YouTube lists beside a video, read from the page its import already downloaded.",
+      pl: "Pokazuje propozycje, które YouTube wyświetla obok filmu — odczytane ze strony pobranej już przy imporcie.",
+      de: "Zeigt die Vorschläge, die YouTube neben einem Video listet — gelesen aus der Seite, die der Import ohnehin geladen hat.",
+    },
+    permissions: {
+      "read:library": {
+        en: "reads the videos and channels already in your library",
+        pl: "odczytuje filmy i kanały, które już masz w bibliotece",
+        de: "liest die Videos und Kanäle, die bereits in deiner Bibliothek sind",
+      },
     },
   },
   "search-suggest": {

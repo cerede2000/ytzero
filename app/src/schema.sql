@@ -672,3 +672,12 @@ CREATE TABLE IF NOT EXISTS bulk_undo (
   payload    TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- The panel of suggestions YouTube shows beside a video, kept as it was read
+-- from the watch page the import had already downloaded. Not videos: a video
+-- gets a row of its own only if somebody acts on it.
+CREATE TABLE IF NOT EXISTS video_related (
+  video_id   TEXT PRIMARY KEY REFERENCES videos(video_id) ON DELETE CASCADE,
+  payload    TEXT NOT NULL,
+  fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
