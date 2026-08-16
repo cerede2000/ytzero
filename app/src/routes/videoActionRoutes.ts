@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { database } from "../database";
-import { isChildUser, recordWatchTick } from "../childTime";
+import { childLocalOnly, isChildUser, recordWatchTick } from "../childTime";
+import { ensureVideoImported } from "../videoImport";
 import { computeShowFrom } from "../scheduleTime";
 import { recordSchedulingSignal } from "../contentSignals";
 import { refreshDiscoveryInBackground } from "../plugins";
