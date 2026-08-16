@@ -50,3 +50,48 @@ describe("saying it once", () => {
     expect(changes).toEqual([true, false]);
   });
 });
+
+describe("a refusal that does not lift", () => {
+  const refusal = new Error("LOGIN_REQUIRED: Sign in to confirm you're not a bot");
+
+  test("waits longer each time, instead of asking every three minutes for ever", () => {
+    // The metadata backfill runs every three minutes and the quiet was ninety
+    // seconds, so it had always expired by the next batch: one lookup per
+    // batch, refused, for hours, on an address YouTube was rate-limiting.
+    let clock = 0;
+    const quiet = createRefusalQuiet({ now: () => clock });
+
+    quiet.note(refusal);
+    clock += 91_000;
+    expect(quiet.quiet()).toBe(false);
+
+    quiet.note(refusal);
+    clock += 91_000;
+    expect(quiet.quiet()).toBe(true);
+
+    clock += 90_000;
+    expect(quiet.quiet()).toBe(false);
+    quiet.note(refusal);
+    clock += 5 * 60_000;
+    expect(quiet.quiet()).toBe(true);
+  });
+
+  test("stops growing rather than going quiet for a day", () => {
+    let clock = 0;
+    const quiet = createRefusalQuiet({ now: () => clock });
+    for (let attempt = 0; attempt < 20; attempt++) quiet.note(refusal);
+    clock += 31 * 60_000;
+    expect(quiet.quiet()).toBe(false);
+  });
+
+  test("goes back to ninety seconds the moment something gets through", () => {
+    let clock = 0;
+    const quiet = createRefusalQuiet({ now: () => clock });
+    for (let attempt = 0; attempt < 5; attempt++) quiet.note(refusal);
+    quiet.clear();
+
+    quiet.note(refusal);
+    clock += 91_000;
+    expect(quiet.quiet()).toBe(false);
+  });
+});

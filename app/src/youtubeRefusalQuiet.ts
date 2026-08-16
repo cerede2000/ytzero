@@ -10,8 +10,16 @@ import { log } from "./logger";
  * The refusal is about the address, not the video, so one failure speaks for
  * the next ones. It is held briefly: long enough that a page open costs
  * nothing, short enough that the first minute back is the one that notices.
+ *
+ * Ninety seconds is right for a spell that lifts. It was wrong for one that
+ * does not: the metadata backfill runs every three minutes, so the quiet had
+ * always expired by the time it came round, and every single batch spent one
+ * lookup being told again to sign in — for hours, on an address YouTube was
+ * already rate-limiting. Each repeat doubles the wait instead, up to half an
+ * hour, and the first answer that gets through puts it back to ninety seconds.
  */
 const QUIET_MS = 90_000;
+const MAX_QUIET_MS = 30 * 60_000;
 
 export interface RefusalQuiet {
   /** True while YouTube's refusal is still being taken at its word. */
@@ -25,27 +33,34 @@ export interface RefusalQuiet {
 export function createRefusalQuiet({
   now = Date.now,
   quietMs = QUIET_MS,
+  maxQuietMs = MAX_QUIET_MS,
   onChange = () => {},
 }: {
   now?: () => number;
   quietMs?: number;
+  maxQuietMs?: number;
   /** Called only when the answer changes, so a log says it once. */
   onChange?: (refusing: boolean) => void;
 } = {}): RefusalQuiet {
   let refusedAt = 0;
-  const quiet = () => refusedAt > 0 && now() - refusedAt < quietMs;
+  let refusals = 0;
+  /** Doubling per consecutive refusal: 90s, 3m, 6m, 12m, 24m, then capped. */
+  const window = () => Math.min(quietMs * 2 ** Math.max(0, refusals - 1), maxQuietMs);
+  const quiet = () => refusedAt > 0 && now() - refusedAt < window();
   return {
     quiet,
     note(error: unknown): void {
       const message = error instanceof Error ? error.message : String(error);
       if (!callerWasRefused(message)) return;
       const was = quiet();
+      refusals++;
       refusedAt = now();
       if (!was) onChange(true);
     },
     clear(): void {
       const was = quiet();
       refusedAt = 0;
+      refusals = 0;
       if (was) onChange(false);
     },
   };
