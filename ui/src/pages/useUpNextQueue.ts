@@ -5,6 +5,7 @@ import type { PlaybackQueueContext } from "../playbackQueue";
 import { sessionPlayQueueItems } from "../sessionPlayQueue";
 
 type Direction = "oldest" | "newest";
+type Step = Direction | "previous";
 
 export type QueueDisplayVideo = Pick<Video, "video_id" | "title" | "thumbnail" | "channel_title">;
 async function resolveNextVideo(queue: PlaybackQueueContext, videoId: string, direction: Direction, relative: "next" | "previous" = "next"): Promise<{ video: QueueDisplayVideo | null }> {
