@@ -166,7 +166,7 @@ export const api = {
     }),
   cleanupUndo: () => http<{ restored: number }>("/cleanup/undo", { method: "POST", body: "{}" }),
   inProgress: () => sharedGet<{ videos: Video[] }>("in-progress", "/in-progress"),
-  youtubeSearch: (q: string) => http<{ results: SearchResult[]; channels: ChannelSearchResult[] }>(`/search/youtube?q=${encodeURIComponent(q)}`),
+  youtubeSearch: (q: string) => http<{ results: SearchResult[]; channels: ChannelSearchResult[]; downloads_allowed?: boolean; downloads_enabled?: boolean }>(`/search/youtube?q=${encodeURIComponent(q)}`),
   searchSuggest: (q: string, language: string, signal?: AbortSignal) =>
     http<{ suggestions: string[]; channels: SearchSuggestChannel[] }>(
       `/search/suggest?q=${encodeURIComponent(q)}&hl=${encodeURIComponent(language)}`,

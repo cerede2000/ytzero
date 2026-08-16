@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./SearchPage.css";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
@@ -9,7 +9,7 @@ import { img } from "../img";
 import VideoCard from "../components/VideoCard";
 import { VideoGridSkeleton } from "../components/LoadingState";
 import { EmptyState, RevealList } from "../components/ui";
-import { searchResultVideo } from "../searchResultVideo";
+import { videoFromSearchResult } from "../searchResultVideo";
 
 function normalizeSearchText(value: string) {
   return value
@@ -28,6 +28,7 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   const [localChannels, setLocalChannels] = useState<Channel[]>([]);
   const [ytResults, setYtResults] = useState<SearchResult[]>([]);
   const [ytChannels, setYtChannels] = useState<ChannelSearchResult[]>([]);
+  const [ytDownloads, setYtDownloads] = useState({ allowed: false, enabled: false });
   const [localLoading, setLocalLoading] = useState(false);
   const [localLoadingMore, setLocalLoadingMore] = useState(false);
   const [localResultsExpanded, setLocalResultsExpanded] = useState(false);
@@ -81,11 +82,28 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
     let cancelled = false;
     setYtLoading(true);
     api.youtubeSearch(q)
-      .then((result) => { if (!cancelled) { setYtResults(result.results); setYtChannels(result.channels); } })
+      .then((result) => {
+        if (cancelled) return;
+        setYtResults(result.results);
+        setYtChannels(result.channels);
+        setYtDownloads({ allowed: Boolean(result.downloads_allowed), enabled: Boolean(result.downloads_enabled) });
+      })
       .catch(() => { if (!cancelled) { setYtResults([]); setYtChannels([]); } })
       .finally(() => { if (!cancelled) setYtLoading(false); });
     return () => { cancelled = true; };
   }, [q, hideExternalSearch]);
+
+  // Results become cards without asking the server anything: everything a card
+  // shows is already in the answer, and the import an action needs is that
+  // action's own cost, not the price of scrolling past twenty videos.
+  const ytVideos = useMemo(() => {
+    const now = Date.now();
+    return ytResults.map((result) => videoFromSearchResult(result, {
+      downloadsAllowed: ytDownloads.allowed,
+      downloadsEnabled: ytDownloads.enabled,
+      now,
+    }));
+  }, [ytResults, ytDownloads]);
 
   if (!q) {
     return <EmptyState icon={<Search />} title={t("searchPlaceholder")} />;
@@ -164,12 +182,12 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
             </>
           )}
           <div className="search-results-header">{t("youtubeResults")}</div>
-          {ytLoading ? <VideoGridSkeleton count={4} gridSize="sm" /> : ytResults.length === 0 ? null : (
+          {ytLoading ? <VideoGridSkeleton count={4} gridSize="sm" /> : ytVideos.length === 0 ? null : (
             <div className="search-local-video-list">
-              {ytResults.map((result) => (
+              {ytVideos.map((video) => (
                 <VideoCard
-                  key={result.videoId}
-                  video={searchResultVideo(result)}
+                  key={video.video_id}
+                  video={video}
                   onPlay={onPlay}
                   onChanged={reloadLocalVideos}
                   searchResultLayout

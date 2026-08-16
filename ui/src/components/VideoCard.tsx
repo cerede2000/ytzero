@@ -435,6 +435,13 @@ export function VideoCard({
   }, [actionsOpen]);
 
   const videoHref = `/watch/${video.video_id}`;
+  /**
+   * A search result does not always say which channel it belongs to, and a
+   * link to nowhere is worse than a name that is simply a name.
+   */
+  const channelLink = (className: string, children: ReactNode) => video.channel_id
+    ? <Link to={`/channel/${video.channel_id}`} className={className}>{children}</Link>
+    : <span className={className}>{children}</span>;
 
   const playFromLink = (e: MouseEvent<HTMLAnchorElement>) => {
     if (actionPreview) { e.preventDefault(); return; }
@@ -783,31 +790,23 @@ export function VideoCard({
               </div>
             )}
             <div className="v-search-channel">
-              {showChannelAvatar && (
-                <Link to={`/channel/${video.channel_id}`} className="card-avatar-link">
-                  {video.channel_thumbnail ? (
-                    <img className="card-ch-avatar" src={img(video.channel_thumbnail)} alt="" draggable={false} />
-                  ) : (
-                    <div className="card-ch-avatar card-ch-avatar-fallback">{video.channel_title.charAt(0).toUpperCase()}</div>
-                  )}
-                </Link>
-              )}
-              <Link to={`/channel/${video.channel_id}`} className="v-channel">{video.channel_title}</Link>
+              {showChannelAvatar && channelLink("card-avatar-link", video.channel_thumbnail ? (
+                <img className="card-ch-avatar" src={img(video.channel_thumbnail)} alt="" draggable={false} />
+              ) : (
+                <div className="card-ch-avatar card-ch-avatar-fallback">{video.channel_title.charAt(0).toUpperCase()}</div>
+              ))}
+              {channelLink("v-channel", video.channel_title)}
             </div>
           </div>
         ) : (
           <div className="card-body">
-            {showChannelAvatar && (
-              <Link to={`/channel/${video.channel_id}`} className="card-avatar-link">
-                {video.channel_thumbnail ? (
-                  <img className="card-ch-avatar" src={img(video.channel_thumbnail)} alt="" draggable={false} />
-                ) : (
-                  <div className="card-ch-avatar card-ch-avatar-fallback">
-                    {video.channel_title.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </Link>
-            )}
+            {showChannelAvatar && channelLink("card-avatar-link", video.channel_thumbnail ? (
+              <img className="card-ch-avatar" src={img(video.channel_thumbnail)} alt="" draggable={false} />
+            ) : (
+              <div className="card-ch-avatar card-ch-avatar-fallback">
+                {video.channel_title.charAt(0).toUpperCase()}
+              </div>
+            ))}
             <div className="card-info">
               <Tooltip text={displayTitle} pos="top" delay={450} className="tooltip-wrap--block tooltip-wrap--title tooltip-wrap--card-title">
                 <Link to={videoHref} className="v-title" onClick={playFromLink}>
@@ -815,9 +814,7 @@ export function VideoCard({
                 </Link>
               </Tooltip>
               <div className="v-channel-meta">
-                <Link to={`/channel/${video.channel_id}`} className={`v-channel${publishedTime ? "" : " no-date"}`}>
-                  {video.channel_title}
-                </Link>
+                {channelLink(`v-channel${publishedTime ? "" : " no-date"}`, video.channel_title)}
                 {publishedTime && !showFoundTime && <span className="v-time">{publishedTime}</span>}
                 {showFoundTime && foundTime && (
                   <span className="v-time v-time--arrival">
