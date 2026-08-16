@@ -136,6 +136,25 @@ describe("direct video streaming", () => {
     expect(resolutions).toBe(1);
   });
 
+  test("says so when a granted chunk never arrives", async () => {
+    // The one ending that named no reason: upstream allowed the range, the
+    // body then failed to arrive, and the player got a bare 502 while the log
+    // showed a retry ladder that had apparently succeeded.
+    const granted = new Response(new Uint8Array(64), {
+      status: 206,
+      headers: { "Content-Range": "bytes 0-63/1000" },
+    });
+    Object.defineProperty(granted, "arrayBuffer", {
+      value: () => Promise.reject(new Error("connection reset by peer")),
+    });
+    const video = factory({
+      spawn: (() => fakeProcess(`${url("video")}\nmp4\n`)) as unknown as typeof Bun.spawn,
+      fetchImpl: (async () => granted) as unknown as typeof fetch,
+    });
+
+    expect(await video.getVideoResponse(1, "abc", "bytes=0-63")).toBeNull();
+  });
+
   test("refuses to proxy a host that is not YouTube's media edge", async () => {
     const video = factory({
       spawn: (() => fakeProcess("https://example.com/anything.mp4\nmp4\n")) as unknown as typeof Bun.spawn,

@@ -108,21 +108,39 @@ async function loadAndPersistVideoInfo(userId: number, videoId: string): Promise
  * already on its way, and a second round of channel lookups behind it.
  * Whoever asks second waits for the first answer instead.
  *
- * It is held only while it runs. An import that has finished is a row in the
- * library, and asking again is how the related panel is refilled.
+ * The answer is then remembered for a minute. Holding it only while it ran
+ * left the sharpest case uncovered: queueing a video and opening it are two
+ * asks a second apart, and the second one arrived just as the first finished —
+ * far enough behind to miss the running import, near enough that the answer it
+ * paid five seconds for was the one already written down.
+ *
+ * A minute is short enough that asking again is still how the related panel is
+ * refilled: that happens when a video is opened long after its siblings were
+ * cleared, not seconds after it was imported.
  */
-export function createVideoImporter(load = loadAndPersistVideoInfo) {
+const IMPORT_MEMORY_MS = 60_000;
+
+export function createVideoImporter(load = loadAndPersistVideoInfo, now: () => number = Date.now) {
   const inFlight = new Map<string, Promise<VideoInfo>>();
+  const answered = new Map<string, { at: number; info: VideoInfo }>();
   return function importVideo(userId: number, videoId: string): Promise<VideoInfo> {
     const key = `${userId}:${videoId}`;
     const running = inFlight.get(key);
     if (running) return running;
+    const remembered = answered.get(key);
+    if (remembered && now() - remembered.at < IMPORT_MEMORY_MS) return Promise.resolve(remembered.info);
     const started = load(userId, videoId);
     inFlight.set(key, started);
     // Registered on the import itself rather than on a chain after it, so it
     // is forgotten before the caller that was waiting gets to run again.
     const forget = () => { if (inFlight.get(key) === started) inFlight.delete(key); };
-    started.then(forget, forget);
+    started.then((info) => {
+      forget();
+      // Swept on each write: nothing here outlives its minute, so a long run
+      // does not accumulate an entry per video ever imported.
+      for (const [seen, entry] of answered) if (now() - entry.at >= IMPORT_MEMORY_MS) answered.delete(seen);
+      answered.set(key, { at: now(), info });
+    }, forget);
     return started;
   };
 }

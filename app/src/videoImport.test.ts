@@ -39,14 +39,50 @@ describe("importing a video the page is waiting for", () => {
     expect(started.sort()).toEqual(["1:abc", "1:def", "2:abc"]);
   });
 
-  test("holds it only while it runs", async () => {
-    // Asking again once the row exists is how the related panel is refilled.
+  test("answers the ask that lands just after it from what it already knows", async () => {
+    // Queueing a video and opening it are two asks a second apart. The second
+    // used to arrive just too late for the running import and pay five seconds
+    // of yt-dlp for an answer that was already written down.
     let started = 0;
     const importVideo = createVideoImporter(async () => { started++; return info("abc"); });
 
-    await importVideo(1, "abc");
-    await importVideo(1, "abc");
+    const first = await importVideo(1, "abc");
+    const second = await importVideo(1, "abc");
 
+    expect(started).toBe(1);
+    expect(second).toBe(first);
+  });
+
+  test("asks again once the answer is old, so the related panel still refills", async () => {
+    let started = 0;
+    let clock = 1_000;
+    const importVideo = createVideoImporter(async () => { started++; return info("abc"); }, () => clock);
+
+    await importVideo(1, "abc");
+    clock += 59_000;
+    await importVideo(1, "abc");
+    expect(started).toBe(1);
+
+    clock += 2_000;
+    await importVideo(1, "abc");
+    expect(started).toBe(2);
+  });
+
+  test("does not keep an entry for every video it has ever imported", async () => {
+    let clock = 1_000;
+    const importVideo = createVideoImporter(async (_userId, videoId) => info(videoId), () => clock);
+
+    await importVideo(1, "old");
+    clock += 120_000;
+    await importVideo(1, "new");
+
+    // The stale entry is gone, so asking about it extracts again rather than
+    // answering from a map that only ever grows.
+    let started = 0;
+    const counting = createVideoImporter(async () => { started++; return info("abc"); }, () => clock);
+    await counting(1, "abc");
+    clock += 120_000;
+    await counting(1, "abc");
     expect(started).toBe(2);
   });
 
