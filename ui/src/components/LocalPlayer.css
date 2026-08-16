@@ -137,6 +137,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
   background: none;
   border: none;
   color: var(--text);
@@ -146,6 +148,8 @@
   border-radius: 8px;
   cursor: pointer;
 }
+/* Long enough to be worth reading, short enough not to widen the menu. */
+.lp-sub-menu-list .ui-menu__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lp-sub-menu-list button:hover { background: rgba(255, 255, 255, 0.09); }
 .lp-sub-menu-list button.is-selected { color: var(--accent); font-weight: 500; background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .lp-sub-menu-list button:disabled { opacity: 0.55; cursor: default; }
