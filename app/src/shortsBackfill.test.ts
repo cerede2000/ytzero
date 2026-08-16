@@ -50,6 +50,26 @@ if (process.env[ISOLATION_FLAG] !== "1") {
       expect(asked).toHaveLength(2);
     });
 
+    test("a refusal ends the pass rather than costing every video a day", async () => {
+      // classifyIsShort answers null without asking anything while the address
+      // is being refused, and the caller counted that as a check YouTube had
+      // declined — backing the video off for up to a day over a question that
+      // was never put, for every video left in the batch.
+      db.prepare(`INSERT INTO videos(video_id,channel_id,title,published_at,live_status)
+        VALUES('refused0001', 'UCshorts', 'A video', datetime('now'), 'none')`).run();
+      const asked: string[] = [];
+      const classify = async (videoId: string) => { asked.push(videoId); return null; };
+
+      const refused = await backfillShorts(undefined, 10, classify, () => true);
+      expect(refused).toEqual({ checked: 0, resolved: 0, postponed: 0 });
+      expect(asked).toEqual([]);
+
+      // And it is still due once the refusal lifts, rather than held back for
+      // half an hour by a check that never happened.
+      await backfillShorts(undefined, 10, classify, () => false);
+      expect(asked).toEqual(["refused0001"]);
+    });
+
     test("waits longer each time, and not for ever", () => {
       expect(shortCheckBackoffMs(1)).toBe(30 * 60_000);
       expect(shortCheckBackoffMs(2)).toBe(60 * 60_000);
