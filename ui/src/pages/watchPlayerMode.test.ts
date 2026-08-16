@@ -79,6 +79,22 @@ describe("resolvePlayerKind", () => {
       expect(resolvePlayerKind({ ...base, streamingEnabled: false, iframeFallback: true })).toBe("youtube");
     });
 
+    test("waits rather than leaving a refused embed on screen", () => {
+      // A video opened from a search is imported before it can be streamed,
+      // and an embed that has already said "unavailable" would sit there for
+      // the whole import saying something untrue: it is on its way.
+      const importing = { ...base, hasVideo: false, streamingEnabled: true, iframeFallback: true };
+      expect(resolvePlayerKind(importing)).toBe("loading");
+      // Only once the embed has actually refused: an ordinary import shows the
+      // embed straight away, because most videos play in it.
+      expect(resolvePlayerKind({ ...importing, iframeFallback: false })).toBe("youtube");
+      // And only where a stream would take over. With nothing to fall back to,
+      // the embed's own message is the honest answer.
+      expect(resolvePlayerKind({ ...importing, streamingEnabled: false })).toBe("youtube");
+      expect(resolvePlayerKind({ ...importing, playerSource: "youtube" })).toBe("youtube");
+      expect(resolvePlayerKind({ ...importing, sourceChoice: "youtube" })).toBe("youtube");
+    });
+
     test("streams first when the default source is the direct stream", () => {
       expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream" })).toBe("stream");
       expect(resolvePlayerKind({ ...base, streamingEnabled: true, defaultSource: "stream", watchMode: "download" })).toBe("stream");

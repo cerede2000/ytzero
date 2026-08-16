@@ -44,7 +44,13 @@ export function resolvePlayerKind(input: {
   // while an import runs, and it plays a second of video at a listener whose
   // audio mode cannot be judged yet. Wait instead — the panel says so.
   if (input.playerPending) return "loading";
-  const canStream = input.hasVideo && input.streamingEnabled && input.playerSource === "auto" && input.sourceChoice !== "youtube";
+  const streamWouldTakeOver = input.streamingEnabled && input.playerSource === "auto" && input.sourceChoice !== "youtube";
+  // The embed has already said it will never play this one, and the row it
+  // needs in order to stream it instead is still being imported. Leaving
+  // YouTube's "video unavailable" on screen for those few seconds tells the
+  // viewer something that is not true: it is coming.
+  if (input.iframeFallback && streamWouldTakeOver && !input.hasVideo) return "loading";
+  const canStream = input.hasVideo && streamWouldTakeOver;
   // A live broadcast has no stable local file. When streaming is on we play it in
   // the native player (via YouTube's own rolling HLS), which — unlike the iframe —
   // can go Picture-in-Picture / background. An *upcoming* (not-yet-started) stream
