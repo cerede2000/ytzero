@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, FolderUp, Info, RotateCw, Trash2 } from "lucide-react";
 import { api, type DownloadConfigResponse, type DownloadSettingDef, type DownloadSettingValue } from "../api";
 import { useI18n } from "../i18n";
+import { frenchFor } from "../i18n/frenchOverlay";
 import { Alert, Badge, Button, Chip, FileDropzone, Input, InputGroup, MultiSelectMenu, SelectMenu, SettingRow, SettingsSection, Slider, Switch, Textarea } from "./ui";
 import "./DownloadConfiguration.css";
 
