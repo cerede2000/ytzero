@@ -26,6 +26,31 @@ export async function metadataCredentialProfile(): Promise<number | null> {
 }
 
 /**
+ * Ask as the profile itself, then as whoever has credentials to lend.
+ *
+ * A profile with no cookie jar makes one anonymous attempt and is refused in
+ * two seconds, where a profile with one takes four and gets an answer. Left
+ * there, whether somebody can open a video comes down to which profile they
+ * happened to pick — and nothing on screen says so.
+ *
+ * The second ask is skipped when there is nobody else to be: no jar anywhere,
+ * or the lender is already the one who asked.
+ */
+export async function askWithBorrowedCredentials<T>(
+  userId: number,
+  ask: (asUserId: number) => Promise<T | null>,
+  lenderOf: () => Promise<number | null> = metadataCredentialProfile,
+  onBorrow: (lender: number) => void = () => {},
+): Promise<T | null> {
+  const own = await ask(userId);
+  if (own) return own;
+  const lender = await lenderOf();
+  if (lender == null || lender === userId) return null;
+  onBorrow(lender);
+  return ask(lender);
+}
+
+/**
  * How many authenticated lookups one batch may spend.
  *
  * yt-dlp costs about five seconds against one for a plain request, so a batch
