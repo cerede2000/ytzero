@@ -1139,12 +1139,15 @@ export async function refreshVideoMetadataBatch(limit = 10): Promise<VideoMetada
       }
       if (info.publishedAt) datesFilled += (await savePublishedAt.run(info.publishedAt, video_id)).changes;
     } catch (e) {
-      if (isYouTubeRefusalError(e)) {
-        skipped = rows.length - i - 1;
-        log.info("video.metadata_halted", { checked, skipped });
-        break;
+      // A lookup we decided not to make says nothing about this video: the
+      // refusal is of the address. Nothing below applies to it — the fallback
+      // would put a second question to the same refusing host, and counting a
+      // skip as an attempt would back the video off for up to six hours over
+      // one nobody asked. Nor is it news: the refusal was reported once.
+      if (e instanceof YouTubeRefusingError) {
+        skipped++;
+        continue;
       }
-      checked++;
       if (isPrivateVideoError(e)) {
         durationRetry.delete(video_id);
         await database.prepare(`
@@ -1172,15 +1175,6 @@ export async function refreshVideoMetadataBatch(limit = 10): Promise<VideoMetada
         }
       } catch {
         // Fall through to the normal transient-error retry.
-      }
-      // A lookup we decided not to make says nothing about this video: the
-      // refusal is of the address. Counting it as an attempt would back the
-      // video off for up to six hours over a question nobody asked, and it is
-      // not news either — the refusal was reported once already, and repeating
-      // it per video buries the failures that do need reading.
-      if (e instanceof YouTubeRefusingError) {
-        skipped++;
-        continue;
       }
       const attempts = (durationRetry.get(video_id)?.attempts ?? 0) + 1;
       const delayMs = Math.min(DURATION_RETRY_BASE_MS * 2 ** (attempts - 1), DURATION_RETRY_MAX_MS);

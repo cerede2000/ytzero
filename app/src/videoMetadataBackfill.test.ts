@@ -38,13 +38,28 @@ if (process.env[ISOLATION_FLAG] !== "1") {
       videoInfoRefusalQuiet.note(new Error("Sign in to confirm you're not a bot"));
       expect(videoInfoRefusalQuiet.quiet()).toBe(true);
 
-      const first = await refreshVideoMetadataBatch(3);
-      expect(first).toEqual({ checked: 0, skipped: 3, durationsFilled: 0, datesFilled: 0 });
+      // A skip that still reaches for the network is not a skip: the fallback
+      // that looks for a publication date on the watch page would put a second
+      // question to the very host that has just turned us away.
+      const realFetch = globalThis.fetch;
+      let reached = 0;
+      globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+        reached++;
+        return realFetch(...args);
+      }) as typeof fetch;
+      try {
+        const first = await refreshVideoMetadataBatch(3);
+        expect(first).toEqual({ checked: 0, skipped: 3, durationsFilled: 0, datesFilled: 0 });
+        expect(reached).toBe(0);
 
-      // The refusal still stands, so the next round finds the same three ready
-      // to be asked about — not serving a sentence for it.
-      const second = await refreshVideoMetadataBatch(3);
-      expect(second).toEqual({ checked: 0, skipped: 3, durationsFilled: 0, datesFilled: 0 });
+        // The refusal still stands, so the next round finds the same three
+        // ready to be asked about — not serving a sentence for it.
+        const second = await refreshVideoMetadataBatch(3);
+        expect(second).toEqual({ checked: 0, skipped: 3, durationsFilled: 0, datesFilled: 0 });
+        expect(reached).toBe(0);
+      } finally {
+        globalThis.fetch = realFetch;
+      }
     });
   });
 }
