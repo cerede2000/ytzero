@@ -5,6 +5,7 @@ import { createYoutubeSearch, parseAbbreviatedCount } from "./youtubeSearch";
 import { isYouTubeRateLimitError, isYouTubeRefusalError, readYouTubeResponse, YouTubeRefusalError, youtubeRefusalGate } from "./youtubeRateLimit";
 import { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError } from "./youtubeVideoAvailability";
 import { videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQuiet";
+import { relatedVideosFromWatchPage, type RelatedVideo } from "./relatedVideos";
 import { inferIsShortFromMetadata } from "./shortClassification";
 import { resolveYouTubeLanguage, youtubeRequestHeaders, youtubeRssHeaders, type ResolvedYouTubeLanguage } from "./youtubeRequestLanguage";
 import { MetadataCookieFallbackBudget, retryVideoInfoWithCookies } from "./videoMetadataFallback";
@@ -1071,6 +1072,9 @@ async function fetchVideoInfoAnonymously(videoId: string, userId?: number): Prom
     const res = await fetch(url, { headers: youtubeRequestHeaders(userId, undefined, false) });
     if (!res.ok) throw new Error(`YouTube fetch failed (${res.status})`);
     const html = await res.text();
+    if (options.related) {
+      options.related.videos = relatedVideosFromWatchPage(extractVariable(html, "ytInitialData"));
+    }
     const pr = extractVariable(html, "ytInitialPlayerResponse");
     result = videoInfoFromPlayerResponse(videoId, pr);
   } catch (htmlError) {

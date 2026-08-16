@@ -308,7 +308,7 @@ export const api = {
   testNotificationDelivery: () => http<{ ok: true }>("/notification-preferences/delivery/test", { method: "POST", body: "{}" }),
   live: () => http<{ videos: Video[] }>("/live"),
   channelLive: (id: string) => http<{ videos: Video[] }>(`/channels/${id}/live`),
-  video: (id: string) => sharedGet<{ video: Video; related: Video[] }>(`video:${id}`, `/videos/${id}`),
+  video: (id: string) => sharedGet<{ video: Video; related: Video[]; related_external?: SearchResult[] }>(`video:${id}`, `/videos/${id}`),
   videoComments: (id: string, sort: VideoCommentSort = "top", refresh = false) =>
     http<VideoCommentsResponse>(`/videos/${id}/comments?sort=${sort}${refresh ? "&refresh=1" : ""}`),
   watchlist: () => sharedGet<{ videos: Video[] }>("watchlist", "/watchlist"),

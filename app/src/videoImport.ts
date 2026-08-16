@@ -4,6 +4,8 @@ import { database } from "./database";
 import { primeAudioSource, primeVideoSource } from "./downloader";
 import { log } from "./logger";
 import { persistDirectVideoInfo } from "./videoInfoPersistence";
+import { saveRelatedVideos } from "./relatedVideoStore";
+import type { RelatedVideo } from "./relatedVideos";
 import { fetchVideoInfoViaYtdlp, type ProgressiveVideoSource } from "./videoInfoViaYtdlp";
 import { videoExistsStmt } from "./videoRoutesSupport";
 import {
@@ -30,9 +32,9 @@ export class LiveDisabledForProfileError extends Error {
  * Only a refusal is worth the second attempt: a video that is private or gone
  * says so consistently, and asking twice would just be slower.
  */
-async function fetchVideoInfoForImport(userId: number, videoId: string): Promise<VideoInfo> {
+async function fetchVideoInfoForImport(userId: number, videoId: string, related: { videos: RelatedVideo[] }): Promise<VideoInfo> {
   try {
-    return await fetchVideoInfo(videoId);
+    return await fetchVideoInfo(videoId, { related });
   } catch (error) {
     if (error instanceof PrivateVideoError || error instanceof DeletedVideoError) throw error;
     const audio: { source: AudioSource | null } = { source: null };
@@ -49,7 +51,11 @@ async function fetchVideoInfoForImport(userId: number, videoId: string): Promise
 }
 
 async function loadAndPersistVideoInfo(userId: number, videoId: string): Promise<VideoInfo> {
-  const info = await fetchVideoInfoForImport(userId, videoId);
+  // The watch page carries YouTube's own panel of suggestions, and this import
+  // is the one moment that page is downloaded. Reading it here is the whole
+  // cost of the related panel; asking for it later would be a request.
+  const related: { videos: RelatedVideo[] } = { videos: [] };
+  const info = await fetchVideoInfoForImport(userId, videoId, related);
   if (childHidesLive(userId) && info.liveStatus !== "none") throw new LiveDisabledForProfileError();
   // Channel avatar + the channel's recent uploads (for the "related" panel).
   const [about, feed] = await Promise.all([
@@ -90,11 +96,14 @@ async function loadAndPersistVideoInfo(userId: number, videoId: string): Promise
     });
     await insertMany(feed.videos);
   }
+  // After the row exists: the panel points at it by foreign key.
+  await saveRelatedVideos(info.videoId, related.videos);
   log.info("external.video_info_loaded", {
     videoId: info.videoId,
     channelId: info.channelId,
     inserted: !existing,
     relatedImported: feed?.videos.length ?? 0,
+    relatedSuggestions: related.videos.length,
   });
   return info;
 }

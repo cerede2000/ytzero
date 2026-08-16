@@ -10,7 +10,9 @@ import { followedExists, profileVideoOwnershipExists, shortsUiVisibilitySql } fr
 import { getDeArrowBranding } from "../dearrow";
 import { log } from "../logger";
 import { ageMs, CHAPTERS_DB_TTL, CREATORS_DB_TTL } from "../routeCache";
-import { videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSupport";
+import { attachLibraryState, videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSupport";
+import { selectRelatedForPanel } from "../relatedVideos";
+import { readRelatedVideos } from "../relatedVideoStore";
 import { registerVideoCommentRoutes } from "./videoCommentRoutes";
 import { importExternalVideoInfo, type VideoInfoImportResult } from "../externalVideoInfoImport";
 import { refreshExternalWatchVideo } from "../externalVideoRefresh";
@@ -383,6 +385,34 @@ api.get("/videos/:id/creators", async (c) => {
   }
 });
 
+/**
+ * YouTube's own suggestions for this video, when the plugin is on.
+ *
+ * They were read from the watch page at import time and have been sitting in
+ * the library ever since, so showing them costs a row lookup. Nothing here
+ * goes to YouTube: a suggestion is a title and a thumbnail until somebody
+ * acts on it.
+ */
+async function suggestedVideos(uid: number, videoId: string) {
+  if (!pluginEnabled("related")) return [];
+  const { settings } = await getPluginSettings(uid, "related");
+  const limit = Number(settings.related_count ?? 12);
+  const stored = await readRelatedVideos(videoId, 25);
+  if (stored.length === 0) return [];
+  const known = await attachLibraryState(uid, stored);
+  const inLibrary = new Set(known.filter((video) => video.in_library === 1).map((video) => video.videoId));
+  const chosen = selectRelatedForPanel(stored, {
+    limit,
+    currentVideoId: videoId,
+    inLibrary,
+    hideKnown: Number(settings.related_hide_known ?? 1) === 1,
+  });
+  // Carried back through attachLibraryState so each card knows whether it is
+  // downloaded and whether acting on it has to import it first.
+  return attachLibraryState(uid, chosen);
+}
+
+
 api.get("/videos/:id", async (c) => {
   const uid = currentUserId(c);
   let row = await database
@@ -476,7 +506,11 @@ api.get("/videos/:id", async (c) => {
   (video as any).channel_caption_mode = channelPlayerRow?.caption_mode ?? null;
   (video as any).channel_caption_language = channelPlayerRow?.caption_language ?? null;
 
-  return c.json({ video, related: await attachTags(uid, related) });
+  return c.json({
+    video,
+    related: await attachTags(uid, related),
+    related_external: await suggestedVideos(uid, row.video_id),
+  });
 });
 
 }
