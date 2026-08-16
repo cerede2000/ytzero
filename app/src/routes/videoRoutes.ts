@@ -14,7 +14,7 @@ import { videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSuppo
 import { registerVideoCommentRoutes } from "./videoCommentRoutes";
 import { importExternalVideoInfo, type VideoInfoImportResult } from "../externalVideoInfoImport";
 import { refreshExternalWatchVideo } from "../externalVideoRefresh";
-import { fetchVideoInfoViaYtdlp } from "../videoInfoViaYtdlp";
+import { fetchVideoInfoViaYtdlp, type ProgressiveVideoSource } from "../videoInfoViaYtdlp";
 import type { AudioSource } from "../audioSourceResolver";
 import { isYouTubeRefusalError, youtubeRefusalGate } from "../youtubeRateLimit";
 import { AsyncTtlCache } from "../asyncTtlCache";
@@ -213,12 +213,14 @@ async function fetchVideoInfoForImport(userId: number, videoId: string) {
   } catch (error) {
     if (error instanceof PrivateVideoError || error instanceof DeletedVideoError) throw error;
     const audio: { source: AudioSource | null } = { source: null };
-    const viaYtdlp = await fetchVideoInfoViaYtdlp(userId, videoId, Bun.spawn, audio).catch(() => null);
+    const video: { source: ProgressiveVideoSource | null } = { source: null };
+    const viaYtdlp = await fetchVideoInfoViaYtdlp(userId, videoId, Bun.spawn, audio, video).catch(() => null);
     if (!viaYtdlp) throw error;
-    // The answer carried the audio track too. Handing it over here is the
-    // difference between a player that starts and one that waits for the same
-    // question to be asked again.
+    // The answer carried both playable tracks too. Handing them over here is
+    // the difference between a player that starts and one that waits for the
+    // same question to be asked again, whichever of the two the page picks.
     if (audio.source) primeAudioSource(userId, videoId, audio.source);
+    if (video.source) primeVideoSource(userId, videoId, video.source);
     return viaYtdlp;
   }
 }
