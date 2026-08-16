@@ -28,6 +28,17 @@ export function rememberProfileAudioMode(profileId: number | null, enabled: bool
   } catch {}
 }
 
+/**
+ * Choose the mode for the profile that is signed in here.
+ *
+ * The watch page reads the remembered mode as it opens, so a page that starts
+ * playback elsewhere states the mode before it navigates rather than arguing
+ * with the player once it is up.
+ */
+export function setProfileAudioMode(enabled: boolean): void {
+  rememberProfileAudioMode(rememberedProfileId(), enabled);
+}
+
 export function useProfileAudioMode(): [boolean, (enabled: boolean) => void] {
   const [profileId] = useState(rememberedProfileId);
   const [enabled, setEnabled] = useState(() => profileAudioModeEnabled(profileId));
