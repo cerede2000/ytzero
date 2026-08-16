@@ -10,9 +10,11 @@ function fetcher(options: {
   answer?: (videoId: string) => RelatedVideo[];
   fail?: () => never;
   clock?: () => number;
+  asSomebody?: (videoId: string, userId: number | undefined) => RelatedVideo[];
 } = {}) {
   const saved: Record<string, RelatedVideo[]> = {};
   const stored = options.stored ?? {};
+  const asked: Array<number | undefined> = [];
   let loads = 0;
   const fetch = createRelatedVideoFetcher(
     async (videoId) => stored[videoId] ?? [],
@@ -24,8 +26,9 @@ function fetcher(options: {
       return {} as never;
     },
     options.clock ?? (() => 1_000),
+    async (videoId, userId) => { asked.push(userId); return options.asSomebody ? options.asSomebody(videoId, userId) : []; },
   );
-  return { fetch, saved, loads: () => loads };
+  return { fetch, saved, asked, loads: () => loads };
 }
 
 describe("fetching a panel for a video that never had one", () => {
@@ -66,11 +69,43 @@ describe("fetching a panel for a video that never had one", () => {
     await fetch("later");
     expect(loads()).toBe(2);
   });
+});
 
-  test("says nothing, and stays quiet, when the address is being refused", async () => {
+describe("when YouTube is refusing the address", () => {
+  test("asks again as the profile looking at the video", async () => {
+    // The refusal is what the anonymous request gets; the cookie jar on disk
+    // is the thing that still gets an answer, and only the watch page carries
+    // a panel at all — yt-dlp cannot stand in for it here.
+    const { fetch, saved, asked } = fetcher({
+      fail: () => { throw new YouTubeRefusingError(); },
+      asSomebody: (videoId) => [suggestion(`${videoId}-signed-in`)],
+    });
+    expect((await fetch("refused", 2)).map((video) => video.videoId)).toEqual(["refused-signed-in"]);
+    expect(saved.refused?.length).toBe(1);
+    expect(asked).toEqual([2]);
+  });
+
+  test("does not hold the video shut for six hours over a ninety-second refusal", async () => {
+    // A refusal answers nothing about this video: the question was never put.
+    // Remembering it as empty is what left a panel local for the rest of the
+    // evening after one bad minute.
     const { fetch, loads } = fetcher({ fail: () => { throw new YouTubeRefusingError(); } });
-    expect(await fetch("refused")).toEqual([]);
-    expect(await fetch("refused")).toEqual([]);
-    expect(loads()).toBe(1);
+    expect(await fetch("still-refused")).toEqual([]);
+    expect(await fetch("still-refused")).toEqual([]);
+    expect(loads()).toBe(2);
+  });
+
+  test("gives up quietly when no profile has a cookie jar", async () => {
+    const { fetch, saved } = fetcher({ fail: () => { throw new YouTubeRefusingError(); } });
+    expect(await fetch("nobody")).toEqual([]);
+    expect(saved.nobody === undefined).toBe(true);
+  });
+
+  test("survives a signed-in attempt that fails too", async () => {
+    const { fetch } = fetcher({
+      fail: () => { throw new YouTubeRefusingError(); },
+      asSomebody: () => { throw new Error("refused again"); },
+    });
+    expect(await fetch("both-refused")).toEqual([]);
   });
 });
