@@ -11,17 +11,32 @@ import { localeForLanguage } from "./uiLanguage";
 
 export type PlaybackDirection = "oldest" | "newest";
 
+/**
+ * Which way to step away from the current video.
+ *
+ * A direction names a side of an order — the newer videos or the older ones —
+ * and it is the listener's feed preference that chooses between them. Asking
+ * for "previous" is a different question: it means the entry before this one
+ * in the list as it stands, and a list is played forwards whatever that
+ * preference happens to say.
+ */
+export type PlaybackStep = PlaybackDirection | "previous";
+
 export function nextFromOrder(ids: readonly string[], currentVideoId: string): string | null {
   const index = ids.indexOf(currentVideoId);
   if (index < 0) return null;
   return ids[index + 1] ?? null;
 }
 
-export function adjacentFromOrder(ids: readonly string[], currentVideoId: string, direction: PlaybackDirection): string | null {
-  if (direction === "newest") return nextFromOrder(ids, currentVideoId);
+export function previousFromOrder(ids: readonly string[], currentVideoId: string): string | null {
   const index = ids.indexOf(currentVideoId);
   if (index < 0) return null;
   return ids[index - 1] ?? null;
+}
+
+export function adjacentFromOrder(ids: readonly string[], currentVideoId: string, direction: PlaybackDirection): string | null {
+  if (direction === "newest") return nextFromOrder(ids, currentVideoId);
+  return previousFromOrder(ids, currentVideoId);
 }
 
 type OrderedPlaybackKind = Exclude<PlaybackContext["kind"], "feed">;

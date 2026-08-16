@@ -25,6 +25,14 @@ describe("playback context adjacency", () => {
     expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "history", "oldest")).toBe("a");
   });
 
+  test("hands back the entry before when it is asked for by name", () => {
+    for (const kind of ["user-playlist", "channel-playlist", "history"] as const) {
+      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", kind, "previous")).toBe("a");
+      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "a", kind, "previous")).toBeNull();
+      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "missing", kind, "previous")).toBeNull();
+    }
+  });
+
   test("recreates the sectioned Watch later order without snapshots", () => {
     const rows = [
       { video_id: "weekend", bucket: "weekend", show_from: "2026-08-15", duration: "1:00", title: "Z", channel_title: "C" },

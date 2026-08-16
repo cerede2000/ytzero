@@ -641,13 +641,16 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     if (!advancedVideoId || !playbackQueue) { setAdvancedNeighbours(null); return; }
     let cancelled = false;
     const forward = queueIsPlaylist || settings?.feed_autoplay_direction === "newest" ? "newest" : "oldest";
-    const neighbour = async (direction: "newest" | "oldest"): Promise<Track | null> => {
-      const adjacent = await api.playbackAdjacent(advancedVideoId, direction, playbackQueue).catch(() => null);
+    // A list runs forwards whatever the feed preference says, so the entry
+    // behind it is asked for by name; a feed has only its two sides.
+    const backward = queueIsPlaylist ? "previous" : forward === "newest" ? "oldest" : "newest";
+    const neighbour = async (step: "newest" | "oldest" | "previous"): Promise<Track | null> => {
+      const adjacent = await api.playbackAdjacent(advancedVideoId, step, playbackQueue).catch(() => null);
       if (!adjacent?.video_id) return null;
       const found = await api.video(adjacent.video_id).catch(() => null);
       return queueTrack(found?.video);
     };
-    void Promise.all([neighbour(forward), neighbour(forward === "newest" ? "oldest" : "newest")])
+    void Promise.all([neighbour(forward), neighbour(backward)])
       .then(([next, previous]) => { if (!cancelled) setAdvancedNeighbours({ next, previous }); });
     return () => { cancelled = true; };
   }, [advancedVideoId, playbackQueue, queueIsPlaylist, settings?.feed_autoplay_direction]);
