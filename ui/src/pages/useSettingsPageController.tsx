@@ -1057,7 +1057,9 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     ...(canManageArea("filters") ? [{ value: "filters" as const, label: t("filters"), count: filterRules.length }] : []),
   ];
   const displaySubTabOptions: { value: "appearance" | "feed" | "navigation" | "playback" | "subtitles" | "screenshots" | "privacy"; label: string }[] = [
-    ...(canManageArea("appearance") ? [{ value: "appearance" as const, label: t("displayAppearance") }] : []),
+    // Always listed: it is where a profile chooses the language it reads the
+    // interface in, which is its own even when the rest of appearance is not.
+    { value: "appearance" as const, label: t("displayAppearance") },
     ...(canManageArea("feed") ? [{ value: "feed" as const, label: t("displayFeed") }] : []),
     ...(canManageArea("navigation") ? [{ value: "navigation" as const, label: t("displayNavigation") }] : []),
     ...(canManageArea("playback") ? [

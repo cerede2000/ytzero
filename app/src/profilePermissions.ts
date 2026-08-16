@@ -73,10 +73,27 @@ export function permissionAreaForMutation(path: string): ProfilePermissionArea |
   return null;
 }
 
+/**
+ * Settings a profile may always change about itself.
+ *
+ * The permission areas exist to protect what is shared, and `appearance` holds
+ * two kinds of thing at once: the instance's name and colour, which are shared,
+ * and the reader's own language, which is not. Gating the language protects
+ * nothing, because a settings write always lands on the profile making it —
+ * there is no other profile to protect it from, and no administrator who could
+ * set it on their behalf.
+ *
+ * What it does instead is strand a profile in a language nobody chose for it
+ * and it cannot leave, which is the one setting where being unable to reach
+ * the settings is the whole of the problem.
+ */
+export const ALWAYS_PERSONAL_SETTINGS: ReadonlySet<string> = new Set(["language"]);
+
 export function permissionAreasForSettings(body: unknown): ProfilePermissionArea[] {
   if (!body || typeof body !== "object" || Array.isArray(body)) return [];
   const areas = new Set<ProfilePermissionArea>();
   for (const key of Object.keys(body)) {
+    if (ALWAYS_PERSONAL_SETTINGS.has(key)) continue;
     const area = SETTING_PERMISSION_AREAS[key];
     if (area) areas.add(area);
   }

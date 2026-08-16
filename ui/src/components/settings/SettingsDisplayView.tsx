@@ -124,7 +124,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
         <>
           <div className="settings-display-groups">
 
-          {displaySubTab === "appearance" && canManageArea("appearance") && <SettingsSection title={t("displayAppearance")} className="settings-display-group">
+          {displaySubTab === "appearance" && <SettingsSection title={t("displayAppearance")} className="settings-display-group">
           {isPrimary ? (
             <>
               <SettingRow label={t("appNameLabel")} htmlFor="app-name">
@@ -219,7 +219,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
           </SettingsSection>
           }
           {displaySubTab === "feed" && canManageArea("feed") && <SettingsSection title={t("displayFeed")} className="settings-display-group">

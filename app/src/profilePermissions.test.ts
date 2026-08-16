@@ -83,3 +83,24 @@ describe("profile administrator permissions", () => {
     expect(permissionAreaForMutation("/profiles/switch")).toBeNull();
   });
 });
+
+describe("the language a profile reads the interface in", () => {
+  test("is never gated, however locked down appearance is", () => {
+    // It lives in the appearance area beside the instance name and colour,
+    // which are shared and worth protecting. This one is not: a settings write
+    // lands on the profile making it, so gating it protects the value from
+    // nobody and leaves the profile reading a language it did not choose.
+    expect(permissionAreasForSettings({ language: "fr" })).toEqual([]);
+  });
+
+  test("still protects what it is sent alongside", () => {
+    // Naming a shared setting in the same request must not ride through on
+    // the language's exemption.
+    expect(permissionAreasForSettings({ language: "fr", app_name: "Mine" })).toEqual(["appearance"]);
+  });
+
+  test("leaves the rest of appearance where it was", () => {
+    expect(permissionAreasForSettings({ grid_size: "sm" })).toEqual(["appearance"]);
+    expect(permissionAreasForSettings({ watched_style: "dim" })).toEqual(["appearance"]);
+  });
+});
