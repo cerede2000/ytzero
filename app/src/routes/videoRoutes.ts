@@ -2,8 +2,7 @@ import type { Context, Hono } from "hono";
 import { publishAppEvent } from "../appEvents";
 import { database } from "../database";
 import { getUserSetting } from "../db";
-import { primeAudioSource, primeVideoSource } from "../downloader";
-import { DeletedVideoError, fetchChannelAbout, fetchChannelFeed, fetchVideoChapters, fetchVideoCreators, fetchVideoInfo, PrivateVideoError } from "../youtube";
+import { fetchVideoChapters, fetchVideoCreators } from "../youtube";
 import { discoveryRecommendations, dismissDiscoveryRecommendation, recommendationFeed, refreshDiscoveryInBackground, refreshDiscoveryNow } from "../plugins";
 import { validYouTubeVideoId } from "../youtubeComments";
 import { childDownloadsOnly, childHidesLive, childLocalOnly, isChildUser, isParentLocked } from "../childTime";
@@ -13,10 +12,10 @@ import { log } from "../logger";
 import { ageMs, CHAPTERS_DB_TTL, CREATORS_DB_TTL } from "../routeCache";
 import { videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSupport";
 import { registerVideoCommentRoutes } from "./videoCommentRoutes";
-import { persistDirectVideoInfo } from "../videoInfoPersistence";
 import { refreshExternalWatchVideo } from "../externalVideoRefresh";
-import { fetchVideoInfoViaYtdlp, type ProgressiveVideoSource } from "../videoInfoViaYtdlp";
 import type { AudioSource } from "../audioSourceResolver";
+import { importVideo, LiveDisabledForProfileError } from "../videoImport";
+import { fetchVideoInfoViaYtdlp, type ProgressiveVideoSource } from "../videoInfoViaYtdlp";
 import { isYouTubeRefusalError, youtubeRefusalGate } from "../youtubeRateLimit";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
@@ -195,32 +194,6 @@ api.delete("/external/:id", async (c) => {
   return c.json({ deleted: res.changes });
 });
 
-/**
- * Read a video's details for an import, through yt-dlp if YouTube will not
- * answer us directly. A video that is not in the library cannot be opened at
- * all until this succeeds, and yt-dlp — with the profile's cookies and a
- * proof-of-origin token — gets an answer where a plain request is refused.
- * Only a refusal is worth the second attempt: a video that is private or gone
- * says so consistently, and asking twice would just be slower.
- */
-async function fetchVideoInfoForImport(userId: number, videoId: string) {
-  try {
-    return await fetchVideoInfo(videoId);
-  } catch (error) {
-    if (error instanceof PrivateVideoError || error instanceof DeletedVideoError) throw error;
-    const audio: { source: AudioSource | null } = { source: null };
-    const video: { source: ProgressiveVideoSource | null } = { source: null };
-    const viaYtdlp = await fetchVideoInfoViaYtdlp(userId, videoId, Bun.spawn, audio, video).catch(() => null);
-    if (!viaYtdlp) throw error;
-    // The answer carried both playable tracks too. Handing them over here is
-    // the difference between a player that starts and one that waits for the
-    // same question to be asked again, whichever of the two the page picks.
-    if (audio.source) primeAudioSource(userId, videoId, audio.source);
-    if (video.source) primeVideoSource(userId, videoId, video.source);
-    return viaYtdlp;
-  }
-}
-
 api.get("/videos/:id/info", async (c) => {
   const uid = currentUserId(c);
   // Restricted child profiles may only open videos already in the library.
@@ -297,11 +270,7 @@ api.get("/videos/:id/info", async (c) => {
     }
     return c.json({ info, related_refresh: "loaded" });
   } catch (e) {
-    if (isYouTubeRefusalError(e)) {
-      const until = Math.max(Date.now() + RELATED_REFUSED_TTL_MS, youtubeRefusalGate.nextRetryAt());
-      relatedRefreshSuppression.set(videoId, { kind: "refused", until });
-      return c.json({ error: "YouTube is temporarily refusing this address", code: "youtube_refused", retry_at: until }, 503);
-    }
+    if (e instanceof LiveDisabledForProfileError) return c.json({ error: e.message }, 403);
     log.error("external.video_info_failed", { videoId: c.req.param("id"), error: e instanceof Error ? e.message : String(e) });
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
   }
