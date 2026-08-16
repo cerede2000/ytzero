@@ -19,8 +19,8 @@ import { channelSyncJobIsRunning } from "./channelSyncRuntime";
 import { isYouTubeRateLimitError, isYouTubeRefusalError } from "./youtubeRateLimit";
 import { RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
 import { syncChannelVideoAvailability } from "./videoAvailabilitySync";
+import { isYouTubeRefusal, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 import { inferIsShortFromMetadata, shortCheckRetryInterval } from "./shortClassification";
-import { YouTubeRefusingError } from "./youtubeRefusalQuiet";
 
 const upsertVideo = database.prepare(RSS_VIDEO_UPSERT_SQL);
 
@@ -1169,7 +1169,7 @@ export async function refreshVideoMetadataBatch(limit = 10): Promise<VideoMetada
     const { video_id, live_status } = rows[i];
     try {
       const info = await fetchVideoInfo(video_id).catch(async (error) => {
-        if (!(error instanceof YouTubeRefusingError)) throw error;
+        if (!isYouTubeRefusal(error)) throw error;
         const authenticated = await fetchVideoInfoAsProfile(video_id, budget);
         if (!authenticated) throw error;
         return authenticated;
@@ -1183,12 +1183,12 @@ export async function refreshVideoMetadataBatch(limit = 10): Promise<VideoMetada
       }
       if (info.publishedAt) datesFilled += (await savePublishedAt.run(info.publishedAt, video_id)).changes;
     } catch (e) {
-      // A lookup we decided not to make says nothing about this video: the
-      // refusal is of the address. Nothing below applies to it — the fallback
-      // would put a second question to the same refusing host, and counting a
-      // skip as an attempt would back the video off for up to six hours over
-      // one nobody asked. Nor is it news: the refusal was reported once.
-      if (e instanceof YouTubeRefusingError) {
+      // A refused lookup says nothing about this video: the refusal is of the
+      // address. Nothing below applies to it — the fallback would put a second
+      // question to the same refusing host, and counting it as an attempt
+      // would back the video off for up to six hours over an answer nobody
+      // got. Nor is it news: the refusal was reported once.
+      if (isYouTubeRefusal(e)) {
         skipped++;
         continue;
       }
@@ -1279,7 +1279,7 @@ export async function backfillImportedVideos(limit = 15) {
     const videoId = rows[i].video_id;
     try {
       const info = await fetchVideoInfo(videoId).catch(async (error) => {
-        if (!(error instanceof YouTubeRefusingError)) throw error;
+        if (!isYouTubeRefusal(error)) throw error;
         const authenticated = await fetchVideoInfoAsProfile(videoId, budget);
         if (!authenticated) throw error;
         return authenticated;
