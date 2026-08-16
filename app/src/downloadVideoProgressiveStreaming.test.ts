@@ -1,27 +1,33 @@
 import { describe, expect, test } from "bun:test";
 import { createDownloadVideoProgressiveStreaming } from "./downloadVideoProgressiveStreaming";
 
-const bytes = Uint8Array.from({ length: 64 }, (_, index) => index);
+const futureExpiry = 9_999_999_999;
+const url = (name: string) => `https://r1.googlevideo.com/${name}?expire=${futureExpiry}`;
 
-function ranged(range: string | null): Response {
-  const match = range?.match(/^bytes=(\d+)-(\d+)$/);
-  if (!match) return new Response(null, { status: 400 });
-  const start = Number(match[1]);
-  if (start >= bytes.byteLength) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${bytes.byteLength}` } });
-  const end = Math.min(Number(match[2]), bytes.byteLength - 1);
-  const body = bytes.slice(start, end + 1);
-  return new Response(body, { status: 206, headers: {
-    "Content-Length": String(body.byteLength),
-    "Content-Range": `bytes ${start}-${end}/${bytes.byteLength}`,
-  } });
+function fakeProcess(stdout: string, stderr = "", exitCode = 0): ReturnType<typeof Bun.spawn> {
+  return {
+    stdout: new Response(stdout).body!,
+    stderr: new Response(stderr).body!,
+    exited: Promise.resolve(exitCode),
+    kill: () => {},
+  } as unknown as ReturnType<typeof Bun.spawn>;
 }
 
-function fixture() {
-  const requests: string[] = [];
-  const streaming = createDownloadVideoProgressiveStreaming({
+function chunk(bytes: number, start = 0, total = 1_000_000): Response {
+  return new Response(new Uint8Array(bytes), {
+    status: 206,
+    headers: {
+      "Content-Length": String(bytes),
+      "Content-Range": `bytes ${start}-${start + bytes - 1}/${total}`,
+    },
+  });
+}
+
+function factory(overrides: Partial<Parameters<typeof createDownloadVideoProgressiveStreaming>[0]> = {}) {
+  return createDownloadVideoProgressiveStreaming({
     YTDLP: "yt-dlp",
     downloadCookiesConfigured: () => false,
-    downloadCookiesFile: () => "cookies.txt",
+    downloadCookiesFile: (userId) => `/cookies/${userId}.txt`,
     ytdlpStatus: async () => "test",
     spawn: (() => ({
       stdout: new Response('https://r1.googlevideo.com/video?expire=9999999999\nmp4\navc1.64001f\nmp4a.40.2\n{"User-Agent":"yt-dlp-agent","Accept-Language":"en-US"}\n').body!,
@@ -33,28 +39,78 @@ function fixture() {
       return ranged(range);
     }) as typeof fetch,
   });
-  return { streaming, requests };
 }
 
-describe("progressive direct video stream", () => {
-  test("turns missing and open-ended browser ranges into finite upstream requests with Content-Length", async () => {
-    const { streaming, requests } = fixture();
-    const first = await streaming.getDirectVideoResponse(1, "video", null);
-    expect(first?.status).toBe(206);
-    expect(first?.headers.get("content-length")).toBe("64");
-    expect(first?.headers.get("content-range")).toBe("bytes 0-63/64");
-    expect(requests).toEqual([`bytes=0-${8 * 1024 * 1024 - 1}`]);
+describe("direct video streaming", () => {
+  test("waits out a fresh URL rather than buying another one", async () => {
+    // A signed googlevideo URL answers 403 to everything for about a second
+    // after it is issued, and then serves. Resolving a replacement costs
+    // several seconds and hands back a URL just as new.
+    let resolutions = 0;
+    let asks = 0;
+    const video = factory({
+      spawn: (() => { resolutions++; return fakeProcess(`${url("video")}\nmp4\n`); }) as unknown as typeof Bun.spawn,
+      fetchImpl: (async () => {
+        asks++;
+        return asks < 3 ? new Response(null, { status: 403 }) : chunk(64);
+      }) as unknown as typeof fetch,
+    });
 
-    const second = await streaming.getDirectVideoResponse(1, "video", "bytes=10-");
-    expect(second?.headers.get("content-range")).toBe("bytes 10-63/64");
-    expect(requests.at(-1)).toBe(`bytes=10-${10 + 8 * 1024 * 1024 - 1}`);
+    const response = await video.getVideoResponse(1, "abc", "bytes=0-63");
+
+    expect(response?.status).toBe(206);
+    expect(asks).toBe(3);
+    expect(resolutions).toBe(1);
   });
 
-  test("rejects suffix and malformed ranges without contacting Google Video", async () => {
-    const { streaming, requests } = fixture();
-    expect((await streaming.getDirectVideoResponse(1, "video", "bytes=-10"))?.status).toBe(416);
-    expect((await streaming.getDirectVideoResponse(1, "video", "bytes=4-2"))?.status).toBe(416);
-    expect(requests).toEqual([]);
+  test("tries the profile's cookies when the address itself is refused", async () => {
+    // Anonymous is asked first because it offers more formats. While YouTube
+    // is turning the address away, that attempt cannot ever succeed, and a
+    // single attempt left the player with nothing to play.
+    const attempts: boolean[] = [];
+    const video = factory({
+      downloadCookiesConfigured: () => true,
+      spawn: ((command: string[]) => {
+        const withCookies = command.includes("--cookies");
+        attempts.push(withCookies);
+        return withCookies
+          ? fakeProcess(`${url("video")}\nmp4\n`)
+          : fakeProcess("", "ERROR: Sign in to confirm you're not a bot", 1);
+      }) as unknown as typeof Bun.spawn,
+      fetchImpl: (async () => chunk(64)) as unknown as typeof fetch,
+    });
+
+    const response = await video.getVideoResponse(1, "refused-video", "bytes=0-63");
+
+    expect(attempts).toEqual([false, true]);
+    expect(response?.status).toBe(206);
+  });
+
+  test("follows googlevideo's own redirect instead of handing back nothing", async () => {
+    const asked: string[] = [];
+    const video = factory({
+      spawn: (() => fakeProcess(`${url("video")}\nmp4\n`)) as unknown as typeof Bun.spawn,
+      fetchImpl: (async (input: unknown) => {
+        asked.push(String(input));
+        return asked.length === 1
+          ? new Response(null, { status: 302, headers: { location: url("moved") } })
+          : chunk(64);
+      }) as unknown as typeof fetch,
+    });
+
+    const response = await video.getVideoResponse(1, "redirected", "bytes=0-63");
+
+    expect(response?.status).toBe(206);
+    expect(asked[1]).toContain("/moved");
+  });
+
+  test("refuses to proxy a host that is not YouTube's media edge", async () => {
+    const video = factory({
+      spawn: (() => fakeProcess("https://example.com/anything.mp4\nmp4\n")) as unknown as typeof Bun.spawn,
+      fetchImpl: (async () => chunk(64)) as unknown as typeof fetch,
+    });
+
+    expect(await video.getVideoResponse(1, "elsewhere", "bytes=0-63")).toBeNull();
   });
 
   test("uses yt-dlp headers for every range request", async () => {
