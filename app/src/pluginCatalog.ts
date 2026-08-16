@@ -229,6 +229,31 @@ export const DISCOVERY_SETTINGS: PluginSettingSource[] = [
 ];
 
 
+export const RELATED_SETTINGS: PluginSettingSource[] = [
+  {
+    key: "related_count",
+    min: 0, max: 25, step: 1,
+    label: { en: "Suggestions from YouTube", pl: "Propozycje z YouTube", de: "Vorschläge von YouTube" },
+    description: {
+      en: "How many of YouTube's own suggestions to show before the library's. 0 keeps the panel local.",
+      pl: "Ile propozycji YouTube pokazać przed pozycjami z biblioteki. 0 zostawia panel lokalny.",
+      de: "Wie viele YouTube-Vorschläge vor denen aus der Bibliothek erscheinen. 0 lässt das Panel lokal.",
+    },
+    defaultValue: 12,
+  },
+  {
+    key: "related_hide_known",
+    type: "toggle",
+    label: { en: "Skip videos already in the library", pl: "Pomijaj filmy już w bibliotece", de: "Videos aus der Bibliothek überspringen" },
+    description: {
+      en: "A suggestion you already have is usually listed below by the library's own matching; this keeps it from appearing twice.",
+      pl: "Propozycja, którą już masz, zwykle i tak pojawia się niżej z dopasowania biblioteki — to nie pokaże jej dwa razy.",
+      de: "Ein Vorschlag, den du schon hast, steht meist ohnehin weiter unten; so erscheint er nicht doppelt.",
+    },
+    defaultValue: 1,
+  },
+];
+
 export const PLUGINS: PluginManifest[] = [
   {
     id: "discovery",
@@ -266,6 +291,14 @@ export const PLUGINS: PluginManifest[] = [
     icon: "Archive",
     permissions: ["read:tubearchivist", "write:watched", "read:library"],
     settingsScope: "global",
+  },
+  {
+    id: "related",
+    name: "Related videos",
+    version: "0.1.0",
+    description: "Shows the suggestions YouTube lists beside a video, read from the page its import already downloaded.",
+    icon: "Shuffle",
+    permissions: ["read:library"],
   },
 ];
 

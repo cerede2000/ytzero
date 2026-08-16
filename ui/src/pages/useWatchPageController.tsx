@@ -758,13 +758,13 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       .then((r) => {
         if (cancelled) return;
         setVideo(r.video);
-        setRelated(r.related);
+        setRelated(withSuggestions(r.related, r.related_external));
         // External video already in DB but its RSS siblings were cleared:
         // refresh them in the background so the "related" panel refills.
         if (r.video.external && r.related.length === 0) {
           api.videoInfo(id, true)
             .then(() => api.video(id))
-            .then((r2) => { if (!cancelled) setRelated(r2.related); })
+            .then((r2) => { if (!cancelled) setRelated(withSuggestions(r2.related, r2.related_external)); })
             .catch(() => {});
         }
       })
@@ -781,7 +781,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
               return api.video(id).then((full) => {
                 if (cancelled) return;
                 setVideo(full.video);
-                setRelated(full.related);
+                setRelated(withSuggestions(full.related, full.related_external));
                 setMissingVideoId(null);
                 setVideoInfo(null);
               });
