@@ -7,6 +7,7 @@ import {
   refreshAllLiveStatuses,
   refreshAvatarsBatch,
   refreshVideoMetadataBatch,
+  SHORTS_BATCH_SIZE,
 } from "./refresher";
 import { syncNextFollowedPlaylist, syncNextSubscribedChannel } from "./scheduledSync";
 import { runAutomaticUpdateChecks } from "./updates";
@@ -34,6 +35,7 @@ export function startScheduler() {
   log.info("scheduler.feed_refresh", {
     intervalMin: refreshIntervalMin,
     batchSize: FEED_REFRESH_BATCH_SIZE,
+    shortsBatchSize: SHORTS_BATCH_SIZE,
     fairnessSlots: FEED_REFRESH_FAIRNESS_SLOTS,
     adaptiveMinIntervalMin: positiveNumber(process.env.ADAPTIVE_REFRESH_MIN_MINUTES, 10),
     adaptiveMaxIntervalMin: positiveNumber(process.env.ADAPTIVE_REFRESH_MAX_MINUTES, 12 * 60),

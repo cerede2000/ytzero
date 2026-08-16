@@ -19,7 +19,7 @@ import { channelSyncJobIsRunning } from "./channelSyncRuntime";
 import { isYouTubeRateLimitError, isYouTubeRefusalError } from "./youtubeRateLimit";
 import { RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
 import { syncChannelVideoAvailability } from "./videoAvailabilitySync";
-import { isYouTubeRefusal, YouTubeRefusingError } from "./youtubeRefusalQuiet";
+import { isYouTubeRefusal, videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 import { inferIsShortFromMetadata, shortCheckRetryInterval } from "./shortClassification";
 
 const upsertVideo = database.prepare(RSS_VIDEO_UPSERT_SQL);
@@ -34,6 +34,15 @@ const EXACT_DATE_BACKFILL_LIMIT = 18;
 const EXACT_DATE_BACKFILL_CONCURRENCY = 3;
 const VIDEO_MAINTENANCE_MAX_AGE_DAYS = positiveNumber(process.env.VIDEO_MAINTENANCE_MAX_AGE_DAYS, 90);
 const VIDEO_MAINTENANCE_CUTOFF = `-${VIDEO_MAINTENANCE_MAX_AGE_DAYS} days`;
+/**
+ * How many videos one shorts pass may ask about.
+ *
+ * This is the largest single source of requests on an instance of any size:
+ * one HEAD per video, at every feed refresh, for every video whose kind is not
+ * yet known. Every other scheduled job could be spaced out from the outside
+ * and this one could not, which made it the one nobody could turn down.
+ */
+export const SHORTS_BATCH_SIZE = positiveNumber(process.env.SHORTS_BATCH_SIZE, 50);
 
 function positiveNumber(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -480,8 +489,9 @@ export interface ShortsBackfillSummary {
  */
 export async function backfillShorts(
   videoIds?: string[],
-  limit = 50,
+  limit = SHORTS_BATCH_SIZE,
   classify: (videoId: string, title: string) => Promise<boolean | null> = classifyIsShort,
+  refusing: () => boolean = () => videoInfoRefusalQuiet.quiet(),
 ): Promise<ShortsBackfillSummary> {
   let rows: { video_id: string; title: string }[];
   if (videoIds && videoIds.length > 0) {
@@ -514,7 +524,14 @@ export async function backfillShorts(
   const due = rows.filter((r) => (shortRetry.get(r.video_id)?.nextAt ?? 0) <= now);
   let resolved = 0;
   let postponed = 0;
+  let checked = 0;
   for (const r of due) {
+    // The refusal is of the address, not of these videos. Carrying on spends a
+    // request to be told so again — and the unanswered check was counted
+    // against the video, backing it off for up to a day over a question that
+    // was never put. A refusal that starts mid-pass ends the pass.
+    if (refusing()) break;
+    checked++;
     const short = await classify(r.video_id, r.title);
     if (short !== null) {
       await setShort.run(short ? 1 : 0, r.video_id);
@@ -530,7 +547,7 @@ export async function backfillShorts(
     if (short !== null) log.info("video.short_checked", { videoId: r.video_id, isShort: short });
     await Bun.sleep(120);
   }
-  return { checked: due.length, resolved, postponed };
+  return { checked, resolved, postponed };
 }
 
 interface StoredShortCandidate {
