@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { pickSubtitleEntry, safeSubtitleUrl, subtitleTracksFromMaps } from "./subtitleTracks";
+import { pickSubtitleEntry, readSubtitleTrack, safeSubtitleUrl, subtitleLanguages, subtitleTracksFromMaps } from "./subtitleTracks";
 
 const timedtext = (lang: string, fmt: string) =>
   `https://www.youtube.com/api/timedtext?v=abc&expire=9999999999&signature=sig&lang=${lang}&fmt=${fmt}`;
@@ -65,13 +65,13 @@ describe("the languages a video offers", () => {
     expect(tracks.every((t) => t.automatic)).toBe(true);
   });
 
-  test("prefers what the author wrote over what a machine heard", () => {
+  test("tries what the author wrote before what a machine heard", () => {
     const tracks = subtitleTracksFromMaps(
       { en: [track("en", "vtt", timedtext("en", "vtt"), "English")] },
       { en: [track("en", "vtt", timedtext("en", "vtt"), "English (auto-generated)")] },
       supported,
     );
-    expect(tracks).toHaveLength(1);
+    expect(subtitleLanguages(tracks)).toEqual(["en"]);
     expect(tracks[0]).toMatchObject({ name: "English", automatic: false });
   });
 
@@ -94,17 +94,63 @@ describe("the languages a video offers", () => {
     expect(tracks.map((t) => t.lang)).toEqual(["pt-BR", "zh-Hans"]);
   });
 
-  test("keeps both apart when the plain language is taken as well", () => {
+  test("says a language once however many tracks are in it", () => {
+    // A video with several audio tracks has a caption track for each. They are
+    // one language to whoever is choosing, and the menu showed both — one of
+    // them under an id nobody can read.
     const tracks = subtitleTracksFromMaps(
-      { fr: [track("fr", "vtt")], "fr-gqnk0mWVyHo": [track("fr2", "vtt")] },
+      { en: [track("en", "vtt")], "en-nP7-2PuUl7o": [track("en2", "vtt")] },
       {},
       supported,
     );
-    expect(tracks.map((t) => t.lang).sort()).toEqual(["fr", "fr-gqnk0mWVyHo"]);
+    expect(tracks.map((t) => t.lang)).toEqual(["en", "en"]);
+    expect(subtitleLanguages(tracks)).toEqual(["en"]);
+  });
+
+  test("keeps every track, so the one that answers can be found", () => {
+    const tracks = subtitleTracksFromMaps(
+      { en: [track("en", "vtt")], "en-nP7-2PuUl7o": [track("en2", "vtt")] },
+      {},
+      supported,
+    );
+    expect(tracks).toHaveLength(2);
   });
 
   test("drops a language it has no readable file for", () => {
     expect(subtitleTracksFromMaps({ en: [track("en", "json3")] }, {}, supported)).toEqual([]);
     expect(subtitleTracksFromMaps({}, {}, supported)).toEqual([]);
+  });
+});
+
+describe("reading a track that YouTube is rate-limiting", () => {
+  const track = {
+    lang: "fr",
+    name: "French",
+    url: "https://www.youtube.com/api/timedtext?v=abc&lang=fr&fmt=vtt",
+    ext: "vtt",
+    automatic: false,
+  };
+
+  test("waits it out rather than reporting a language that leads nowhere", async () => {
+    // Measured: asking for several tracks in a row is answered 429, and the
+    // same URL returns fifteen kilobytes a second and a half later.
+    let asks = 0;
+    const fetchImpl = (async () => {
+      asks++;
+      return asks < 3
+        ? new Response("", { status: 429 })
+        : new Response("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nbonjour\n");
+    }) as unknown as typeof fetch;
+
+    const text = await readSubtitleTrack(track, undefined, fetchImpl, async () => {});
+    expect(text).toContain("bonjour");
+    expect(asks).toBe(3);
+  });
+
+  test("gives up on a refusal that is not a rate limit", async () => {
+    let asks = 0;
+    const fetchImpl = (async () => { asks++; return new Response("", { status: 404 }); }) as unknown as typeof fetch;
+    expect(await readSubtitleTrack(track, undefined, fetchImpl, async () => {})).toBeNull();
+    expect(asks).toBe(1);
   });
 });
