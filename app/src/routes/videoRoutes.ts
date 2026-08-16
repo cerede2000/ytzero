@@ -429,10 +429,24 @@ api.get("/videos/:id/creators", async (c) => {
  * goes to YouTube: a suggestion is a title and a thumbnail until somebody
  * acts on it.
  */
+/**
+ * Whether a panel is worth asking YouTube for at all.
+ *
+ * Setting the count to zero is how someone says they want the library's own
+ * list and nothing else. Asking anyway, and then rendering none of the answer,
+ * is a request nobody wanted made.
+ */
+async function relatedPanelWanted(uid: number): Promise<boolean> {
+  if (!pluginEnabled("related")) return false;
+  const { settings } = await getPluginSettings(uid, "related");
+  return Number(settings.related_count ?? 15) > 0;
+}
+
 async function suggestedVideos(uid: number, videoId: string, fetchMissing = false) {
   if (!pluginEnabled("related")) return [];
   const { settings } = await getPluginSettings(uid, "related");
-  const limit = Number(settings.related_count ?? 12);
+  const limit = Number(settings.related_count ?? 15);
+  if (limit <= 0) return [];
   const stored = fetchMissing ? await fetchRelatedVideos(videoId) : await readRelatedVideos(videoId, 25);
   if (stored.length === 0) return [];
   const known = await attachLibraryState(uid, stored);
@@ -445,7 +459,8 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   });
   // Carried back through both so each card knows whether it is downloaded,
   // whether acting on it has to import it first, and whether this profile has
-  // already watched it — the panel dims a suggestion you have seen.
+  // already watched it — the panel leaves out what has been watched, the same
+  // way it leaves out a watched library video.
   return attachLibraryState(uid, await attachWatchedState(uid, chosen, (video) => video.videoId));
 }
 
@@ -550,7 +565,7 @@ api.get("/videos/:id", async (c) => {
     related_external: suggested,
     // The panel was never read for this video. Saying so lets the page open on
     // what it has and ask for the rest, rather than wait a second for it.
-    related_pending: suggested.length === 0 && pluginEnabled("related"),
+    related_pending: suggested.length === 0 && await relatedPanelWanted(uid),
   });
 });
 
