@@ -1079,11 +1079,19 @@ async function refreshPlaylistDurations(): Promise<number> {
   }
 }
 
-export async function refreshVideoMetadataBatch(limit = 10) {
-  if (maintenanceActive()) return 0;
+/** The batch summary, returned as well as logged so it can be asserted on. */
+export interface VideoMetadataBatchSummary {
+  checked: number;
+  skipped: number;
+  durationsFilled: number;
+  datesFilled: number;
+}
+
+export async function refreshVideoMetadataBatch(limit = 10): Promise<VideoMetadataBatchSummary | null> {
+  if (maintenanceActive()) return null;
   if (channelSyncJobIsRunning()) {
     log.info("video.metadata_skipped", { reason: "channel_sync_job_in_progress" });
-    return 0;
+    return null;
   }
   await refreshPlaylistDurations();
   const now = Date.now();
@@ -1101,7 +1109,7 @@ export async function refreshVideoMetadataBatch(limit = 10) {
   const rows = candidates
     .filter((r) => (durationRetry.get(r.video_id)?.nextAt ?? 0) <= now)
     .slice(0, limit);
-  if (rows.length === 0) return;
+  if (rows.length === 0) return null;
 
   const save = database.prepare("UPDATE videos SET duration = ? WHERE video_id = ? AND duration IS NULL");
   const savePublishedAt = database.prepare(`
@@ -1116,7 +1124,6 @@ export async function refreshVideoMetadataBatch(limit = 10) {
 
   let durationsFilled = 0;
   let datesFilled = 0;
-  let checked = 0;
   let skipped = 0;
   for (let i = 0; i < rows.length; i++) {
     const { video_id, live_status } = rows[i];
@@ -1166,24 +1173,32 @@ export async function refreshVideoMetadataBatch(limit = 10) {
       } catch {
         // Fall through to the normal transient-error retry.
       }
+      // A lookup we decided not to make says nothing about this video: the
+      // refusal is of the address. Counting it as an attempt would back the
+      // video off for up to six hours over a question nobody asked, and it is
+      // not news either — the refusal was reported once already, and repeating
+      // it per video buries the failures that do need reading.
+      if (e instanceof YouTubeRefusingError) {
+        skipped++;
+        continue;
+      }
       const attempts = (durationRetry.get(video_id)?.attempts ?? 0) + 1;
       const delayMs = Math.min(DURATION_RETRY_BASE_MS * 2 ** (attempts - 1), DURATION_RETRY_MAX_MS);
       durationRetry.set(video_id, { attempts, nextAt: Date.now() + delayMs });
-      // A lookup we decided to skip is not news: the refusal that caused it
-      // was reported once already, and repeating it per video buries the
-      // failures that do need reading. The batch summary still counts them.
-      if (!(e instanceof YouTubeRefusingError)) {
-        log.warn("video.metadata_failed", {
-          videoId: video_id,
-          error: e instanceof Error ? e.message : String(e),
-          attempts,
-          retryInMin: Math.round(delayMs / 60_000),
-        });
-      }
+      log.warn("video.metadata_failed", {
+        videoId: video_id,
+        error: e instanceof Error ? e.message : String(e),
+        attempts,
+        retryInMin: Math.round(delayMs / 60_000),
+      });
     }
+    // Paced so as not to hammer YouTube — which a batch that is not talking to
+    // YouTube has no reason to do.
     if (i < rows.length - 1) await Bun.sleep(800);
   }
-  log.info("video.metadata_batch", { checked, skipped, durationsFilled, datesFilled });
+  const summary = { checked: rows.length - skipped, skipped, durationsFilled, datesFilled };
+  log.info("video.metadata_batch", summary);
+  return summary;
 }
 
 // Imported (Takeout) videos land on a placeholder channel with an empty title;
