@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AUTHENTICATED_LOOKUPS_PER_BATCH, fetchVideoInfoAsProfile, lookupBudget } from "./metadataCredentials";
+import { askWithBorrowedCredentials, AUTHENTICATED_LOOKUPS_PER_BATCH, fetchVideoInfoAsProfile, lookupBudget } from "./metadataCredentials";
 import type { VideoInfo } from "./youtube";
 
 const info = (videoId: string) => ({ videoId, title: "A video", channelId: "UC1" }) as VideoInfo;
@@ -53,5 +53,43 @@ describe("asking again as somebody", () => {
       async () => 1,
     );
     expect(found).toBeNull();
+  });
+});
+
+describe("borrowing credentials to open a video", () => {
+  test("asks as the profile itself, and stops there when that works", async () => {
+    const asked: number[] = [];
+    const found = await askWithBorrowedCredentials(2, async (id) => { asked.push(id); return info("abc"); }, async () => 1);
+    expect(found?.videoId).toBe("abc");
+    expect(asked).toEqual([2]);
+  });
+
+  test("asks again as the lender when the profile has nothing to ask with", async () => {
+    // A profile with no cookie jar makes one anonymous attempt, is refused in
+    // two seconds, and the video will not open — while the same video opens
+    // for the profile next door. That is not a decision anybody made.
+    const asked: number[] = [];
+    const borrowed: number[] = [];
+    const found = await askWithBorrowedCredentials(
+      2,
+      async (id) => { asked.push(id); return id === 1 ? info("abc") : null; },
+      async () => 1,
+      (lender) => borrowed.push(lender),
+    );
+    expect(found?.videoId).toBe("abc");
+    expect(asked).toEqual([2, 1]);
+    expect(borrowed).toEqual([1]);
+  });
+
+  test("does not ask the same profile twice when it is its own lender", async () => {
+    const asked: number[] = [];
+    expect(await askWithBorrowedCredentials(1, async (id) => { asked.push(id); return null; }, async () => 1)).toBe(null);
+    expect(asked).toEqual([1]);
+  });
+
+  test("gives up when no profile has a jar to lend", async () => {
+    const asked: number[] = [];
+    expect(await askWithBorrowedCredentials(2, async (id) => { asked.push(id); return null; }, async () => null)).toBe(null);
+    expect(asked).toEqual([2]);
   });
 });
