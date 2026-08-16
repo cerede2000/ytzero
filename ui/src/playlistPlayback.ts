@@ -3,6 +3,13 @@ import type { PlaybackQueueContext } from "./playbackQueue";
 
 export type PlaybackEndAction = "stop" | "offer" | "advance";
 
+/**
+ * A queue that is played through rather than stepped around in.
+ *
+ * A session queue is a list someone assembled deliberately, so it runs on to
+ * the end the way a playlist does — forwards whatever the feed's autoplay
+ * direction happens to say.
+ */
 export function isContinuousPlaylistQueue(
   queue: PlaybackQueueContext | null,
 ): queue is Extract<PlaybackQueueContext, { kind: "user-playlist" | "channel-playlist" | "session" }> {

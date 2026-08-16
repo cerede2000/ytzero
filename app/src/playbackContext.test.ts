@@ -26,6 +26,26 @@ describe("persisted playback context", () => {
     expect(parsePlaybackContext({ version: 1, kind: "session", ids: ["dQw4w9WgXcQ", "dQw4w9WgXcQ"] })).toEqual({ version: 1, kind: "session", ids: ["dQw4w9WgXcQ"] });
   });
 
+  test("carries the order of a queue that exists nowhere else", () => {
+    // Every other kind names a list this server can look up. A session queue
+    // was gathered in one browser tab, so its order arrives with it — the one
+    // context that does hold video ids, and for the only reason that justifies
+    // it.
+    expect(parsePlaybackContext({ version: 1, kind: "session", ids: ["dQw4w9WgXcQ", "sF80I-TQiW0"] }))
+      .toEqual({ version: 1, kind: "session", ids: ["dQw4w9WgXcQ", "sF80I-TQiW0"] });
+  });
+
+  test("takes a session queue as an order, not as text to hand to a query", () => {
+    expect(parsePlaybackContext({ version: 1, kind: "session", ids: ["dQw4w9WgXcQ", "dQw4w9WgXcQ"] }))
+      .toEqual({ version: 1, kind: "session", ids: ["dQw4w9WgXcQ"] });
+    expect(parsePlaybackContext({ version: 1, kind: "session", ids: ["' OR 1=1 --", 42, null] })).toBeNull();
+    expect(parsePlaybackContext({ version: 1, kind: "session", ids: [] })).toBeNull();
+    expect(parsePlaybackContext({ version: 1, kind: "session" })).toBeNull();
+    const many = parsePlaybackContext({ version: 1, kind: "session", ids: Array.from({ length: 300 }, (_, index) => `v${String(index).padStart(10, "0")}`) });
+    expect(many).toMatchObject({ kind: "session" });
+    expect((many as { ids: string[] }).ids).toHaveLength(200);
+  });
+
   test("rejects unversioned, oversized and snapshot contexts", () => {
     expect(parsePlaybackContext({ kind: "history" })).toBeNull();
     expect(parsePlaybackContext({ version: 1, kind: "snapshot", videoIds: ["video"] })).toBeNull();

@@ -21,6 +21,8 @@ export const SESSION_PLAY_QUEUE_MAX_ITEMS = 100;
 const VIDEO_ID = /^[A-Za-z0-9_-]{6,20}$/;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+export const SESSION_QUEUE_LIMIT = 200;
 
 export function parsePlaybackContext(value: unknown): PlaybackContext | null {
   if (typeof value === "string") {
@@ -53,6 +55,12 @@ export function parsePlaybackContext(value: unknown): PlaybackContext | null {
   }
   if (context.kind === "watchlist" && typeof context.dueOnly === "boolean" && (WATCHLIST_SORTS as readonly unknown[]).includes(context.sort)) {
     return { version: 1, kind: "watchlist", sort: context.sort as WatchlistSort, dueOnly: context.dueOnly };
+  }
+  if (context.kind === "session" && Array.isArray(context.ids)) {
+    // The order is the caller's to give, but the shape of it is not: this
+    // list is read back from a stored column and turned into a query.
+    const ids = [...new Set(context.ids.filter((id): id is string => typeof id === "string" && VIDEO_ID.test(id)))];
+    return ids.length > 0 ? { version: 1, kind: "session", ids: ids.slice(0, SESSION_QUEUE_LIMIT) } : null;
   }
   return null;
 }
