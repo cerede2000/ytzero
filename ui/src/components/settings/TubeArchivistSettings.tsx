@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../../i18n";
+import { frenchFor } from "../../i18n/frenchOverlay";
 import { tubeArchivistApi, type TubeArchivistStatus } from "../../tubeArchivistApi";
 import { Alert, Button, Field, FormActions, Input, SettingRow, SettingsSection } from "../ui";
 

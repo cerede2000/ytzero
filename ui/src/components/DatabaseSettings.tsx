@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, ArchiveRestore, CheckCircle2, Database, LoaderCircle } from "lucide-react";
 import { api, type DatabaseStatus } from "../api";
 import { useI18n } from "../i18n";
+import { frenchFor } from "../i18n/frenchOverlay";
 import { Alert, Badge, Button, ButtonLink, Field, Input, SettingRow, Text } from "./ui";
 import "./DatabaseSettings.css";
 
