@@ -84,3 +84,18 @@ export class YouTubeRefusingError extends Error {
     this.name = "YouTubeRefusingError";
   }
 }
+
+/**
+ * A refusal of this address, whichever way it arrived.
+ *
+ * Only the second one and after are `YouTubeRefusingError`: the first is what
+ * three real attempts came back with, and it is reported as the failure it is.
+ * Callers that treat a refusal differently — by asking again with credentials,
+ * or by declining to remember the answer — have to recognise both, or they
+ * take the wrong branch exactly once per refusal cycle: on the video that
+ * opened it.
+ */
+export function isYouTubeRefusal(error: unknown): boolean {
+  if (error instanceof YouTubeRefusingError) return true;
+  return callerWasRefused(error instanceof Error ? error.message : String(error));
+}

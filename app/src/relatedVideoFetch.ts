@@ -4,7 +4,7 @@ import { readRelatedVideos, saveRelatedVideos } from "./relatedVideoStore";
 import type { RelatedVideo } from "./relatedVideos";
 import { fetchRelatedVideosAsSomebody, fetchVideoInfo } from "./youtube";
 import { youtubeCookieHeader } from "./youtubeCookieHeader";
-import { YouTubeRefusingError } from "./youtubeRefusalQuiet";
+import { isYouTubeRefusal } from "./youtubeRefusalQuiet";
 
 /**
  * Fetch the panel for a video that never had one.
@@ -64,7 +64,7 @@ export function createRelatedVideoFetcher(
       try {
         await load(videoId, related);
       } catch (error) {
-        if (!(error instanceof YouTubeRefusingError)) {
+        if (!isYouTubeRefusal(error)) {
           log.warn("related.fetch_failed", { videoId, error: error instanceof Error ? error.message : String(error) });
           emptyAt.set(videoId, now());
           return [];
