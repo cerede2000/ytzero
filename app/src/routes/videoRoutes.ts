@@ -10,7 +10,7 @@ import { followedExists, profileVideoOwnershipExists, shortsUiVisibilitySql } fr
 import { getDeArrowBranding } from "../dearrow";
 import { log } from "../logger";
 import { ageMs, CHAPTERS_DB_TTL, CREATORS_DB_TTL } from "../routeCache";
-import { attachLibraryState, videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSupport";
+import { attachLibraryState, attachWatchedState, videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSupport";
 import { selectRelatedForPanel } from "../relatedVideos";
 import { readRelatedVideos } from "../relatedVideoStore";
 import { fetchRelatedVideos } from "../relatedVideoFetch";
@@ -441,11 +441,12 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
     limit,
     currentVideoId: videoId,
     inLibrary,
-    hideKnown: Number(settings.related_hide_known ?? 1) === 1,
+    hideKnown: Number(settings.related_hide_known ?? 0) === 1,
   });
-  // Carried back through attachLibraryState so each card knows whether it is
-  // downloaded and whether acting on it has to import it first.
-  return attachLibraryState(uid, chosen);
+  // Carried back through both so each card knows whether it is downloaded,
+  // whether acting on it has to import it first, and whether this profile has
+  // already watched it — the panel dims a suggestion you have seen.
+  return attachLibraryState(uid, await attachWatchedState(uid, chosen, (video) => video.videoId));
 }
 
 

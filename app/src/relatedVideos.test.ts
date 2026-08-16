@@ -140,6 +140,16 @@ describe("choosing what the panel carries", () => {
     expect(selectRelatedForPanel(list, options).map((item) => item.videoId)).toEqual(["a", "b", "c", "d"]);
   });
 
+  test("keeps a suggestion the library happens to have", () => {
+    // Dropping it was the default once, on the reasoning that it would appear
+    // twice. It does not: the page removes from the local list anything the
+    // suggestions already name. Dropping it only freed the slot for a video
+    // the library picked itself — which is what "it suggests my own videos"
+    // turned out to be.
+    const chosen = selectRelatedForPanel(list, { limit: 4, currentVideoId: "zz", inLibrary: new Set(["a", "c"]) });
+    expect(chosen.map((item) => item.videoId)).toEqual(["a", "b", "c", "d"]);
+  });
+
   test("carries nothing when the panel was asked for none", () => {
     // The setting goes down to zero, and zero means the panel stays local.
     expect(selectRelatedForPanel(list, { limit: 0, currentVideoId: "zz" })).toEqual([]);

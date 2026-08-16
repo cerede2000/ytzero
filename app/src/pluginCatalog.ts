@@ -222,13 +222,13 @@ export const RELATED_SETTINGS: PluginSettingSource[] = [
   {
     key: "related_hide_known",
     type: "toggle",
-    label: { en: "Skip videos already in the library", pl: "Pomijaj filmy już w bibliotece", de: "Videos aus der Bibliothek überspringen" },
+    label: { en: "Only suggest videos you do not have", pl: "Proponuj tylko filmy, których nie masz", de: "Nur Videos vorschlagen, die du nicht hast" },
     description: {
-      en: "A suggestion you already have is usually listed below by the library's own matching; this keeps it from appearing twice.",
-      pl: "Propozycja, którą już masz, zwykle i tak pojawia się niżej z dopasowania biblioteki — to nie pokaże jej dwa razy.",
-      de: "Ein Vorschlag, den du schon hast, steht meist ohnehin weiter unten; so erscheint er nicht doppelt.",
+      en: "Off by default: a suggestion is no worse for already being in the library, and dropping it only frees the slot for something the library picked itself. Turn it on to use the panel purely for discovery.",
+      pl: "Domyślnie wyłączone: propozycja nie jest gorsza przez to, że już ją masz, a jej usunięcie zwalnia miejsce dla pozycji wybranej przez bibliotekę. Włącz, aby panel służył tylko odkrywaniu.",
+      de: "Standardmäßig aus: Ein Vorschlag wird nicht schlechter, weil du ihn schon hast; ihn zu streichen macht nur Platz für etwas, das die Bibliothek selbst gewählt hat. Einschalten, um das Panel rein zum Entdecken zu nutzen.",
     },
-    defaultValue: 1,
+    defaultValue: 0,
   },
 ];
 
