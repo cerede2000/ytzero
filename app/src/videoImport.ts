@@ -128,3 +128,31 @@ export function createVideoImporter(load = loadAndPersistVideoInfo) {
 }
 
 export const importVideo = createVideoImporter();
+
+/**
+ * Make sure a video is in the library before something is asked of it.
+ *
+ * A video can be seen before it is imported — a search result is a card like
+ * any other — and downloading it, scheduling it or filing it in a playlist all
+ * need the row that opening it would have created. Doing that here means the
+ * action succeeds from wherever the video was seen, rather than answering "not
+ * found" for something plainly on screen.
+ *
+ * An import costs an extraction, so it is only paid for when the row really is
+ * missing; a video already in the library is left exactly as it is.
+ */
+export async function ensureVideoImported(
+  userId: number,
+  videoId: string,
+  inLibrary: (videoId: string) => Promise<unknown> = (id) => videoExistsStmt.get(id),
+  load: (userId: number, videoId: string) => Promise<unknown> = importVideo,
+): Promise<boolean> {
+  if (await inLibrary(videoId)) return true;
+  try {
+    await load(userId, videoId);
+    return true;
+  } catch (error) {
+    log.warn("external.video_import_for_action_failed", { videoId, error: error instanceof Error ? error.message : String(error) });
+    return false;
+  }
+}
