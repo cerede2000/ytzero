@@ -20,6 +20,7 @@ import { channelSyncJobIsRunning } from "./channelSyncRuntime";
 import { isYouTubeRateLimitError, isYouTubeRefusalError } from "./youtubeRateLimit";
 import { RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
 import { syncChannelVideoAvailability } from "./videoAvailabilitySync";
+import { isYouTubeRefusal, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 import { inferIsShortFromMetadata, shortCheckRetryInterval } from "./shortClassification";
 const upsertVideo = database.prepare(RSS_VIDEO_UPSERT_SQL);
 const videoExists = database.prepare("SELECT 1 FROM videos WHERE video_id = ?");

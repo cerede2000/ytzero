@@ -95,6 +95,20 @@ describe("when YouTube is refusing the address", () => {
     expect(loads()).toBe(2);
   });
 
+  test("recognises the first refusal, which arrives as a plain failure", async () => {
+    // Only the second refusal and after are YouTubeRefusingError: the first is
+    // what three real attempts came back with. Reading just the class sent the
+    // video that opened the cycle down the "no panel here" branch — logged as
+    // a fetch failure, remembered for six hours, and never asked with cookies.
+    const refused = new Error("video info failed: html=videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you’re not a bot); innertube=HTTP error! status: 400; embed=videoDetails missing (no player response)");
+    const { fetch, saved } = fetcher({
+      fail: () => { throw refused; },
+      asSomebody: (videoId) => [suggestion(`${videoId}-signed-in`)],
+    });
+    expect((await fetch("first-of-the-cycle", 2)).map((video) => video.videoId)).toEqual(["first-of-the-cycle-signed-in"]);
+    expect(saved["first-of-the-cycle"]?.length).toBe(1);
+  });
+
   test("gives up quietly when no profile has a cookie jar", async () => {
     const { fetch, saved } = fetcher({ fail: () => { throw new YouTubeRefusingError(); } });
     expect(await fetch("nobody")).toEqual([]);
