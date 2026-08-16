@@ -1145,6 +1145,7 @@ const {
   getLiveAudioResource,
   isSegmentName,
   invalidateAudioSources, primeAudioSource, retryAudioSource,
+  primeVideoSource,
   liveStreamEnabled,
   resetHlsScratch,
 } = createDownloadStreaming({

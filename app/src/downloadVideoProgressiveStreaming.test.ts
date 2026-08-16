@@ -104,6 +104,38 @@ describe("direct video streaming", () => {
     expect(asked[1]).toContain("/moved");
   });
 
+  test("plays a file the import already resolved, without asking again", async () => {
+    // The import runs yt-dlp over this very video seconds earlier, and the
+    // file this player streams is in that answer.
+    let resolutions = 0;
+    const asked: string[] = [];
+    const video = factory({
+      spawn: (() => { resolutions++; return fakeProcess(`${url("late")}\nmp4\n`); }) as unknown as typeof Bun.spawn,
+      fetchImpl: (async (input: unknown) => { asked.push(String(input)); return chunk(64); }) as unknown as typeof fetch,
+    });
+
+    video.primeVideoSource(1, "primed", { url: url("early"), mime: "video/mp4", expiresAt: Date.now() + 60_000 });
+    const response = await video.getVideoResponse(1, "primed", "bytes=0-63");
+
+    expect(response?.status).toBe(206);
+    expect(resolutions).toBe(0);
+    expect(asked[0]).toContain("/early");
+  });
+
+  test("keeps one profile's signed file to itself", async () => {
+    // The URL was signed for whoever asked, and cookies belong to a profile.
+    let resolutions = 0;
+    const video = factory({
+      spawn: (() => { resolutions++; return fakeProcess(`${url("own")}\nmp4\n`); }) as unknown as typeof Bun.spawn,
+      fetchImpl: (async () => chunk(64)) as unknown as typeof fetch,
+    });
+
+    video.primeVideoSource(1, "shared", { url: url("first"), mime: "video/mp4", expiresAt: Date.now() + 60_000 });
+    await video.getVideoResponse(2, "shared", "bytes=0-63");
+
+    expect(resolutions).toBe(1);
+  });
+
   test("refuses to proxy a host that is not YouTube's media edge", async () => {
     const video = factory({
       spawn: (() => fakeProcess("https://example.com/anything.mp4\nmp4\n")) as unknown as typeof Bun.spawn,

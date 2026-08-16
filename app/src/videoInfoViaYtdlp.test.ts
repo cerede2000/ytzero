@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { audioSourceFromPrinted, videoInfoFromYtdlpJson } from "./videoInfoViaYtdlp";
+import { audioSourceFromPrinted, printedFormats, progressiveVideoFromPrinted, videoInfoFromYtdlpJson } from "./videoInfoViaYtdlp";
 
 const base = {
   title: "A video",
@@ -96,5 +96,40 @@ describe("audio track taken from the same answer", () => {
 
   test("carries on without headers rather than not at all", () => {
     expect(audioSourceFromPrinted({ ...printed, headers: "NA" })?.headers).toBeUndefined();
+  });
+});
+
+describe("both playable tracks taken from the same answer", () => {
+  const FIELDS = 6;
+  const block = (url: string, acodec: string, vcodec: string, ext: string) =>
+    [`{"id":"abc"}`, url, "NA", acodec, vcodec, ext].join("\n");
+  const audio = block("https://r1.googlevideo.com/audio?expire=9999999999", "mp4a.40.2", "none", "m4a");
+  const progressive = block("https://r1.googlevideo.com/muxed?expire=9999999999", "mp4a.40.2", "avc1.42001E", "mp4");
+
+  test("splits what was printed into one entry per format", () => {
+    // Asking for two formats repeats the whole print block for each of them.
+    const formats = printedFormats(`${audio}\n${progressive}\n`, FIELDS);
+    expect(formats).toHaveLength(2);
+    expect(audioSourceFromPrinted(formats[0]!)?.url).toContain("/audio");
+    expect(progressiveVideoFromPrinted(formats[1]!)?.url).toContain("/muxed");
+  });
+
+  test("copes with a video that offers only one of the two", () => {
+    // yt-dlp quietly skips a selector that matches nothing rather than failing
+    // the call, so the import must count the blocks instead of assuming two.
+    const formats = printedFormats(`${audio}\n`, FIELDS);
+    expect(formats).toHaveLength(1);
+    expect(progressiveVideoFromPrinted(formats[0]!)).toBeNull();
+    expect(audioSourceFromPrinted(formats[0]!)).not.toBeNull();
+  });
+
+  test("takes only a file the video element can play on its own", () => {
+    const muxed = printedFormats(progressive, FIELDS)[0]!;
+    expect(progressiveVideoFromPrinted(muxed)?.mime).toBe("video/mp4");
+    // Video with no sound, or sound with no video, is what the HLS path
+    // assembles from two streams — not something to hand a <video> element.
+    expect(progressiveVideoFromPrinted({ ...muxed, acodec: "none" })).toBeNull();
+    expect(progressiveVideoFromPrinted({ ...muxed, vcodec: "none" })).toBeNull();
+    expect(progressiveVideoFromPrinted({ ...muxed, url: "https://example.com/muxed.mp4" })).toBeNull();
   });
 });

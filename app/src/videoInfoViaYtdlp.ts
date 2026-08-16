@@ -29,6 +29,12 @@ const INFO_TIMEOUT_MS = 45_000;
 const INFO_FIELDS = "%(.{id,title,channel_id,channel,uploader,description,thumbnail,"
   + "view_count,duration,upload_date,timestamp,release_timestamp,live_status,is_live,was_live})j";
 
+/** Printed once per requested format, in this order. */
+const PRINTED_FIELDS = [INFO_FIELDS, "urls", "%(http_headers)j", "%(acodec)s", "%(vcodec)s", "%(ext)s"];
+
+const AUDIO_SELECTOR = "bestaudio[acodec^=mp4a]/bestaudio[ext=m4a]/140/bestaudio/best";
+const PROGRESSIVE_SELECTOR = "22/18/best[ext=mp4][acodec!=none][vcodec!=none]";
+
 /** yt-dlp's own vocabulary for what a video is doing. */
 function liveStatusFrom(json: Record<string, unknown>): VideoInfo["liveStatus"] {
   const status = typeof json.live_status === "string" ? json.live_status : "";
@@ -86,6 +92,13 @@ export function videoInfoFromYtdlpJson(videoId: string, json: Record<string, unk
   };
 }
 
+/** A muxed progressive file, which is what the direct video player streams. */
+export interface ProgressiveVideoSource {
+  url: string;
+  mime: string;
+  expiresAt: number;
+}
+
 /** googlevideo URLs carry an `expire` unix-second param; keep just under it. */
 function sourceExpiry(url: string): number {
   const match = url.match(/[?&]expire=(\d+)/);
@@ -93,26 +106,29 @@ function sourceExpiry(url: string): number {
   return expiresAt ? Math.max(Date.now(), expiresAt - 300_000) : Date.now() + 3 * 3_600_000;
 }
 
-/**
- * The audio track that came with the description.
- *
- * The import asks for one format and prints it alongside the fields it needs,
- * so the track the player is about to want is already resolved — URL, and the
- * headers that URL expects. Resolving it again, seconds later, is the same
- * work twice.
- */
-export function audioSourceFromPrinted(printed: {
+export interface PrintedFormat {
   url?: string;
   headers?: string;
   acodec?: string;
   vcodec?: string;
-}): AudioSource | null {
-  const acodec = printed.acodec ?? "";
-  const vcodec = printed.vcodec ?? "";
+  ext?: string;
+}
+
+const absent = (codec: string) => !codec || codec === "none" || codec === "NA";
+
+/**
+ * The audio track that came with the description.
+ *
+ * The import asks for the formats it prints alongside the fields it needs, so
+ * the track the player is about to want is already resolved — URL, and the
+ * headers that URL expects. Resolving it again, seconds later, is the same
+ * work twice.
+ */
+export function audioSourceFromPrinted(printed: PrintedFormat): AudioSource | null {
   // Audio only, and the AAC-in-MP4 the audio path is built around: anything
   // else would play as silence, or not at all.
-  if (!acodec.startsWith("mp4a")) return null;
-  if (vcodec && vcodec !== "none" && vcodec !== "NA") return null;
+  if (!(printed.acodec ?? "").startsWith("mp4a")) return null;
+  if (!absent(printed.vcodec ?? "")) return null;
   const url = printed.url ? safeGoogleVideoUrl(printed.url) : null;
   if (!url) return null;
   return {
@@ -123,6 +139,42 @@ export function audioSourceFromPrinted(printed: {
   };
 }
 
+/**
+ * The progressive file that came with it, for the same reason.
+ *
+ * The direct video player streams one muxed file, and the import is already
+ * asking YouTube about this video with the credentials it takes to get an
+ * answer. Printing that format too costs one more signature to decipher —
+ * measured at no difference worth reporting — and saves the player a second
+ * extraction of four to five seconds a few moments later.
+ */
+export function progressiveVideoFromPrinted(printed: PrintedFormat): ProgressiveVideoSource | null {
+  // Muxed: a file with only one of the two is what the HLS path assembles, not
+  // something a <video> element can play on its own.
+  if (absent(printed.acodec ?? "") || absent(printed.vcodec ?? "")) return null;
+  const url = printed.url ? safeGoogleVideoUrl(printed.url) : null;
+  if (!url) return null;
+  return { url, mime: printed.ext === "webm" ? "video/webm" : "video/mp4", expiresAt: sourceExpiry(url) };
+}
+
+/**
+ * Split what yt-dlp printed back into one entry per format.
+ *
+ * Asking for two formats repeats the whole `--print` block for each, and a
+ * selector that matches nothing is quietly skipped rather than failing the
+ * call — so the blocks are counted, not assumed, and each one says for itself
+ * which track it is.
+ */
+export function printedFormats(stdout: string, fieldsPerFormat: number): PrintedFormat[] {
+  const lines = stdout.split(/\r?\n/);
+  const formats: PrintedFormat[] = [];
+  for (let start = 0; start + fieldsPerFormat <= lines.length; start += fieldsPerFormat) {
+    const [, url, headers, acodec, vcodec, ext] = lines.slice(start, start + fieldsPerFormat);
+    formats.push({ url, headers, acodec, vcodec, ext });
+  }
+  return formats;
+}
+
 async function runAttempt(
   userId: number,
   videoId: string,
@@ -131,18 +183,17 @@ async function runAttempt(
   /** Filled in when YouTube turned the caller away rather than the request. */
   refusedRef: { refused: boolean } = { refused: false },
   audioRef: { source: AudioSource | null } = { source: null },
+  videoRef: { source: ProgressiveVideoSource | null } = { source: null },
 ): Promise<VideoInfo | null> {
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
     "--ignore-config", "--no-playlist", "--no-warnings",
-    // One format rather than all of them: every format URL costs a signature
-    // to decipher, and we want exactly one — the one the player will ask for.
-    "-f", "bestaudio[acodec^=mp4a]/bestaudio[ext=m4a]/140/bestaudio/best",
-    "--print", INFO_FIELDS,
-    "--print", "urls",
-    "--print", "%(http_headers)j",
-    "--print", "%(acodec)s",
-    "--print", "%(vcodec)s",
+    // Two formats rather than all of them: every format URL costs a signature
+    // to decipher, and these are the two a page actually plays — the audio
+    // track and the progressive file. A video offering neither prints one
+    // block, or none, and the import carries on regardless.
+    "-f", `${AUDIO_SELECTOR},${PROGRESSIVE_SELECTOR}`,
+    ...PRINTED_FIELDS.flatMap((field) => ["--print", field]),
     ...potArgsFor(useCookies),
   ];
   let process: ReturnType<typeof Bun.spawn>;
@@ -165,9 +216,12 @@ async function runAttempt(
       refusedRef.refused = callerWasRefused(stderr);
       return null;
     }
-    const [fields, url, headers, acodec, vcodec] = stdout.split(/\r?\n/);
-    const info = videoInfoFromYtdlpJson(videoId, JSON.parse(fields ?? "{}") as Record<string, unknown>);
-    if (info) audioRef.source = audioSourceFromPrinted({ url, headers, acodec, vcodec });
+    const info = videoInfoFromYtdlpJson(videoId, JSON.parse(stdout.split(/\r?\n/)[0] ?? "{}") as Record<string, unknown>);
+    if (!info) return null;
+    for (const printed of printedFormats(stdout, PRINTED_FIELDS.length)) {
+      audioRef.source ??= audioSourceFromPrinted(printed);
+      videoRef.source ??= progressiveVideoFromPrinted(printed);
+    }
     return info;
   } catch {
     return null;
@@ -186,19 +240,22 @@ export async function fetchVideoInfoViaYtdlp(
   spawn: typeof Bun.spawn = Bun.spawn,
   /** Receives the audio track found alongside, so nobody resolves it twice. */
   audioRef: { source: AudioSource | null } = { source: null },
+  /** And the progressive file, for the same reason. */
+  videoRef: { source: ProgressiveVideoSource | null } = { source: null },
 ): Promise<VideoInfo | null> {
   if (!(await ytdlpStatus())) return null;
   const startedAt = Date.now();
   const order = cookieAttemptMemory.order(userId, downloadCookiesConfigured(userId), videoInfoRefusalQuiet.quiet());
   for (const useCookies of order) {
     const refusal = { refused: false };
-    const info = await runAttempt(userId, videoId, useCookies, spawn, refusal, audioRef);
+    const info = await runAttempt(userId, videoId, useCookies, spawn, refusal, audioRef, videoRef);
     cookieAttemptMemory.record({
       userId, useCookies, resolved: Boolean(info), refused: refusal.refused,
     });
     if (info) {
       log.info("video.info_via_ytdlp", {
-        videoId, usedCookies: useCookies, ms: Date.now() - startedAt, audio: Boolean(audioRef.source),
+        videoId, usedCookies: useCookies, ms: Date.now() - startedAt,
+        audio: Boolean(audioRef.source), video: Boolean(videoRef.source),
       });
       return info;
     }
