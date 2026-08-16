@@ -325,6 +325,9 @@
 .v-search-channel { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
 .v-search-channel .card-avatar-link { margin: 0; }
 .v-search-channel .card-ch-avatar { width: 24px; height: 24px; }
+/* Scoped through .video-card so it outweighs the separator this layout does
+   not use — the rule below it in VideoCardMetadata.css matches just as
+   tightly, and was winning on order alone. */
 .video-card .v-search-channel .v-channel::after { display: none; }
 
 @media (max-width: 560px) {
