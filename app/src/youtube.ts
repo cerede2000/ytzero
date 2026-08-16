@@ -1163,6 +1163,16 @@ export async function fetchVideoChapters(videoId: string, userId?: number): Prom
 /**
  * Detect whether a video is a YouTube Short. /shorts/<id> responds 200 for
  * Shorts and redirects (303) to /watch for regular videos.
+ *
+ * This was the one thing still talking to YouTube while YouTube was refusing
+ * the address. Its own endpoint kept answering, so nothing stopped it — but a
+ * single channel sync can queue a hundred and seventy of these in a quarter of
+ * an hour, each one a request from an address already being rate-limited, and
+ * the sync that followed came back `rateLimited: true`.
+ *
+ * Nothing here is urgent: an unclassified video is asked about again later,
+ * with its own backoff. Waiting for the refusal to lift costs a delay; not
+ * waiting costs the refusal.
  */
 export async function classifyIsShort(
   videoId: string,
@@ -1170,9 +1180,8 @@ export async function classifyIsShort(
   fetchImpl: typeof fetch = fetch,
   duration?: string | null,
 ): Promise<boolean | null> {
-  const local = inferIsShortFromMetadata(title, duration);
-  if (local !== null) return local;
-  youtubeRefusalGate.enter();
+  if (/#shorts?\b/i.test(title)) return true;
+  if (videoInfoRefusalQuiet.quiet()) return null;
   try {
     const res = await fetchImpl(`https://www.youtube.com/shorts/${videoId}`, {
       method: "HEAD",
