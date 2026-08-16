@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from "react";
-import { audioHlsBufferConfig, shouldFallbackFromHlsJs, shouldFallbackFromNativeHls } from "../audioMediaSourcePolicy";
+import { shouldFallbackFromHlsJs, shouldFallbackFromNativeHls, shouldStartProgressive } from "../audioMediaSourcePolicy";
 import { useMediaRelease } from "./useMediaRelease";
 
 export function useAudioMediaSource({
@@ -52,9 +52,8 @@ export function useAudioMediaSource({
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
     audio.addEventListener("error", onMediaError);
 
-    const cleanup = () => {
+    const detach = () => {
       cancelled = true;
-      hls?.destroy();
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
       audio.removeEventListener("error", onMediaError);
       audio.pause();
@@ -62,12 +61,11 @@ export function useAudioMediaSource({
       audio.load();
     };
 
-    // A completed download is a normal range-capable media file. Do not hand
-    // it to an HLS implementation: that would request a manifest that does
-    // not exist and delay local playback.
-    if (!playlistSrc) {
-      if (!attachProgressive()) fatal();
-      return cleanup;
+    // A file already on disk plays as itself: no playlist, and nothing asked
+    // of YouTube for a video whose whole point is that it was kept.
+    if (shouldStartProgressive({ live, playlistSrc, progressiveSrc })) {
+      attachProgressive();
+      return detach;
     }
 
     if (audio.canPlayType("application/vnd.apple.mpegurl")) {
