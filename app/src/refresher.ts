@@ -9,6 +9,7 @@ import { preserveChannelMedia, preservePlaylistMedia } from "./channelMedia";
 import { notifyChannelVideos, notifyFollowedPlaylistVideos } from "./notifications";
 import { IMPORTED_CHANNEL_ID } from "./takeout";
 import { beginMutation, maintenanceActive } from "./maintenance";
+import { fetchVideoInfoAsProfile, lookupBudget } from "./metadataCredentials";
 import { estimateUploadCadenceMs, selectRefreshBatch, targetRefreshIntervalMs, type AdaptiveRefreshOptions, type RefreshCandidate } from "./adaptiveRefresh";
 import { publishAppEventSoon } from "./appEvents";
 import { configuredTimeZone } from "./timeZone";
@@ -1161,11 +1162,18 @@ export async function refreshVideoMetadataBatch(limit = 10): Promise<VideoMetada
   let durationsFilled = 0;
   let datesFilled = 0;
   let skipped = 0;
+  // A few of the lookups this batch gives up on may be asked again as a
+  // profile, through the cookies the import path already uses.
+  const budget = lookupBudget();
   for (let i = 0; i < rows.length; i++) {
     const { video_id, live_status } = rows[i];
     try {
-      const info = await fetchVideoInfo(video_id);
-      checked++;
+      const info = await fetchVideoInfo(video_id).catch(async (error) => {
+        if (!(error instanceof YouTubeRefusingError)) throw error;
+        const authenticated = await fetchVideoInfoAsProfile(video_id, budget);
+        if (!authenticated) throw error;
+        return authenticated;
+      });
       durationRetry.delete(video_id);
       if (info.duration) {
         await save.run(info.duration, video_id);
@@ -1266,13 +1274,16 @@ export async function backfillImportedVideos(limit = 15) {
   if (rows.length === 0) return;
 
   let enriched = 0;
-  let checked = 0;
-  let skipped = 0;
+  const budget = lookupBudget();
   for (let i = 0; i < rows.length; i++) {
     const videoId = rows[i].video_id;
     try {
-      const info = await fetchVideoInfo(videoId);
-      checked++;
+      const info = await fetchVideoInfo(videoId).catch(async (error) => {
+        if (!(error instanceof YouTubeRefusingError)) throw error;
+        const authenticated = await fetchVideoInfoAsProfile(videoId, budget);
+        if (!authenticated) throw error;
+        return authenticated;
+      });
       // Without an owner the row would stay on the placeholder channel and be
       // re-picked every tick; back off like a failure instead.
       if (!info.channelId) throw new Error("video info has no channelId");
