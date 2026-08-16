@@ -1,6 +1,8 @@
 import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
 import { downloadCookiesConfigured, srtToVtt, ytdlpCommand, ytdlpStatus } from "./downloader";
 import { log } from "./logger";
+import { dlSettings } from "./downloadConfig";
+import { getUserSetting } from "./db";
 import { SUBTITLE_LANGUAGE_CODES } from "./subtitleLanguages";
 import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { potArgsFor } from "./ytdlpPotProvider";
@@ -100,23 +102,47 @@ export function askedLanguage(lang: string): string {
 }
 
 /**
+ * The languages this profile has any use for.
+ *
+ * Machine captions come translated into everything: one video offered
+ * seventy-one, of which the listener wanted one. Estonian and Kazakh on a
+ * French video are a machine's translation of a machine's transcription, and
+ * a menu of them is a menu nobody reads — worse, trying a few in a row is
+ * what YouTube answers with 429.
+ *
+ * What is asked for is what has been said out loud: the captions language,
+ * the player's, the interface's, and the ones downloads are configured to
+ * keep. English closes the list when nothing else has been chosen.
+ */
+export function wantedSubtitleLanguages(said: Array<string | null | undefined>): Set<string> {
+  const wanted = new Set<string>();
+  for (const value of said) {
+    for (const code of String(value ?? "").split(/[\s,]+/)) {
+      const trimmed = code.trim();
+      if (trimmed) wanted.add(trimmed);
+    }
+  }
+  if (wanted.size === 0) wanted.add("en");
+  return wanted;
+}
+
+/**
  * What yt-dlp printed, reduced to one track per language.
  *
- * A video's own captions are always offered. Machine-generated ones are not:
- * YouTube lists a hundred and sixty translations of them, which is a menu
- * nobody reads, so only the languages this app offers are kept.
+ * A video's own captions are always offered, whatever language they are in.
+ * Machine-generated ones are kept only where they were asked for.
  */
 export function subtitleTracksFromMaps(
   subtitles: CaptionMap,
   automatic: CaptionMap,
-  supported: ReadonlySet<string> = SUBTITLE_LANGUAGE_CODES,
+  wanted: ReadonlySet<string> = SUBTITLE_LANGUAGE_CODES,
 ): SubtitleTrack[] {
   const tracks: SubtitleTrack[] = [];
   const take = (map: CaptionMap, automaticTrack: boolean) => {
     for (const [code, entries] of Object.entries(map ?? {})) {
       const lang = askedLanguage(code);
       if (!Array.isArray(entries)) continue;
-      if (automaticTrack && !supported.has(lang)) continue;
+      if (automaticTrack && !wanted.has(lang)) continue;
       const picked = pickSubtitleEntry(entries);
       if (!picked) continue;
       const named = entries.find((entry) => typeof entry.name === "string" && entry.name);
@@ -173,7 +199,13 @@ export function createSubtitleTracks({
     const [subtitles, automatic] = stdout.split(/\r?\n/).map((line) => {
       try { return JSON.parse(line) as CaptionMap; } catch { return {} as CaptionMap; }
     });
-    return { tracks: subtitleTracksFromMaps(subtitles ?? {}, automatic ?? {}), refused: false };
+    const wanted = wantedSubtitleLanguages([
+      getUserSetting(userId, "player_cc_lang"),
+      getUserSetting(userId, "player_hl"),
+      getUserSetting(userId, "language"),
+      String((await dlSettings(userId) as { sub_langs?: unknown }).sub_langs ?? ""),
+    ]);
+    return { tracks: subtitleTracksFromMaps(subtitles ?? {}, automatic ?? {}, wanted), refused: false };
   }
 
   async function resolveFresh(userId: number, videoId: string): Promise<SubtitleTrack[]> {
