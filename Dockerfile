@@ -19,12 +19,20 @@ RUN if [ "${YTZERO_CHANGELOG_PREGENERATED}" = "1" ]; then bun run build:prepared
 FROM oven/bun:1.3-slim
 ARG DENO_VERSION=2.8.1
 ARG POT_PROVIDER_VERSION=1.3.1
+# YouTube changes what it asks of a caller faster than yt-dlp cuts a stable
+# release: the stable channel can be six weeks old while the challenge it has
+# to answer changed last week, and the symptom is "Sign in to confirm you're
+# not a bot" from yt-dlp on an address whose cookies still load a watch page
+# perfectly. The nightly channel is the project's own answer to that, built
+# from the same tree. Set YTDLP_CHANNEL=yt-dlp to pin the stable one back.
+ARG YTDLP_CHANNEL=yt-dlp-nightly-builds
 WORKDIR /app
 RUN apt-get update && \
     apt-get upgrade -y --no-install-recommends && \
     apt-get install -y --no-install-recommends python3 ffmpeg curl ca-certificates unzip && \
-    curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    curl -fsSL "https://github.com/yt-dlp/${YTDLP_CHANNEL}/releases/latest/download/yt-dlp" -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp && \
+    yt-dlp --version && \
     curl -fsSL https://deno.land/install.sh -o /tmp/install-deno.sh && \
     DENO_INSTALL=/usr/local sh /tmp/install-deno.sh "v${DENO_VERSION}" && \
     deno --version && \
