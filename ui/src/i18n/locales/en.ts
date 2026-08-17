@@ -815,6 +815,8 @@ export const en = {
     subscribers: "subscribers",
     moreLikeThis: "More like this",
     refreshSuggestions: "Refresh suggestions",
+    relatedFromYoutube: "from YouTube",
+    relatedFromLibrary: "from your library",
     commentsTitle: "Comments",
     commentsSortLabel: "Sort comments",
     commentsSortTop: "Most popular",
