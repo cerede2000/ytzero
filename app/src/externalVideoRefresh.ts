@@ -20,7 +20,7 @@ export async function refreshExternalWatchVideo(row: VideoRow, userId: number): 
     const related: { videos: RelatedVideo[] } = { videos: [] };
     const info = await fetchVideoInfo(row.video_id, { related });
     await persistDirectVideoInfo(info);
-    await saveRelatedVideos(row.video_id, related.videos);
+    await saveRelatedVideos(row.video_id, userId, related.videos);
     const refreshed = await database.prepare(`${videoSelect(userId)} WHERE v.video_id = ?`).get(row.video_id) as VideoRow;
     if (refreshed.live_status !== row.live_status) {
       log.info("video.live_status_corrected", {

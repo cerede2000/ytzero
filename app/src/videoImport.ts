@@ -118,7 +118,7 @@ async function loadAndPersistVideoInfo(userId: number, videoId: string): Promise
     await insertMany(feed.videos);
   }
   // After the row exists: the panel points at it by foreign key.
-  await saveRelatedVideos(info.videoId, related.videos);
+  await saveRelatedVideos(info.videoId, userId, related.videos);
   log.info("external.video_info_loaded", {
     videoId: info.videoId,
     channelId: info.channelId,

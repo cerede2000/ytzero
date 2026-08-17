@@ -10,15 +10,16 @@ function fetcher(options: {
   answer?: (videoId: string) => RelatedVideo[];
   fail?: () => never;
   clock?: () => number;
-  asSomebody?: (videoId: string, userId: number | undefined) => RelatedVideo[];
+  asSomebody?: (videoId: string, userId: number) => RelatedVideo[];
 } = {}) {
   const saved: Record<string, RelatedVideo[]> = {};
-  const stored = options.stored ?? {};
-  const asked: Array<number | undefined> = [];
+  const stored = { ...(options.stored ?? {}) };
+  const asked: Array<number> = [];
+  const forgotten: string[] = [];
   let loads = 0;
   const fetch = createRelatedVideoFetcher(
-    async (videoId) => stored[videoId] ?? [],
-    async (videoId, videos) => { saved[videoId] = [...videos]; },
+    async (videoId, userId) => stored[`${userId}:${videoId}`] ?? [],
+    async (videoId, userId, videos) => { stored[`${userId}:${videoId}`] = [...videos]; saved[`${userId}:${videoId}`] = [...videos]; },
     async (videoId, related) => {
       loads++;
       if (options.fail) options.fail();
@@ -27,99 +28,115 @@ function fetcher(options: {
     },
     options.clock ?? (() => 1_000),
     async (videoId, userId) => { asked.push(userId); return options.asSomebody ? options.asSomebody(videoId, userId) : []; },
+    async (videoId, userId) => { forgotten.push(`${userId}:${videoId}`); delete stored[`${userId}:${videoId}`]; },
   );
-  return { fetch, saved, asked, loads: () => loads };
+  return { fetch, saved, asked, forgotten, loads: () => loads };
 }
 
 describe("fetching a panel for a video that never had one", () => {
-  test("reads what is stored rather than asking again", async () => {
-    const { fetch, loads } = fetcher({ stored: { abc: [suggestion("kept")] } });
-    expect((await fetch("abc")).map((video) => video.videoId)).toEqual(["kept"]);
+  test("reads what is stored for this profile rather than asking again", async () => {
+    const { fetch, loads } = fetcher({ stored: { "1:abc": [suggestion("kept")] } });
+    expect((await fetch("abc", 1)).map((video) => video.videoId)).toEqual(["kept"]);
     expect(loads()).toBe(0);
   });
 
-  test("asks once, and writes the answer down", async () => {
+  test("asks once, and writes the answer down under the profile that asked", async () => {
     const { fetch, saved, loads } = fetcher();
-    expect((await fetch("abc")).map((video) => video.videoId)).toEqual(["abc-a"]);
-    expect(saved.abc?.length).toBe(1);
+    expect((await fetch("abc", 2)).map((video) => video.videoId)).toEqual(["abc-a"]);
+    expect(saved["2:abc"]?.length).toBe(1);
+    expect(saved["1:abc"] === undefined).toBe(true);
     expect(loads()).toBe(1);
   });
 
-  test("two pages opening the same video share one request", async () => {
+  test("one profile's panel is not the other's", async () => {
+    // A panel is assembled from what an account watches. Keyed on the video
+    // alone it was fetched by whoever opened the video first and served to the
+    // whole household after — one person's viewing habits, handed to everyone.
+    const { fetch, loads } = fetcher({ stored: { "1:shared": [suggestion("mine")] } });
+    expect((await fetch("shared", 1)).map((v) => v.videoId)).toEqual(["mine"]);
+    expect((await fetch("shared", 2)).map((v) => v.videoId)).toEqual(["shared-a"]);
+    expect(loads()).toBe(1);
+  });
+
+  test("two pages opening the same video for the same profile share one request", async () => {
     const { fetch, loads } = fetcher();
-    const [first, second] = await Promise.all([fetch("shared"), fetch("shared")]);
+    const [first, second] = await Promise.all([fetch("both", 1), fetch("both", 1)]);
     expect(first).toEqual(second);
     expect(loads()).toBe(1);
   });
 
   test("stops asking about a video YouTube gives nothing for", async () => {
-    // Not every video has a panel, and the ones that do not would otherwise
-    // buy a request on every single open, for ever.
     const { fetch, loads } = fetcher({ answer: () => [] });
-    expect(await fetch("empty")).toEqual([]);
-    expect(await fetch("empty")).toEqual([]);
+    expect(await fetch("empty", 1)).toEqual([]);
+    expect(await fetch("empty", 1)).toEqual([]);
     expect(loads()).toBe(1);
   });
 
   test("tries again once the quiet has passed", async () => {
     let clock = 1_000;
     const { fetch, loads } = fetcher({ answer: () => [], clock: () => clock });
-    await fetch("later");
+    await fetch("later", 1);
     clock += 7 * 60 * 60_000;
-    await fetch("later");
+    await fetch("later", 1);
+    expect(loads()).toBe(2);
+  });
+});
+
+describe("asking again on purpose", () => {
+  test("drops what was stored and fetches a fresh panel", async () => {
+    const { fetch, forgotten, loads } = fetcher({ stored: { "1:abc": [suggestion("stale")] } });
+    expect((await fetch("abc", 1)).map((v) => v.videoId)).toEqual(["stale"]);
+    expect((await fetch("abc", 1, true)).map((v) => v.videoId)).toEqual(["abc-a"]);
+    expect(forgotten).toEqual(["1:abc"]);
+    expect(loads()).toBe(1);
+  });
+
+  test("asks even for a video YouTube gave nothing for a moment ago", async () => {
+    const { fetch, loads } = fetcher({ answer: () => [] });
+    await fetch("nothing-here", 1);
+    await fetch("nothing-here", 1, true);
     expect(loads()).toBe(2);
   });
 });
 
 describe("when YouTube is refusing the address", () => {
-  test("asks again as the profile looking at the video", async () => {
-    // The refusal is what the anonymous request gets; the cookie jar on disk
-    // is the thing that still gets an answer, and only the watch page carries
-    // a panel at all — yt-dlp cannot stand in for it here.
+  test("asks again as the profile looking at the video, and only as them", async () => {
     const { fetch, saved, asked } = fetcher({
       fail: () => { throw new YouTubeRefusingError(); },
-      asSomebody: (videoId) => [suggestion(`${videoId}-signed-in`)],
+      asSomebody: (videoId, userId) => userId === 2 ? [suggestion(`${videoId}-signed-in`)] : [],
     });
     expect((await fetch("refused", 2)).map((video) => video.videoId)).toEqual(["refused-signed-in"]);
-    expect(saved.refused?.length).toBe(1);
+    expect(saved["2:refused"]?.length).toBe(1);
     expect(asked).toEqual([2]);
   });
 
-  test("does not hold the video shut for six hours over a ninety-second refusal", async () => {
-    // A refusal answers nothing about this video: the question was never put.
-    // Remembering it as empty is what left a panel local for the rest of the
-    // evening after one bad minute.
-    const { fetch, loads } = fetcher({ fail: () => { throw new YouTubeRefusingError(); } });
-    expect(await fetch("still-refused")).toEqual([]);
-    expect(await fetch("still-refused")).toEqual([]);
-    expect(loads()).toBe(2);
+  test("a profile with no jar of its own gets no panel, not somebody else's", async () => {
+    // Metadata may be fetched with a borrowed jar — a title is the video's,
+    // not the account's. Suggestions are the opposite, and lending them hands
+    // one person's viewing habits to another.
+    const { fetch, saved, asked } = fetcher({
+      fail: () => { throw new YouTubeRefusingError(); },
+      asSomebody: (_videoId, userId) => userId === 1 ? [suggestion("profile-one")] : [],
+    });
+    expect(await fetch("refused", 2)).toEqual([]);
+    expect(saved["2:refused"] === undefined).toBe(true);
+    expect(asked).toEqual([2]);
   });
 
   test("recognises the first refusal, which arrives as a plain failure", async () => {
-    // Only the second refusal and after are YouTubeRefusingError: the first is
-    // what three real attempts came back with. Reading just the class sent the
-    // video that opened the cycle down the "no panel here" branch — logged as
-    // a fetch failure, remembered for six hours, and never asked with cookies.
-    const refused = new Error("video info failed: html=videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you’re not a bot); innertube=HTTP error! status: 400; embed=videoDetails missing (no player response)");
+    const refused = new Error("video info failed: html=videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you’re not a bot); innertube=HTTP error! status: 400");
     const { fetch, saved } = fetcher({
       fail: () => { throw refused; },
       asSomebody: (videoId) => [suggestion(`${videoId}-signed-in`)],
     });
-    expect((await fetch("first-of-the-cycle", 2)).map((video) => video.videoId)).toEqual(["first-of-the-cycle-signed-in"]);
-    expect(saved["first-of-the-cycle"]?.length).toBe(1);
+    expect((await fetch("first-of-the-cycle", 2)).map((v) => v.videoId)).toEqual(["first-of-the-cycle-signed-in"]);
+    expect(saved["2:first-of-the-cycle"]?.length).toBe(1);
   });
 
-  test("gives up quietly when no profile has a cookie jar", async () => {
-    const { fetch, saved } = fetcher({ fail: () => { throw new YouTubeRefusingError(); } });
-    expect(await fetch("nobody")).toEqual([]);
-    expect(saved.nobody === undefined).toBe(true);
-  });
-
-  test("survives a signed-in attempt that fails too", async () => {
-    const { fetch } = fetcher({
-      fail: () => { throw new YouTubeRefusingError(); },
-      asSomebody: () => { throw new Error("refused again"); },
-    });
-    expect(await fetch("both-refused")).toEqual([]);
+  test("does not hold the video shut for six hours over a ninety-second refusal", async () => {
+    const { fetch, loads } = fetcher({ fail: () => { throw new YouTubeRefusingError(); } });
+    expect(await fetch("still-refused", 1)).toEqual([]);
+    expect(await fetch("still-refused", 1)).toEqual([]);
+    expect(loads()).toBe(2);
   });
 });

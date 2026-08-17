@@ -159,29 +159,24 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
   },
   {
     version: 8,
-    name: "shorts-classification-retry",
+    name: "related-video-panel-per-profile",
     schemaHashes: {
-      "app/src/schema.sql": "b8b7d541e396d5fe9a6b9e259996e92a2636a282467b27068404d6d57aea58e6",
+      "app/src/schema.sql": "0657ff8e5ed18b9370c6143f98bcc8140d9eaf60f5f32bc6a341f870f5084775",
       "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
       "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
     },
+    // The rows already stored have no profile that could be recovered: each was
+    // fetched by whoever opened the video first, under whatever credentials
+    // were reachable then. Carrying them over would attribute one person's
+    // recommendations to everybody, which is the defect. They are dropped, and
+    // the next open fetches a panel that belongs to the reader.
     sqlite: [
-      // These legacy catalog columns predate cross-database migrations. Keep
-      // the retry index safe when upgrading an older PostgreSQL/SQLite schema.
-      { kind: "add-column", table: "videos", column: "is_short", definition: "INTEGER" },
-      { kind: "add-column", table: "videos", column: "is_private", definition: "INTEGER NOT NULL DEFAULT 0" },
-      { kind: "add-column", table: "videos", column: "short_check_attempts", definition: "INTEGER NOT NULL DEFAULT 0" },
-      { kind: "add-column", table: "videos", column: "short_check_attempted_at", definition: "TEXT" },
-      { kind: "add-column", table: "videos", column: "short_check_next_attempt_at", definition: "TEXT" },
-      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_videos_shorts_retry ON videos(is_short, is_private, is_unavailable, short_check_next_attempt_at)" },
+      { kind: "sql", statement: `DROP TABLE IF EXISTS video_related` },
+      { kind: "sql", statement: `CREATE TABLE video_related (video_id TEXT NOT NULL REFERENCES videos(video_id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, payload TEXT NOT NULL, fetched_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (video_id, user_id))` },
     ],
     postgres: [
-      { kind: "add-column", table: "videos", column: "is_short", definition: "INTEGER" },
-      { kind: "add-column", table: "videos", column: "is_private", definition: "INTEGER NOT NULL DEFAULT 0" },
-      { kind: "add-column", table: "videos", column: "short_check_attempts", definition: "INTEGER NOT NULL DEFAULT 0" },
-      { kind: "add-column", table: "videos", column: "short_check_attempted_at", definition: "TEXT" },
-      { kind: "add-column", table: "videos", column: "short_check_next_attempt_at", definition: "TEXT" },
-      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_videos_shorts_retry ON videos(is_short, is_private, is_unavailable, short_check_next_attempt_at)" },
+      { kind: "sql", statement: `DROP TABLE IF EXISTS video_related` },
+      { kind: "sql", statement: `CREATE TABLE video_related (video_id TEXT NOT NULL REFERENCES videos(video_id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, payload TEXT NOT NULL, fetched_at TEXT NOT NULL DEFAULT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'), PRIMARY KEY (video_id, user_id))` },
     ],
   },
   {
