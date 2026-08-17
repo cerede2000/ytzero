@@ -183,3 +183,24 @@ describe("a video with no library row", () => {
     expect(signedInFetches).toBe(1);
   });
 });
+
+describe("being known, rather than merely presenting a jar", () => {
+  test("the log records the answer, not the attempt", async () => {
+    // An expired or rotated jar is answered with the page a stranger gets:
+    // parseable, twenty suggestions, and about nobody. Reporting
+    // "credentialed" for the attempt made rather than the answer received is
+    // how a dead jar looks like a working one for a morning.
+    let told: { signedIn: boolean } | undefined;
+    const fetch = createRelatedVideoFetcher(
+      async () => [],
+      async () => {},
+      async () => { throw new Error("not reached"); },
+      () => 1_000,
+      async (videoId, _userId, recognised) => { told = recognised; return [suggestion(`${videoId}-a`)]; },
+      async () => {},
+    );
+    await fetch("asked-as-somebody", 9);
+    expect(told !== undefined).toBe(true);
+    expect(told?.signedIn).toBe(false);
+  });
+});
