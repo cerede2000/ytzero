@@ -5,6 +5,7 @@ import type { RelatedVideo } from "./relatedVideos";
 import { fetchRelatedVideosAsSomebody, fetchVideoInfo } from "./youtube";
 import { panelLanguage } from "./relatedVideoText";
 import { youtubeCookieHeader } from "./youtubeCookieHeader";
+import { persistSetCookies, recordCookieRecognition } from "./youtubeCookieHealth";
 import { isYouTubeRefusal } from "./youtubeRefusalQuiet";
 
 /**
@@ -84,10 +85,15 @@ export function createRelatedVideoFetcher(
   load = (videoId: string, related: { videos: RelatedVideo[] }, userId: number) =>
     fetchVideoInfo(videoId, { force: true, related, language: panelLanguage(getUserSetting(userId, "language")) }),
   now: () => number = Date.now,
-  loadAsSomebody = async (videoId: string, userId: number, recognised?: { signedIn: boolean }): Promise<RelatedVideo[]> => {
+  loadAsSomebody = async (videoId: string, userId: number, session?: { signedIn: boolean; setCookies: string[] }): Promise<RelatedVideo[]> => {
     const cookieHeader = cookieHeaderFor(userId);
     if (!cookieHeader) return [];
-    return fetchRelatedVideosAsSomebody(videoId, cookieHeader, panelLanguage(getUserSetting(userId, "language")), recognised);
+    const videos = await fetchRelatedVideosAsSomebody(videoId, cookieHeader, panelLanguage(getUserSetting(userId, "language")), session);
+    if (session) {
+      recordCookieRecognition(userId, session.signedIn);
+      persistSetCookies(userId, session.setCookies);
+    }
+    return videos;
   },
   forget = forgetRelatedVideos,
 ) {
@@ -125,7 +131,7 @@ export function createRelatedVideoFetcher(
        * question is theirs. A profile with no jar of its own returns from the
        * account attempt at once, having asked nothing.
        */
-      const recognised = { signedIn: false };
+      const recognised = { signedIn: false, setCookies: [] as string[] };
       const mine = preferAccount
         ? await loadAsSomebody(videoId, userId, recognised).catch((failure) => {
             log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
