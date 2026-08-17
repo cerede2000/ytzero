@@ -259,3 +259,26 @@ describe("the panel youtube.com itself shows", () => {
     expect((await fetch("v4", 1, false, "personal")).map((v) => v.videoId)).toEqual(["v4-anon"]);
   });
 });
+
+describe("a panel stops being an answer when the question changes", () => {
+  test("switching the setting does not serve what the other setting fetched", async () => {
+    // Kept without recording which question it answered, a panel outlived the
+    // setting that produced it: changing the setting appeared to do nothing
+    // for a day, and every experiment had to be preceded by a manual refresh
+    // nobody could be expected to know about. Six rounds were spent judging
+    // panels fetched under a rule that had since been replaced.
+    const stored: Record<string, { source: string; videos: RelatedVideo[] }> = {};
+    const fetch = createRelatedVideoFetcher(
+      async (videoId, userId, _limit, source) => stored[`${userId}:${videoId}`]?.source === source ? stored[`${userId}:${videoId}`].videos : [],
+      async (videoId, userId, videos, source) => { stored[`${userId}:${videoId}`] = { source: source ?? "video", videos: [...videos] }; },
+      async (videoId, related) => { related.videos = [suggestion(`${videoId}-anon`)]; return {} as never; },
+      () => 1_000,
+      async (videoId) => [suggestion(`${videoId}-account`)],
+      async () => {},
+    );
+    expect((await fetch("v5", 1, false, "video")).map((v) => v.videoId)).toEqual(["v5-anon"]);
+    expect((await fetch("v5", 1, false, "account")).map((v) => v.videoId)).toEqual(["v5-account"]);
+    // And back again, without either having overwritten the other's answer.
+    expect((await fetch("v5", 1, false, "video")).map((v) => v.videoId)).toEqual(["v5-anon"]);
+  });
+});

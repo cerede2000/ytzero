@@ -453,7 +453,7 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   if (limit <= 0) return [];
   const stored = fetchMissing
     ? await fetchRelatedVideos(videoId, uid, refresh, relatedSource(settings.related_source))
-    : await readRelatedVideos(videoId, uid, 25);
+    : await readRelatedVideos(videoId, uid, 25, relatedSource(settings.related_source));
   if (stored.length === 0) return [];
   const known = await attachLibraryState(uid, stored);
   const inLibrary = new Set(known.filter((video) => video.in_library === 1).map((video) => video.videoId));
