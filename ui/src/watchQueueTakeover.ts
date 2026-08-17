@@ -18,8 +18,16 @@ export function effectivePlaybackQueue(
   queuedVideoIds: readonly string[],
 ): PlaybackQueueContext | null {
   if (base?.kind === "user-playlist" || base?.kind === "channel-playlist") return base;
-  // Queuing what is already on screen would otherwise make it its own next.
-  const queued = queuedVideoIds.filter((videoId) => videoId !== currentVideoId);
-  if (!currentVideoId || queued.length === 0) return base;
-  return { version: 1, kind: "session", ids: [currentVideoId, ...queued] };
+  if (!currentVideoId || queuedVideoIds.length === 0) return base;
+  /*
+   * Once inside the queue, the queue's own order is the order.
+   *
+   * Putting the video playing at the head unconditionally rotates the list at
+   * every step: from the second entry the rest reads as [first, third], so
+   * "next" goes back to the first and the third is never reached. The head is
+   * only for the video somebody was watching when they queued something —
+   * which, by definition, is not in the queue.
+   */
+  if (queuedVideoIds.includes(currentVideoId)) return { version: 1, kind: "session", ids: [...queuedVideoIds] };
+  return { version: 1, kind: "session", ids: [currentVideoId, ...queuedVideoIds] };
 }

@@ -27,15 +27,30 @@ describe("queuing a suggestion while something is playing", () => {
   });
 
   test("the video playing is not queued behind itself", () => {
-    // Queuing what is already on screen would otherwise make it its own next.
     expect(effectivePlaybackQueue(feed, "playing", ["playing", "next-a"]))
       .toEqual({ version: 1, kind: "session", ids: ["playing", "next-a"] });
   });
 
   test("a queue already running picks up what was added since", () => {
-    const running: PlaybackQueueContext = { version: 1, kind: "session", ids: ["playing", "next-a"] };
-    expect(effectivePlaybackQueue(running, "playing", ["next-a", "next-b"]))
-      .toEqual({ version: 1, kind: "session", ids: ["playing", "next-a", "next-b"] });
+    const running: PlaybackQueueContext = { version: 1, kind: "session", ids: ["a", "b"] };
+    expect(effectivePlaybackQueue(running, "playing", ["a", "b", "c"]))
+      .toEqual({ version: 1, kind: "session", ids: ["playing", "a", "b", "c"] });
+  });
+
+  test("inside the queue, the queue's own order is the order", () => {
+    // Heading the list with whatever is playing rotates it at every step: from
+    // the second entry the rest reads as [first, third], so "next" goes back to
+    // the first and the third is never reached. Three videos, played through:
+    const queue = ["a", "b", "c"];
+    expect(effectivePlaybackQueue(feed, "a", queue)).toEqual({ version: 1, kind: "session", ids: ["a", "b", "c"] });
+    expect(effectivePlaybackQueue(feed, "b", queue)).toEqual({ version: 1, kind: "session", ids: ["a", "b", "c"] });
+    expect(effectivePlaybackQueue(feed, "c", queue)).toEqual({ version: 1, kind: "session", ids: ["a", "b", "c"] });
+  });
+
+  test("a video added while the queue is playing is reached in turn", () => {
+    // Two queued, a third added from the panel while the first plays.
+    expect(effectivePlaybackQueue(feed, "b", ["a", "b", "c"]))
+      .toEqual({ version: 1, kind: "session", ids: ["a", "b", "c"] });
   });
 
   test("without a video there is nothing to put at the head", () => {

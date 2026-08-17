@@ -66,6 +66,51 @@ export function withoutEntry(queue: readonly SessionQueueEntry[], videoId: strin
   return queue.filter((item) => item.videoId !== videoId);
 }
 
+/**
+ * The queued video, as a card can draw it, without asking the library.
+ *
+ * A suggestion queued from the panel has no library row until its import
+ * finishes — and that import is only started by the queuing itself. Anything
+ * that waited for the row was therefore blank for the seconds that mattered:
+ * the "next" button did not appear at the moment somebody said what should
+ * play next, which is the moment it exists for.
+ *
+ * The queue already holds what it queued. Enough of it, at least, to name and
+ * picture the video; the rest arrives with the row.
+ */
+export function videoFromSessionEntry(entry: SessionQueueEntry): Video {
+  return {
+    video_id: entry.videoId,
+    title: entry.title,
+    thumbnail: entry.thumbnail,
+    channel_title: entry.channelTitle,
+    duration: entry.duration,
+    channel_id: "",
+    description: "",
+    published_at: "",
+    found_at: "",
+    published_at_approximate: 1,
+    members_only: 0,
+    is_private: 0,
+    live_status: "none",
+    status: "inbox",
+    bucket: null,
+    show_from: null,
+    is_short: 0,
+    views: null,
+    likes: null,
+    watch_position: null,
+    watch_duration: null,
+    in_history: 0,
+    external: 1,
+    liked: 0,
+    watched: 0,
+    channel_thumbnail: null,
+    channel_subscriber_count: null,
+    tags: [],
+  } as unknown as Video;
+}
+
 export function entryFromVideo(video: Video): SessionQueueEntry {
   return {
     videoId: video.video_id,
