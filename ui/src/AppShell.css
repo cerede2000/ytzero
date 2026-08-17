@@ -448,6 +448,77 @@ body.sidebar-hidden .sidebar { width: 0; padding: 0; }
   color: var(--text-3);
   font-size: 12px;
   margin-left: auto;
+  transition: opacity .12s ease;
+}
+/*
+ * Play a list without opening it.
+ *
+ * The buttons take the count's place rather than a place of their own: the row
+ * is as wide as the sidebar and has none to spare, and a row that grows an
+ * extra control on hover shifts every name beside it. The count is the one
+ * thing here nobody needs while reaching for play.
+ */
+.sidebar-playlist-row { position: relative; }
+/*
+ * The buttons are a sibling of the link, so hovering one is not hovering it.
+ * Left to the link alone, reaching for play would put the row's own highlight
+ * out just as the cursor arrived on it.
+ */
+.sidebar-playlist-row:hover .sidebar-playlist-item,
+.sidebar-playlist-row:focus-within .sidebar-playlist-item { background: var(--surface); }
+.sidebar-playlist-play {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  /* A name too long to fit runs under the buttons rather than into them. */
+  padding: 4px 10px 4px 20px;
+  background: linear-gradient(90deg, transparent, var(--surface) 18px);
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+.sidebar-playlist-row:hover .sidebar-playlist-play,
+.sidebar-playlist-row:focus-within .sidebar-playlist-play {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sidebar-playlist-row:hover .sidebar-playlist-count,
+.sidebar-playlist-row:focus-within .sidebar-playlist-count { opacity: 0; }
+.sidebar-playlist-play-btn {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text);
+  cursor: pointer;
+}
+.sidebar-playlist-play-btn:hover { background: var(--accent); color: #fff; }
+.sidebar-playlist-play-btn:disabled { opacity: .45; cursor: default; }
+.sidebar-playlist-play-btn:disabled:hover { background: var(--surface-3); color: var(--text); }
+/*
+ * A touch screen has no hover to reveal anything with, so the buttons are
+ * simply there. The count goes, because both cannot fit.
+ */
+@media (hover: none) {
+  .sidebar-playlist-play {
+    opacity: 1;
+    pointer-events: auto;
+    /* Nothing is hovered here, so the row behind is the sidebar itself. */
+    background: linear-gradient(90deg, transparent, var(--bg) 18px);
+  }
+  .sidebar-playlist-row:has(.active) .sidebar-playlist-play {
+    background: linear-gradient(90deg, transparent, var(--surface) 18px);
+  }
+  .sidebar-playlist-count { opacity: 0; }
 }
 /* ---------- main & topbar ---------- */
 .main { flex: 1; min-width: 0; overflow-x: clip; }

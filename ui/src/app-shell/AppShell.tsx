@@ -1,6 +1,4 @@
-import { useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { type Video } from "../api";
+import { useLocation } from "react-router-dom";
 import AppRoutes from "../AppRoutes";
 import ChildLockScreen from "../components/ChildLockScreen";
 import ChildNowWatching from "../components/ChildNowWatching";
@@ -8,8 +6,8 @@ import { Toast } from "../components/ui";
 import { DeArrowProvider } from "../dearrow";
 import { ENHANCE_CONFIGURATION_ELEMENT_ID, serializeEnhanceConfiguration } from "../enhanceBridge";
 import { splitNavItems } from "../nav";
-import type { PlaybackQueueContext, PlayOptions } from "../playbackQueue";
 import { AppNameContext } from "../useDocumentTitle";
+import { usePlayVideo } from "../usePlayVideo";
 import AppBootstrap from "./AppBootstrap";
 import AppSidebar from "./AppSidebar";
 import AppTopBar from "./AppTopBar";
@@ -25,7 +23,6 @@ import "../AppShell.css";
 export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
   const { ready: i18nReady } = useI18n();
   const location = useLocation();
-  const navigate = useNavigate();
   const preferences = useAppPreferences();
   const plugins = usePluginRoutes();
   const profile = useProfileSession();
@@ -34,29 +31,7 @@ export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
 
   useSidebarVisibility(location.pathname);
 
-  const play = useCallback((video: Video, playbackQueue?: PlaybackQueueContext, options?: PlayOptions) => navigate(
-    `/watch/${video.video_id}`,
-    {
-      state: {
-        playbackQueue,
-        fromStart: options?.fromStart,
-        audio: options?.audio,
-        // What the card was already showing. A video that is not in the
-        // library has to be imported before the page knows anything about it,
-        // and that takes as long as it takes — but the title, the channel and
-        // the thumbnail were on screen a moment ago, so there is no reason to
-        // stare at an empty page while it happens.
-        preview: {
-          videoId: video.video_id,
-          title: video.title,
-          channelId: video.channel_id,
-          channelTitle: video.channel_title,
-          thumbnail: video.thumbnail,
-          duration: video.duration ?? null,
-        },
-      },
-    },
-  ), [navigate]);
+  const play = usePlayVideo();
 
   if (!i18nReady || !preferences.ready || !plugins.ready || !profile.ready) {
     return <AppBootstrap />;
