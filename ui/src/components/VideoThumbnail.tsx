@@ -24,6 +24,12 @@ const VARIANT_CLASSES: Record<VideoThumbnailVariant, { frame: string; image: str
   childWatching: { frame: "child-watching-thumb", image: "" },
 };
 
+/**
+ * Long enough for DeArrow to have rendered the frame this card's first request
+ * asked it for, short enough that the reader is still on the page.
+ */
+const RETRY_AFTER_MS = 20_000;
+
 export function watchProgress(position: number | null | undefined, duration: number | null | undefined): number | null {
   if (position == null || duration == null || duration <= 0 || position <= 0) return null;
   return Math.min(1, Math.max(0, position / duration));
@@ -98,8 +104,30 @@ export function VideoThumbnail({
    * rotate. Each candidate is tried once, in order.
    */
   const [failed, setFailed] = useState<readonly string[]>([]);
+  const [retried, setRetried] = useState<readonly string[]>([]);
   const candidates = thumbnailCandidates(src, fallbackSrc);
   const shown = candidates.find((candidate) => !failed.includes(candidate)) ?? candidates[0];
+  /*
+   * A frame that was not ready is asked for once more, quietly.
+   *
+   * The retry loads into an image nobody is looking at, and the card only
+   * changes if it works — a reader watching a thumbnail settle is worse than
+   * one looking at the uploader's image a moment longer.
+   */
+  const pending = pendingRetry(failed, retried);
+  useEffect(() => {
+    if (!pending) return;
+    const timer = window.setTimeout(() => {
+      const probe = new Image();
+      probe.onload = () => {
+        setRetried((previous) => [...previous, pending]);
+        setFailed((previous) => previous.filter((url) => url !== pending));
+      };
+      probe.onerror = () => setRetried((previous) => [...previous, pending]);
+      probe.src = img(pending);
+    }, RETRY_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
   const watchedClass = watched ? " watched-thumbnail--watched" : "";
   const progressClass = watched || (progress != null && progress > 0) ? " watched-thumbnail--has-progress" : "";
   return (
