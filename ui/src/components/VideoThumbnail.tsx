@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { img } from "../img";
-import { pendingRetry, thumbnailCandidates } from "../thumbnailFallback";
+import { pendingRetry, shownThumbnail, thumbnailCandidates } from "../thumbnailFallback";
 import "./VideoThumbnail.css";
 
 export type VideoThumbnailVariant =
@@ -89,26 +89,43 @@ export function VideoThumbnail({
    */
   const [failed, setFailed] = useState<readonly string[]>([]);
   const [retried, setRetried] = useState<readonly string[]>([]);
+  const [painted, setPainted] = useState<string | null>(null);
   const candidates = thumbnailCandidates(src, fallbackSrc);
-  const shown = candidates.find((candidate) => !failed.includes(candidate)) ?? candidates[0];
+  const wanted = candidates.find((candidate) => !failed.includes(candidate)) ?? candidates[0];
   /*
-   * A frame that was not ready is asked for once more, quietly.
+   * A card that already shows something never blinks through empty.
    *
-   * The retry loads into an image nobody is looking at, and the card only
-   * changes if it works — a reader watching a thumbnail settle is worse than
-   * one looking at the uploader's image a moment longer.
+   * Setting a new `src` empties the element until the replacement decodes, and
+   * these cards get a second URL a moment after the first: DeArrow's answer
+   * arrives after the page has settled, so every thumbnail on screen went
+   * blank and came back. The replacement is loaded out of sight and swapped in
+   * once it is ready — the reader sees one image become another, or nothing at
+   * all happen. Only the first paint is immediate, because a card waiting on a
+   * preload is a card showing nothing.
+   */
+  const shown = shownThumbnail(painted, wanted);
+  useEffect(() => {
+    if (!painted || painted === wanted) return;
+    let abandoned = false;
+    const probe = new Image();
+    probe.onload = () => { if (!abandoned) setPainted(wanted); };
+    probe.onerror = () => {
+      if (!abandoned) setFailed((previous) => previous.includes(wanted) ? previous : [...previous, wanted]);
+    };
+    probe.src = img(wanted);
+    return () => { abandoned = true; };
+  }, [painted, wanted]);
+  /*
+   * A frame that was not ready is asked for once more, quietly. Lifting the
+   * failure is all this does — the preload above is what decides whether the
+   * card changes, so a second refusal costs the reader nothing.
    */
   const pending = pendingRetry(failed, retried);
   useEffect(() => {
     if (!pending) return;
     const timer = window.setTimeout(() => {
-      const probe = new Image();
-      probe.onload = () => {
-        setRetried((previous) => [...previous, pending]);
-        setFailed((previous) => previous.filter((url) => url !== pending));
-      };
-      probe.onerror = () => setRetried((previous) => [...previous, pending]);
-      probe.src = img(pending);
+      setRetried((previous) => [...previous, pending]);
+      setFailed((previous) => previous.filter((url) => url !== pending));
     }, RETRY_AFTER_MS);
     return () => window.clearTimeout(timer);
   }, [pending]);
@@ -122,6 +139,7 @@ export function VideoThumbnail({
         alt={alt}
         loading={loading}
         draggable={draggable}
+        onLoad={() => setPainted(shown)}
         onError={() => setFailed((previous) => previous.includes(shown) ? previous : [...previous, shown])}
       />
       {children}
