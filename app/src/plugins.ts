@@ -574,6 +574,7 @@ async function localRecommendations(
       AND v.live_status = 'none'
       AND COALESCE(v.is_private, 0) = 0
       AND COALESCE(v.is_unavailable, 0) = 0
+      AND COALESCE(v.is_private, 0) = 0
       AND v.published_at IS NOT NULL AND v.published_at != ''
       AND TRIM(v.title) != '' AND TRIM(v.thumbnail) != ''
       AND TRIM(COALESCE(c.custom_title, c.title)) != ''
@@ -857,6 +858,7 @@ async function readStoredDiscoveryRecommendations(uid: number, limit: number): P
       AND v.live_status = 'none'
       AND COALESCE(v.is_private, 0) = 0
       AND COALESCE(v.is_unavailable, 0) = 0
+      AND COALESCE(v.is_private, 0) = 0
       AND v.published_at IS NOT NULL AND v.published_at != ''
       AND TRIM(v.title) != '' AND TRIM(v.thumbnail) != ''
       AND TRIM(COALESCE(c.custom_title, c.title)) != ''

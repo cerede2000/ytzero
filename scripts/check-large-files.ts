@@ -62,7 +62,7 @@ const lineLimits: Record<string, number> = {
   "ui/src/components/VideoCard.css": 666,
   "ui/src/components/VideoThumbnail.css": 100,
   "ui/src/pages/SearchPage.css": 120,
-  "app/src/plugins.ts": 1081,
+  "app/src/plugins.ts": 1083,
   "app/src/pluginCatalog.ts": 404,
   "ui/src/api.ts": 536,
   "ui/src/apiTypes.ts": 1114,

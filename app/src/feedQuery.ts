@@ -60,7 +60,11 @@ export function feedVisibilityWhere(
 ): { where: string[]; params: any[] } {
   const where: string[] = [];
   const params: any[] = [];
+  // A video nobody can open is not offered. Deleted and private are the same
+  // fact to a reader — the action paths already require both, and only the
+  // lists that show videos were asking for one of them.
   where.push("COALESCE(v.is_unavailable, 0) = 0");
+  where.push("COALESCE(v.is_private, 0) = 0");
   where.push("(v.published_at IS NOT NULL AND v.published_at != '')");
   const status = q.status ?? "inbox";
   if (status !== "all") {
