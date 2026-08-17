@@ -37,14 +37,20 @@ const settings = {
 };
 
 describe("recommendation eligibility", () => {
-  test("requires confirmed regular, non-live, playable and unfinished videos", () => {
+  test("requires a regular, non-live, playable and unfinished video", () => {
     expect(isEligibleRecommendation(candidate())).toBe(true);
-    expect(isEligibleRecommendation(candidate({ is_short: null }))).toBe(false);
     expect(isEligibleRecommendation(candidate({ is_short: 1 }))).toBe(false);
     expect(isEligibleRecommendation(candidate({ live_status: null }))).toBe(false);
     expect(isEligibleRecommendation(candidate({ live_status: "upcoming" }))).toBe(false);
     expect(isEligibleRecommendation(candidate({ live_status: "live" }))).toBe(false);
     expect(isEligibleRecommendation(candidate({ live_status: "was_live" }))).toBe(false);
+  });
+
+  test("an unchecked format is not a reason to withhold a video", () => {
+    // Shortness is only ever established while syncing a channel, so a video
+    // that arrived another way keeps null for good. Requiring a confirmed 0 was
+    // not "no Shorts here", it was "nothing from outside a channel sync, ever".
+    expect(isEligibleRecommendation(candidate({ is_short: null }))).toBe(true);
     expect(isEligibleRecommendation(candidate({ is_private: 1 }))).toBe(false);
     expect(isEligibleRecommendation(candidate({ watched: 1 }))).toBe(false);
     expect(isEligibleRecommendation(candidate({ status: "archived" }))).toBe(false);
