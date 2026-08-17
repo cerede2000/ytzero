@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { pendingRetry, plainYouTubeThumbnail, thumbnailCandidates } from "./thumbnailFallback";
+import { pendingRetry, plainYouTubeThumbnail, shownThumbnail, thumbnailCandidates } from "./thumbnailFallback";
 
 /**
  * The URL that started this, taken from a row on the reporting instance. The
@@ -60,6 +60,24 @@ describe("what a card tries, in order", () => {
 
   test("a healthy thumbnail is still the first thing shown", () => {
     expect(thumbnailCandidates(PLAIN)[0]).toBe(PLAIN);
+  });
+});
+
+describe("what is on screen while the next image loads", () => {
+  test("the first paint waits for nothing", () => {
+    // Holding back here would leave the card empty, which is the thing being
+    // avoided in the first place.
+    expect(shownThumbnail(null, PLAIN)).toBe(PLAIN);
+  });
+
+  test("what is already painted stays until the replacement is ready", () => {
+    // The reported flicker: DeArrow's answer lands after the page has settled,
+    // the src changes, and the element is empty until the new image decodes.
+    expect(shownThumbnail(PLAIN, DEARROW)).toBe(PLAIN);
+  });
+
+  test("and gives way once it has been swapped in", () => {
+    expect(shownThumbnail(DEARROW, DEARROW)).toBe(DEARROW);
   });
 });
 

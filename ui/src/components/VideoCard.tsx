@@ -209,7 +209,15 @@ export function VideoCard({
   const [swiping, setSwiping] = useState(false);
   const [committedDir, setCommittedDir] = useState<"left" | "right" | null>(null);
   const [committedFeedback, setCommittedFeedback] = useState<CardFeedback | null>(null);
-  const [loadedThumbnailSrc, setLoadedThumbnailSrc] = useState<string | null>(null);
+  /*
+   * Whether this card has ever painted an image — not whether the current URL
+   * has. The blurred placeholder is there to cover an empty frame, and once
+   * something is on screen there is no empty frame left to cover. Comparing the
+   * loaded URL against the wanted one brought the placeholder back over a
+   * perfectly good image every time DeArrow's answer arrived, which is a
+   * gradient blinking across every card on the page a moment after it settled.
+   */
+  const [thumbnailPainted, setThumbnailPainted] = useState(false);
   const [previewActive, setPreviewActive] = useState(false);
   const canDownloadLocally = video.live_status !== "live" && video.live_status !== "upcoming";
   const queued = useInSessionQueue(video.video_id);
@@ -702,10 +710,10 @@ export function VideoCard({
             aria-label={displayTitle}
           >
               <span
-                className={`video-card-thumbnail-color${loadedThumbnailSrc === displayThumbnail ? " video-card-thumbnail-color--loaded" : ""}`}
+                className={`video-card-thumbnail-color${thumbnailPainted ? " video-card-thumbnail-color--loaded" : ""}`}
                 style={thumbnailColorStyle(video.video_id)}
                 onLoadCapture={(event) => {
-                  if ((event.target as HTMLElement).classList.contains("video-thumbnail-image")) setLoadedThumbnailSrc(displayThumbnail);
+                  if ((event.target as HTMLElement).classList.contains("video-thumbnail-image")) setThumbnailPainted(true);
                 }}
               >
                 <VideoThumbnail

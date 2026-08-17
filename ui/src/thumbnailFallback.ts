@@ -54,6 +54,19 @@ export function pendingRetry(failed: readonly string[], retried: readonly string
   return failed.find((url) => !retried.includes(url)) ?? null;
 }
 
+/**
+ * What stays on screen while a different image is being loaded out of sight.
+ *
+ * Setting a new `src` empties the element until the replacement decodes, and a
+ * card is given a second URL a moment after its first: DeArrow's answer arrives
+ * after the page has settled. Rendering what is already painted until the next
+ * one is ready is what turns a blink into a swap. The exception is the first
+ * paint, where holding back would show nothing at all.
+ */
+export function shownThumbnail(painted: string | null, wanted: string): string {
+  return painted && painted !== wanted ? painted : wanted;
+}
+
 export function thumbnailCandidates(src: string, fallbackSrc?: string): string[] {
   const candidates: string[] = [];
   for (const url of [src, fallbackSrc]) {
