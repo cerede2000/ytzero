@@ -897,6 +897,28 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
    * left no way at all to correct a panel fetched before the profiles were
    * kept apart.
    */
+  /**
+   * Read the panel again, without asking YouTube.
+   *
+   * Acting on a suggestion — putting it aside, marking it seen — takes it out of
+   * what the panel should offer, and the store holds more than it shows. So the
+   * slot is filled from what was already fetched: no request leaves the house,
+   * and the card that was acted on is replaced rather than merely crossed out.
+   */
+  const reloadSuggestions = useCallback(() => {
+    if (!id) return;
+    api.videoSuggestions(id)
+      .then((result) => {
+        if (!result.suggestions.length) return;
+        suggestionsFor.current = id;
+        setRelated((current) => withSuggestions(current, result.suggestions, {
+          allowed: result.downloads_allowed,
+          enabled: result.downloads_enabled,
+        }));
+      })
+      .catch(() => {});
+  }, [id]);
+
   const [refreshingSuggestions, setRefreshingSuggestions] = useState(false);
   const refreshSuggestions = useCallback(() => {
     if (!id || refreshingSuggestions) return;
@@ -1703,6 +1725,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     related,
     relatedFromYoutube,
     refreshSuggestions,
+    reloadSuggestions,
     refreshingSuggestions,
     reload,
     reloadDownloadedPlayer,

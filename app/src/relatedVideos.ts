@@ -101,12 +101,22 @@ export function selectRelatedForPanel(
      * short because five of them had been seen.
      */
     watched?: ReadonlySet<string>;
+    /**
+     * Put aside, and therefore not to be offered back.
+     *
+     * Dismissing a suggestion says "not this one". Offering it again on the next
+     * read would make the gesture pointless — and it is the same rule as
+     * watched, so it takes the same place in the order: dropped before the cut,
+     * so its slot goes to the next suggestion rather than being left empty.
+     */
+    dismissed?: ReadonlySet<string>;
   },
 ): RelatedVideo[] {
   if (options.limit <= 0) return [];
   return videos
     .filter((video) => video.videoId !== options.currentVideoId)
     .filter((video) => !options.watched?.has(video.videoId))
+    .filter((video) => !options.dismissed?.has(video.videoId))
     .filter((video) => !(options.hideKnown && options.inLibrary?.has(video.videoId)))
     .slice(0, options.limit);
 }

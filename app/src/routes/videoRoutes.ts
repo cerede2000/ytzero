@@ -444,6 +444,16 @@ function relatedSource(value: unknown): RelatedSource {
   return value === "personal" || value === "account" ? value : "video";
 }
 
+/** Which of these the profile has put aside. */
+async function dismissedFromPanel(uid: number, videoIds: readonly string[]): Promise<Set<string>> {
+  if (videoIds.length === 0) return new Set();
+  const placeholders = videoIds.map(() => "?").join(",");
+  const rows = await database.prepare(
+    `SELECT video_id FROM user_videos WHERE user_id = ? AND status = 'archived' AND video_id IN (${placeholders})`
+  ).all(uid, ...videoIds) as { video_id: string }[];
+  return new Set(rows.map((row) => row.video_id));
+}
+
 async function relatedPanelWanted(uid: number): Promise<boolean> {
   if (!pluginEnabled("related")) return false;
   const { settings } = await getPluginSettings(uid, "related");
@@ -467,7 +477,11 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   // leaving a gap, so a panel never arrives short for having been useful.
   const seen = await attachWatchedState(uid, stored, (video) => video.videoId);
   const watched = new Set(seen.filter((video) => video.watched === 1).map((video) => video.videoId));
-  const chosen = selectRelatedForPanel(stored, { limit, currentVideoId: videoId, inLibrary, hideKnown, watched });
+  // Dismissing a suggestion has to stick, or the gesture means nothing: it is
+  // read back on the next pass and takes the same place as watched, so the slot
+  // goes to the next suggestion rather than being left empty.
+  const dismissed = await dismissedFromPanel(uid, stored.map((video) => video.videoId));
+  const chosen = selectRelatedForPanel(stored, { limit, currentVideoId: videoId, inLibrary, hideKnown, watched, dismissed });
   // What was fetched and what survives are different numbers, and the gap
   // between them is where a panel quietly loses the suggestions that made it
   // worth having: the ones from channels somebody follows are in the library
@@ -475,7 +489,7 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   if (chosen.length < Math.min(stored.length, limit)) {
     log.info("related.narrowed", {
       videoId, userId: uid, fetched: stored.length, shown: chosen.length,
-      limit, hideKnown, inLibrary: inLibrary.size, watched: watched.size,
+      limit, hideKnown, inLibrary: inLibrary.size, watched: watched.size, dismissed: dismissed.size,
     });
   }
   // Carried back through both so each card knows whether it is downloaded,

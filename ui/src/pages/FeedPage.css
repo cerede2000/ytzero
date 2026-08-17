@@ -193,3 +193,32 @@
     margin-top: 12px;
   }
 }
+
+/*
+ * Leaving "Continue watching".
+ *
+ * Visible rather than revealed on hover: it is a way out of a shelf that fills
+ * itself, and a way out nobody can see is a shelf that only grows. Quiet enough
+ * at rest that a row of them does not read as a row of close buttons.
+ */
+.continue-card { position: relative; }
+.continue-card-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  color: var(--text);
+  opacity: .55;
+  cursor: pointer;
+  transition: opacity .12s ease, background .12s ease;
+}
+.continue-card:hover .continue-card-remove { opacity: 1; }
+.continue-card-remove:hover { background: var(--danger, #c0392b); color: #fff; opacity: 1; }
