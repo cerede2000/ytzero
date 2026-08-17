@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseCompactCount, parseCompactPublishedText, relatedFromLockup, relatedVideosFromWatchPage, selectRelatedForPanel } from "./relatedVideos";
+import type { RelatedVideo } from "./relatedVideos";
 
 // Captured from a live watch page. The side panel writes a card differently
 // from search: the channel sits in a row with no browse endpoint behind it,
@@ -174,3 +175,35 @@ describe("a seen suggestion gives up its place", () => {
     expect(selectRelatedForPanel(list, { limit: 3, currentVideoId: "zzz" }).map((v) => v.videoId)).toEqual(["a", "b", "c"]);
   });
 });
+
+describe("a suggestion the profile has put aside", () => {
+  const panel = ["a", "b", "c", "d", "e"].map((id) => ({ videoId: id, title: id }) as RelatedVideo);
+
+  test("is not offered back, and its slot goes to the next one", () => {
+    // Dismissing says "not this one". Offering it again on the next read makes
+    // the gesture pointless — and leaving a gap instead of filling it makes the
+    // panel arrive short for having been used.
+    const chosen = selectRelatedForPanel(panel, {
+      limit: 3,
+      currentVideoId: "watching",
+      dismissed: new Set(["a", "b"]),
+    });
+    expect(chosen.map((video) => video.videoId)).toEqual(["c", "d", "e"]);
+  });
+
+  test("dismissed and watched are the same rule, applied together", () => {
+    const chosen = selectRelatedForPanel(panel, {
+      limit: 3,
+      currentVideoId: "watching",
+      dismissed: new Set(["a"]),
+      watched: new Set(["b"]),
+    });
+    expect(chosen.map((video) => video.videoId)).toEqual(["c", "d", "e"]);
+  });
+
+  test("with nothing put aside, nothing changes", () => {
+    const chosen = selectRelatedForPanel(panel, { limit: 2, currentVideoId: "watching" });
+    expect(chosen.map((video) => video.videoId)).toEqual(["a", "b"]);
+  });
+});
+
