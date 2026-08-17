@@ -28,8 +28,8 @@ export const RSS_VIDEO_UPSERT_SQL = `
  */
 export const DIRECT_VIDEO_INFO_UPSERT_SQL = `
   INSERT INTO videos
-    (video_id, channel_id, title, description, thumbnail, published_at, live_status, status, views, duration, external)
-  VALUES (?, ?, ?, ?, ?, ?, ?, 'inbox', ?, ?, 1)
+    (video_id, channel_id, title, description, thumbnail, published_at, live_status, status, views, duration, external, embeddable)
+  VALUES (?, ?, ?, ?, ?, ?, ?, 'inbox', ?, ?, 1, ?)
   ON CONFLICT(video_id) DO UPDATE SET
     channel_id = excluded.channel_id,
     title = CASE WHEN TRIM(excluded.title) != '' THEN excluded.title ELSE videos.title END,
@@ -45,5 +45,7 @@ export const DIRECT_VIDEO_INFO_UPSERT_SQL = `
     END,
     is_private = 0,
     is_unavailable = 0,
+    -- An answer that did not carry it leaves what was known standing.
+    embeddable = COALESCE(excluded.embeddable, videos.embeddable),
     availability_checked_at = datetime('now')
 `;

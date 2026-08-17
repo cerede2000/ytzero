@@ -23,6 +23,8 @@ export interface Video {
   members_only: number;
   is_private: number;
   is_unavailable?: number;
+  /** 0 when the uploader forbids playback outside youtube.com; absent when unknown. */
+  embeddable?: number | null;
   live_status: "none" | "upcoming" | "live" | "was_live";
   status: "inbox" | "queued" | "archived";
   bucket: Bucket | null;

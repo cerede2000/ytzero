@@ -359,7 +359,13 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     streamingEnabled,
     keepStreamingAfterDownload: downloadReadyToReload,
     defaultSource: settings?.player_default_source === "stream" ? "stream" : "youtube",
-    iframeFallback,
+    // Some videos are known to refuse the embed before it is ever mounted:
+    // the uploader forbade playback outside youtube.com, the watch page said
+    // so at import, and the row has carried the answer ever since. Waiting for
+    // the iframe to report it means showing YouTube's own refusal notice first
+    // — a dead end presented as the outcome, when the direct stream was always
+    // going to be the answer.
+    iframeFallback: iframeFallback || matchingVideo?.embeddable === 0,
     // Only audio mode waits. It needs the row twice over — to know whether it
     // is even allowed, and to ask the server for the track — so the embed
     // would play a second of video at someone who asked not to see any.
