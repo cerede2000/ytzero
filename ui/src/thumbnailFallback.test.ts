@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { plainYouTubeThumbnail, thumbnailCandidates } from "./thumbnailFallback";
+import { pendingRetry, plainYouTubeThumbnail, thumbnailCandidates } from "./thumbnailFallback";
 
 /**
  * The URL that started this, taken from a row on the reporting instance. The
@@ -60,5 +60,28 @@ describe("what a card tries, in order", () => {
 
   test("a healthy thumbnail is still the first thing shown", () => {
     expect(thumbnailCandidates(PLAIN)[0]).toBe(PLAIN);
+  });
+});
+
+describe("asking a second time", () => {
+  test("a frame that was not ready gets one more chance", () => {
+    // Measured on the channel reported: a video answering 204 at 20:28 answered
+    // 200 later the same evening. Asking once decides on the wrong answer.
+    expect(pendingRetry([DEARROW], [])).toBe(DEARROW);
+  });
+
+  test("and only one", () => {
+    // A video DeArrow cannot render answers 204 for ever. Retrying past that
+    // is a card asking for a thing it has been told twice it cannot have.
+    expect(pendingRetry([DEARROW], [DEARROW])).toBe(null);
+  });
+
+  test("nothing failed, nothing to ask again", () => {
+    expect(pendingRetry([], [])).toBe(null);
+    expect(pendingRetry([], [DEARROW])).toBe(null);
+  });
+
+  test("the first still owed is the one taken", () => {
+    expect(pendingRetry([DEARROW, DEAD], [DEARROW])).toBe(DEAD);
   });
 });

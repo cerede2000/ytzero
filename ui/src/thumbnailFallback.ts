@@ -36,6 +36,24 @@ export function plainYouTubeThumbnail(url: string): string | null {
  * cannot rotate — derived from the last of those, since a DeArrow frame carries
  * no video id of its own but the image it stands in for does.
  */
+/**
+ * The candidate owed a second chance.
+ *
+ * DeArrow renders a frame the first time somebody asks for it, and answers 204
+ * until it has one — so the first page view of a video nobody has ever opened
+ * gets nothing, falls back to the uploader's image, and keeps it for the rest
+ * of the session. Measured on the channel reported: of 22 videos, 3 answered
+ * 204; one of them had answered 204 earlier the same evening and answered 200
+ * by the time it was asked again. The answer changes, so asking once is not
+ * enough — and the 204 carries no cache headers, so asking again really asks.
+ *
+ * Once per candidate, though. A video DeArrow cannot render answers 204 for
+ * ever, and a card that keeps retrying is a card that keeps asking for it.
+ */
+export function pendingRetry(failed: readonly string[], retried: readonly string[]): string | null {
+  return failed.find((url) => !retried.includes(url)) ?? null;
+}
+
 export function thumbnailCandidates(src: string, fallbackSrc?: string): string[] {
   const candidates: string[] = [];
   for (const url of [src, fallbackSrc]) {
