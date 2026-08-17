@@ -3,6 +3,7 @@ import { log } from "./logger";
 import { forgetRelatedVideos, readRelatedVideos, saveRelatedVideos } from "./relatedVideoStore";
 import type { RelatedVideo } from "./relatedVideos";
 import { fetchRelatedVideosAsSomebody, fetchVideoInfo } from "./youtube";
+import { fetchWatchNextPanel } from "./youtubeInnerTube";
 import { panelLanguage } from "./relatedVideoText";
 import { youtubeCookieHeader } from "./youtubeCookieHeader";
 import { persistSetCookies, recordCookieRecognition } from "./youtubeCookieHealth";
@@ -22,6 +23,9 @@ import { isYouTubeRefusal } from "./youtubeRefusalQuiet";
  * entry, and a cached answer is exactly the one that carries no page to read
  * the panel out of.
  */
+/** Whose question the panel answers. */
+export type RelatedSource = "video" | "personal" | "account";
+
 const inFlight = new Map<string, Promise<RelatedVideo[]>>();
 /** A video YouTube gave nothing for is not asked about again this soon. */
 const REFUSED_QUIET_MS = 6 * 60 * 60_000;
@@ -96,8 +100,14 @@ export function createRelatedVideoFetcher(
     return videos;
   },
   forget = forgetRelatedVideos,
+  /** The panel youtube.com itself shows: the video's, seen by this account. */
+  asBrowser = async (videoId: string, userId: number): Promise<RelatedVideo[]> => {
+    const cookieHeader = cookieHeaderFor(userId);
+    if (!cookieHeader) return [];
+    return fetchWatchNextPanel(videoId, cookieHeader, panelLanguage(getUserSetting(userId, "language")));
+  },
 ) {
-  return async function fetchRelatedVideos(videoId: string, userId: number, refresh = false, preferAccount = false): Promise<RelatedVideo[]> {
+  return async function fetchRelatedVideos(videoId: string, userId: number, refresh = false, source: RelatedSource = "video"): Promise<RelatedVideo[]> {
     const key = `${userId}:${videoId}`;
     // Asking again is what the reader just pressed. Nothing stored, nothing
     // remembered about an empty answer, and no sharing with a request that was
@@ -132,9 +142,13 @@ export function createRelatedVideoFetcher(
        * account attempt at once, having asked nothing.
        */
       const recognised = { signedIn: false, setCookies: [] as string[] };
-      const mine = preferAccount
-        ? await loadAsSomebody(videoId, userId, recognised).catch((failure) => {
-            log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
+      const asAccount = () => loadAsSomebody(videoId, userId, recognised).catch((failure) => {
+        log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
+        return [] as RelatedVideo[];
+      });
+      const mine = source === "account" ? await asAccount()
+        : source === "personal" ? await asBrowser(videoId, userId).catch((failure) => {
+            log.warn("related.watch_next_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
             return [] as RelatedVideo[];
           })
         : [];
@@ -142,7 +156,7 @@ export function createRelatedVideoFetcher(
         remember(key, mine, now);
         await save(videoId, userId, mine);
         // `recognised` is the answer; `credentialed` was only the attempt.
-        log.info("related.fetched", { videoId, userId, suggestions: mine.length, credentialed: true, recognised: recognised.signedIn });
+        log.info("related.fetched", { videoId, userId, suggestions: mine.length, source, recognised: recognised.signedIn });
         return mine;
       }
 
@@ -160,9 +174,9 @@ export function createRelatedVideoFetcher(
         // over a refusal that lasts ninety seconds. The account can still be
         // asked — being known is what gets an answer from a refused address —
         // even when the reader would rather the panel were about the video.
-        const authenticated = preferAccount
-          ? []
-          : await loadAsSomebody(videoId, userId, recognised).catch(() => [] as RelatedVideo[]);
+        const authenticated = source === "video"
+          ? await loadAsSomebody(videoId, userId, recognised).catch(() => [] as RelatedVideo[])
+          : [];
         if (authenticated.length > 0) {
           remember(key, authenticated, now);
           await save(videoId, userId, authenticated);
