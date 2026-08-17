@@ -194,8 +194,6 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
                   onPlay={onPlay}
                   onChanged={reloadLocalVideos}
                   searchResultLayout
-                  allowReject={false}
-                  allowMarkWatched={false}
                   processing={false}
                   inLibrary={inLibrary}
                 />

@@ -61,7 +61,11 @@ api.post("/videos/:id/import", async (c) => {
 api.post("/videos/:id/archive", async (c) => {
   const uid = currentUserId(c);
   const id = c.req.param("id");
-  if (!await videoExistsStmt.get(id)) return c.json({ error: "not found" }, 404);
+  // Dismissing is offered wherever a video is shown, and one seen in search or
+  // in a suggestion panel has no row yet — the same import opening it would do.
+  // Refusing here is what forced those two surfaces to hide the action instead.
+  if (childLocalOnly(uid) && !await videoExistsStmt.get(id)) return c.json({ error: "restricted" }, 403);
+  if (!await ensureVideoImported(uid, id)) return c.json({ error: "not found" }, 404);
   await database.prepare(
     `INSERT INTO user_videos (user_id, video_id, status) VALUES (?, ?, 'archived')
      ON CONFLICT(user_id, video_id) DO UPDATE SET status = 'archived', bucket = NULL, show_from = NULL, playback_context_json = NULL`
@@ -114,7 +118,10 @@ api.post("/videos/:id/watch", async (c) => {
 api.post("/videos/:id/complete", async (c) => {
   const uid = currentUserId(c);
   const id = c.req.param("id");
-  if (!await videoExistsStmt.get(id)) return c.json({ error: "not found" }, 404);
+  // Marking something watched is a statement about a video, not about whether
+  // the library happens to hold it yet.
+  if (childLocalOnly(uid) && !await videoExistsStmt.get(id)) return c.json({ error: "restricted" }, 403);
+  if (!await ensureVideoImported(uid, id)) return c.json({ error: "not found" }, 404);
   await completeVideo(uid, id);
   refreshDiscoveryInBackground(uid);
   return c.json({ ok: true });
