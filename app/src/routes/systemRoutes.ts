@@ -21,6 +21,43 @@ export function registerSystemRoutes(
   },
 ): void {
   const { isAdmin, currentUserId } = access;
+/**
+ * What the audio player did, from a device I cannot open a console on.
+ *
+ * The lock-screen controls disappear on Android while the sound plays on, and
+ * the mechanism is not reproducible on a desktop: there the element pauses, so
+ * neither the stall watcher nor a source rebuild ever fires. Two guesses read
+ * from the code were both wrong, which is enough of those.
+ *
+ * Deliberately narrow — a fixed set of names, a small payload, one line each —
+ * so it reports on this and cannot become a way for a page to write the log.
+ */
+const AUDIO_DIAGNOSTIC_EVENTS = new Set([
+  "session_torn_down_while_playing",
+  "source_rebuilt",
+  "stall_recovery",
+  "visibility",
+]);
+api.post("/diagnostics/audio", async (c) => {
+  const uid = currentUserId(c);
+  const body = await c.req.json().catch(() => null) as { event?: unknown; videoId?: unknown; detail?: unknown } | null;
+  if (!body || typeof body.event !== "string" || !AUDIO_DIAGNOSTIC_EVENTS.has(body.event)) {
+    return c.json({ ok: false }, 400);
+  }
+  const detail = body.detail && typeof body.detail === "object"
+    ? Object.fromEntries(Object.entries(body.detail).slice(0, 10).map(([key, value]) => [
+        key.slice(0, 24),
+        typeof value === "string" ? value.slice(0, 60) : value,
+      ]))
+    : {};
+  log.info(`audio.client.${body.event}`, {
+    userId: uid,
+    videoId: typeof body.videoId === "string" ? body.videoId.slice(0, 16) : null,
+    ...detail,
+  });
+  return c.json({ ok: true });
+});
+
 api.get("/config", (c) => {
   return c.json({ app_url: process.env.APP_URL ?? "" });
 });
