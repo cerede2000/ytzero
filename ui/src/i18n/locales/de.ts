@@ -1226,7 +1226,7 @@ export const de: Locale = {
     dearrowTitlesEnabled: "Titel ohne Clickbait",
     dearrowTitlesHint: "Ersetzt Originaltitel durch beschreibende Vorschläge der DeArrow-Community. Anfragen nutzen ein anonymes Hash-Präfix; die Bibliothek bleibt unverändert.",
     dearrowThumbnailsEnabled: "Vorschaubilder ohne Clickbait",
-    dearrowThumbnailsHint: "Ersetzt Originalvorschaubilder durch ausgewählte Videoframes der DeArrow-Community. Der Dienst erhält dafür die Video-ID.",
+    dearrowThumbnailsHint: "Ersetzt die Miniaturansichten durch ein Bild aus dem Video: das von der DeArrow-Community gewählte, sonst das von DeArrow vorgeschlagene. Der Miniaturansichtsdienst erhält die Video-ID.",
     dearrowAttribution: "DeArrow-/SponsorBlock-Daten (CC BY-NC-SA 4.0).",
     dearrowSaved: "DeArrow-Einstellungen gespeichert",
     showOriginalVersion: "Originalversion anzeigen",

@@ -1228,7 +1228,7 @@ export const en = {
     dearrowTitlesEnabled: "Clickbait-free titles",
     dearrowTitlesHint: "Replaces original titles with descriptive suggestions from the DeArrow community. Requests use an anonymous hash prefix and the library stays unchanged.",
     dearrowThumbnailsEnabled: "Clickbait-free thumbnails",
-    dearrowThumbnailsHint: "Replaces original thumbnails with frames selected by the DeArrow community. The thumbnail service receives the video ID.",
+    dearrowThumbnailsHint: "Replaces the uploader's thumbnails with a frame from the video: the one the DeArrow community chose where there is one, and the one DeArrow points at otherwise. The thumbnail service receives the video id.",
     dearrowAttribution: "DeArrow/SponsorBlock data (CC BY-NC-SA 4.0).",
     dearrowSaved: "DeArrow settings saved",
     showOriginalVersion: "Show the original version",

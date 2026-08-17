@@ -1227,7 +1227,7 @@ export const pl: Locale = {
     dearrowTitlesEnabled: "Tytuły bez clickbaitu",
     dearrowTitlesHint: "Zastępuje oryginalne tytuły opisowymi propozycjami społeczności DeArrow. Zapytania używają anonimowego prefiksu, a biblioteka pozostaje bez zmian.",
     dearrowThumbnailsEnabled: "Miniatury bez clickbaitu",
-    dearrowThumbnailsHint: "Zastępuje oryginalne miniatury kadrami wybranymi przez społeczność DeArrow. Usługa miniatur otrzymuje ID filmu.",
+    dearrowThumbnailsHint: "Zastępuje miniatury kadrem z filmu: wybranym przez społeczność DeArrow, a w przeciwnym razie tym, który wskazuje DeArrow. Usługa miniatur otrzymuje identyfikator filmu.",
     dearrowAttribution: "Dane DeArrow/SponsorBlock (CC BY-NC-SA 4.0).",
     dearrowSaved: "Zapisano ustawienia DeArrow",
     showOriginalVersion: "Pokaż oryginalną wersję",
