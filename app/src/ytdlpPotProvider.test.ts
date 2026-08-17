@@ -58,9 +58,13 @@ describe("PO token provider arguments", () => {
 });
 
 describe("who needs a token", () => {
-  test("an attempt carrying cookies goes without one", () => {
-    // Measured on a refused address: 4.5 s with cookies alone, 6.0 s with a
-    // token as well, for the same answer. The account is the proof already.
-    expect(potArgsFor(true)).toEqual([]);
+  test("every attempt carries one, cookies or not", () => {
+    // It once went without when cookies were present: 4.5 s with cookies
+    // alone against 6.0 s with a token as well, for the same answer. Then
+    // YouTube began challenging the player API of a signed-in caller too — the
+    // same jar that loads a watch page perfectly gets "Sign in to confirm
+    // you're not a bot" from yt-dlp — and the one thing that might answer was
+    // being withheld precisely because an account was present.
+    expect(potArgsFor(true)).toEqual(potArgsFor(false));
   });
 });
