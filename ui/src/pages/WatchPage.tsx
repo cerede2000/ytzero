@@ -1089,7 +1089,7 @@ export default function WatchPage() {
           * YouTube shows them too, dimmed, with the progress bar — which the
           * card below already draws.
           */}
-        {related.filter((v) => v.is_short === 0).map((v) => (
+        {related.filter((v) => !isShort(v)).map((v) => (
           <div key={v.video_id} className="related-item">
             <div className="related-thumb-shell">
               <Link className="related-thumb-link" to={`/watch/${v.video_id}`} aria-label={v.title} title={v.title}>
