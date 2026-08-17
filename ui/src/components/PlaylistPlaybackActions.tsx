@@ -8,7 +8,7 @@ import { MenuItem, SplitButton } from "./ui";
 export default function PlaylistPlaybackActions({ videos, disabled = false, onPlay }: {
   videos: readonly Video[];
   disabled?: boolean;
-  onPlay: (video: Video) => void;
+  onPlay: (video: Video, audio: boolean) => void;
 }) {
   const { t } = useI18n();
   const first = videos[0];
@@ -20,8 +20,11 @@ export default function PlaylistPlaybackActions({ videos, disabled = false, onPl
   // the times a list is meant to be listened to rather than watched, and the
   // choice sticks afterwards exactly as the player's own toggle does.
   const start = (video: Video, audio: boolean) => {
+    // Written for the videos that follow, and stated to the navigation for
+    // this one: the preference is keyed on the profile this browser remembers
+    // being, and a browser that was never told has nowhere to keep it.
     setProfileAudioMode(audio);
-    onPlay(video);
+    onPlay(video, audio);
   };
 
   return <>

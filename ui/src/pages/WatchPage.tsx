@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, type CSSProperties } from "react";
 import "./WatchPage.css";
 import { emitToast } from "../events";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   Archive,
   AlertTriangle,
