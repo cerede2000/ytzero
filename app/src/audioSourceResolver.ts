@@ -1,6 +1,7 @@
 import { AudioSourceCache, audioSourceKey } from "./audioSourceCache";
 import { defaultAudioDiagnostic, type AudioDiagnostic } from "./audioDiagnostics";
 import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
+import { recordVideoGone } from "./videoGoneOnPlayback";
 import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { downloadCookieAttempts } from "./downloadStrategy";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
@@ -106,6 +107,11 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
         const said = stderr.trim().split(/\r?\n/).filter(Boolean).at(-1)?.slice(0, 300);
         refusedRef.refused = callerWasRefused(stderr);
         reportFailure("ytdlp_exit", said ? { exitCode, said } : { exitCode });
+        // The reader has just been told the video is gone. Keeping that answer
+        // saves offering them the same video tomorrow — the availability sync
+        // re-asks each one at most once a day. A refusal is not this, and
+        // recordVideoGone declines to act on one.
+        if (!refusedRef.refused) void recordVideoGone(videoId, new Error(stderr)).catch(() => {});
         return null;
       }
       const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
