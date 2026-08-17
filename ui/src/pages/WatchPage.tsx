@@ -191,6 +191,7 @@ export default function WatchPage() {
     related,
     relatedFromYoutube,
     refreshSuggestions,
+    reloadSuggestions,
     refreshingSuggestions,
     reload,
     reloadDownloadedPlayer,
@@ -1101,7 +1102,7 @@ export default function WatchPage() {
                 {formatTimeAgo(v.published_at, language)}
               </div>
             </div>
-            <VideoQuickActions video={v} />
+            <VideoQuickActions video={v} onChanged={reloadSuggestions} />
           </div>
         ))}
         </>}
