@@ -136,16 +136,38 @@ describe("when YouTube is refusing the address", () => {
     // what three real attempts came back with. Read as an ordinary failure it
     // would be remembered as "this video has no panel", for six hours.
     const refused = new Error("video info failed: html=videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you’re not a bot); innertube=HTTP error! status: 400");
-    const { fetch, loads } = fetcher({ fail: () => { throw refused; } });
+    let clock = 1_000;
+    const { fetch, loads } = fetcher({ fail: () => { throw refused; }, clock: () => clock });
     expect(await fetch("plain-refusal", 1)).toEqual([]);
+    // Ten minutes on: read as an ordinary failure this would still be shut.
+    clock += 10 * 60_000;
     expect(await fetch("plain-refusal", 1)).toEqual([]);
     expect(loads()).toBe(2);
   });
 
-  test("does not hold the video shut for six hours over a ninety-second refusal", async () => {
-    const { fetch, loads } = fetcher({ fail: () => { throw new YouTubeRefusingError(); } });
+  test("pauses for as long as a refusal lasts, not for as long as an empty answer does", async () => {
+    // The two silences are different lengths on purpose. A refusal is not an
+    // answer about this video, so six hours is far too long — but no pause at
+    // all means every page opened during a cycle asks again, and each ask is
+    // another request to an address that is already saying no.
+    let clock = 1_000;
+    const { fetch, loads } = fetcher({ fail: () => { throw new YouTubeRefusingError(); }, clock: () => clock });
     expect(await fetch("still-refused", 1)).toEqual([]);
     expect(await fetch("still-refused", 1)).toEqual([]);
+    expect(loads()).toBe(1);
+
+    clock += 91_000;
+    expect(await fetch("still-refused", 1)).toEqual([]);
+    expect(loads()).toBe(2);
+  });
+
+  test("and the pause is nowhere near the one an empty answer buys", async () => {
+    let clock = 1_000;
+    const { fetch, loads } = fetcher({ fail: () => { throw new YouTubeRefusingError(); }, clock: () => clock });
+    await fetch("brief-quiet", 1);
+    clock += 10 * 60_000;
+    await fetch("brief-quiet", 1);
+    // An empty answer would still be holding this shut; a refusal is long done.
     expect(loads()).toBe(2);
   });
 });

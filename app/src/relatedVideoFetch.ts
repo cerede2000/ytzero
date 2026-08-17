@@ -27,9 +27,24 @@ import { isYouTubeRefusal } from "./youtubeRefusalQuiet";
 export type RelatedSource = "video" | "personal" | "account";
 
 const inFlight = new Map<string, Promise<RelatedVideo[]>>();
-/** A video YouTube gave nothing for is not asked about again this soon. */
-const REFUSED_QUIET_MS = 6 * 60 * 60_000;
-const emptyAt = new Map<string, number>();
+
+/**
+ * Two silences, and they are not the same length.
+ *
+ * "This video has no panel" is an answer, and it stays true for hours: asking
+ * again the same evening buys the same nothing. "I will not answer you" is not
+ * an answer at all — the question was never put — and it lasts about as long as
+ * a refusal cycle does.
+ *
+ * Told apart, each gets the pause it deserves. Conflated, one of them is always
+ * wrong: hold both for six hours and a ninety-second refusal shuts the panel
+ * for the afternoon; hold neither and every open of every video re-asks an
+ * address that is already saying no, which is how a refusal cycle feeds itself.
+ */
+const EMPTY_QUIET_MS = 6 * 60 * 60_000;
+const REFUSAL_QUIET_MS = 90_000;
+/** When this key may be asked about again — an instant, not a duration. */
+const quietUntil = new Map<string, number>();
 
 /**
  * The panels that could not be written down.
@@ -114,7 +129,7 @@ export function createRelatedVideoFetcher(
     // already running under the old answer.
     if (refresh) {
       await forget(videoId, userId);
-      emptyAt.delete(key);
+      quietUntil.delete(key);
       remembered.delete(key);
     } else {
       const stored = await read(videoId, userId, 25, source);
@@ -123,8 +138,8 @@ export function createRelatedVideoFetcher(
       if (held) return held;
       const running = inFlight.get(key);
       if (running) return running;
-      const quietSince = emptyAt.get(key);
-      if (quietSince !== undefined && now() - quietSince < REFUSED_QUIET_MS) return [];
+      const until = quietUntil.get(key);
+      if (until !== undefined && now() < until) return [];
     }
 
     const started = (async () => {
@@ -142,6 +157,29 @@ export function createRelatedVideoFetcher(
        * account attempt at once, having asked nothing.
        */
       const recognised = { signedIn: false, setCookies: [] as string[] };
+      /**
+       * One line for every panel that arrives, whichever path produced it.
+       *
+       * The three used to be written where they happened, and drifted: one
+       * reported the question asked, one hard-coded "video" whatever had been
+       * asked, and the third still carried the field the others had replaced.
+       * Read together they described three different features. `source` is
+       * always the question; `answeredBy` appears only when somebody other than
+       * the one asked ended up answering it, which is the interesting case and
+       * the one that was invisible.
+       */
+      const reportFetched = (videos: readonly RelatedVideo[], answeredBy: RelatedSource) => {
+        log.info("related.fetched", {
+          videoId, userId, suggestions: videos.length, source,
+          ...(answeredBy === source ? {} : { answeredBy }),
+          // Only the page read learns whether YouTube knew us; the endpoint
+          // answers without saying, so reporting it there was a false no.
+          ...(answeredBy === "account" ? { recognised: recognised.signedIn } : {}),
+          // What came back, so a panel can be judged from the log rather than
+          // from a screenshot of it.
+          first: videos.slice(0, 3).map((video) => `${video.channelTitle} — ${video.title}`.slice(0, 70)),
+        });
+      };
       const asAccount = () => loadAsSomebody(videoId, userId, recognised).catch((failure) => {
         log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
         return [] as RelatedVideo[];
@@ -155,16 +193,7 @@ export function createRelatedVideoFetcher(
       if (mine.length > 0) {
         remember(key, mine, now);
         await save(videoId, userId, mine, source);
-        // `recognised` is the answer; `credentialed` was only the attempt.
-        log.info("related.fetched", {
-          videoId, userId, suggestions: mine.length, source,
-          // Only the page read learns whether YouTube knew us; the endpoint
-          // answers without saying, so reporting it there was a false no.
-          ...(source === "account" ? { recognised: recognised.signedIn } : {}),
-          // What came back, so a panel can be judged from the log rather than
-          // from a screenshot of it.
-          first: mine.slice(0, 3).map((video) => `${video.channelTitle} — ${video.title}`.slice(0, 70)),
-        });
+        reportFetched(mine, source);
         return mine;
       }
 
@@ -174,7 +203,7 @@ export function createRelatedVideoFetcher(
       } catch (error) {
         if (!isYouTubeRefusal(error)) {
           log.warn("related.fetch_failed", { videoId, userId, error: error instanceof Error ? error.message : String(error) });
-          emptyAt.set(key, now());
+          quietUntil.set(key, now() + EMPTY_QUIET_MS);
           return [];
         }
         // A refusal answers nothing about this video: the question was never
@@ -188,22 +217,26 @@ export function createRelatedVideoFetcher(
         if (authenticated.length > 0) {
           remember(key, authenticated, now);
           await save(videoId, userId, authenticated, source);
-          log.info("related.fetched", { videoId, userId, suggestions: authenticated.length, credentialed: true, recognised: recognised.signedIn });
+          reportFetched(authenticated, "account");
           return authenticated;
         }
-        log.info("related.unavailable_while_refused", { videoId, userId });
+        // A refusal says nothing about this video, so it must not be filed as
+        // "no panel here" — but it must still be a pause. Left with none, the
+        // page that opens during a cycle asks again, and the next one after it,
+        // each ask another request to an address that is already refusing.
+        quietUntil.set(key, now() + REFUSAL_QUIET_MS);
+        log.info("related.unavailable_while_refused", { videoId, userId, quietFor: REFUSAL_QUIET_MS / 1000 });
         return [];
       }
       if (related.videos.length === 0) {
-        emptyAt.set(key, now());
+        quietUntil.set(key, now() + EMPTY_QUIET_MS);
         return [];
       }
       remember(key, related.videos, now);
       await save(videoId, userId, related.videos, source);
-      log.info("related.fetched", {
-        videoId, userId, suggestions: related.videos.length, source: "video",
-        first: related.videos.slice(0, 3).map((video) => `${video.channelTitle} — ${video.title}`.slice(0, 70)),
-      });
+      // Whatever was asked for, this answer is the video's own: the account was
+      // asked first and had nothing to say, or had no jar to say it with.
+      reportFetched(related.videos, "video");
       return related.videos;
     })();
 
