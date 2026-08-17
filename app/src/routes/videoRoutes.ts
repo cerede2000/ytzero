@@ -442,12 +442,12 @@ async function relatedPanelWanted(uid: number): Promise<boolean> {
   return Number(settings.related_count ?? 15) > 0;
 }
 
-async function suggestedVideos(uid: number, videoId: string, fetchMissing = false) {
+async function suggestedVideos(uid: number, videoId: string, fetchMissing = false, refresh = false) {
   if (!pluginEnabled("related")) return [];
   const { settings } = await getPluginSettings(uid, "related");
   const limit = Number(settings.related_count ?? 15);
   if (limit <= 0) return [];
-  const stored = fetchMissing ? await fetchRelatedVideos(videoId, uid) : await readRelatedVideos(videoId, 25);
+  const stored = fetchMissing ? await fetchRelatedVideos(videoId, uid, refresh) : await readRelatedVideos(videoId, uid, 25);
   if (stored.length === 0) return [];
   const known = await attachLibraryState(uid, stored);
   const inLibrary = new Set(known.filter((video) => video.in_library === 1).map((video) => video.videoId));
@@ -575,7 +575,8 @@ api.get("/videos/:id/suggestions", async (c) => {
   const uid = currentUserId(c);
   const videoId = c.req.param("id");
   if (childLocalOnly(uid) || !validYouTubeVideoId(videoId)) return c.json({ suggestions: [] });
-  return c.json({ suggestions: await suggestedVideos(uid, videoId, true) });
+  // `refresh` is the reader saying the panel is not theirs, or not current.
+  return c.json({ suggestions: await suggestedVideos(uid, videoId, true, c.req.query("refresh") === "1") });
 });
 
 }

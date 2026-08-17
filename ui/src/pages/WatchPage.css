@@ -1021,3 +1021,20 @@ body.cinema .watch-layout.theater .watch-actions .ui-button--secondary:not(.ui-p
 .watch-more-menu .more-menu-section-label { color: var(--text-3); font-size: 11px; font-weight: 600; letter-spacing: .04em; padding: 3px 10px 5px; text-transform: uppercase; }
 .watch-more-menu .ui-menu__status { margin-left: auto; }
 .watch-more-menu--watchlater .schedule-picker__group { margin-inline: 2px; }
+
+/* The panel's own heading row: the title, and the way to ask again. A stored
+   panel is this profile's answer from up to a day ago, and until now a video
+   already in the library had no way to be asked a second time. */
+.related-heading { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.related-heading .related-title { margin-bottom: 0; }
+.related-refresh {
+  align-items: center; background: transparent; border: 0; border-radius: 999px;
+  color: var(--muted); cursor: pointer; display: inline-flex; height: 28px;
+  justify-content: center; padding: 0; transition: background 140ms ease, color 140ms ease; width: 28px;
+}
+.related-refresh:hover:not(:disabled) { background: var(--chip); color: var(--text); }
+.related-refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.related-refresh:disabled { cursor: default; opacity: .6; }
+.related-refresh--spinning { animation: related-refresh-spin 900ms linear infinite; }
+@keyframes related-refresh-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .related-refresh--spinning { animation: none; } }

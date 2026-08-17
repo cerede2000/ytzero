@@ -799,6 +799,7 @@ export const pl: Locale = {
     showAllResults: "Pokaż wszystkie wyniki",
     subscribers: "subskrybentów",
     moreLikeThis: "Więcej podobnych",
+    refreshSuggestions: "Odśwież propozycje",
     commentsTitle: "Komentarze",
     commentsSortLabel: "Sortuj komentarze",
     commentsSortTop: "Najpopularniejsze",

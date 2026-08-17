@@ -286,7 +286,8 @@ export const api = {
   live: () => http<{ videos: Video[] }>("/live"),
   channelLive: (id: string) => http<{ videos: Video[] }>(`/channels/${id}/live`),
   video: (id: string) => sharedGet<{ video: Video; related: Video[]; related_external?: SearchResult[]; related_pending?: boolean }>(`video:${id}`, `/videos/${id}`),
-  videoSuggestions: (id: string) => http<{ suggestions: SearchResult[] }>(`/videos/${id}/suggestions`),
+  videoSuggestions: (id: string, refresh = false) =>
+    http<{ suggestions: SearchResult[] }>(`/videos/${id}/suggestions${refresh ? "?refresh=1" : ""}`),
   videoComments: (id: string, sort: VideoCommentSort = "top", refresh = false) =>
     http<VideoCommentsResponse>(`/videos/${id}/comments?sort=${sort}${refresh ? "&refresh=1" : ""}`),
   watchlist: () => sharedGet<{ videos: Video[] }>("watchlist", "/watchlist"),

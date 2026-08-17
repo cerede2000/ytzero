@@ -165,6 +165,8 @@ export default function WatchPage() {
     privateVideoNotice,
     queue,
     related,
+    refreshSuggestions,
+    refreshingSuggestions,
     reload,
     reloadDownloadedPlayer,
     requestDownload,
@@ -1056,7 +1058,19 @@ export default function WatchPage() {
           />
         )}
         {showRelated && <>
-        <h2 className="related-title">{t("moreLikeThis")}</h2>
+        <div className="related-heading">
+          <h2 className="related-title">{t("moreLikeThis")}</h2>
+          <button
+            type="button"
+            className="related-refresh"
+            onClick={refreshSuggestions}
+            disabled={refreshingSuggestions}
+            aria-label={t("refreshSuggestions")}
+            title={t("refreshSuggestions")}
+          >
+            <RefreshCw size={15} className={refreshingSuggestions ? "related-refresh--spinning" : undefined} />
+          </button>
+        </div>
         {related.filter((v) => v.is_short === 0 && v.watched !== 1).map((v) => (
           <div key={v.video_id} className="related-item">
             <div className="related-thumb-shell">

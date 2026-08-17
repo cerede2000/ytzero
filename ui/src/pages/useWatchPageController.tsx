@@ -843,6 +843,24 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     return () => { cancelled = true; };
   }, [id, relatedPending]);
 
+  /**
+   * Ask YouTube again, because the reader says this panel is not theirs.
+   *
+   * A stored panel is this profile's answer from up to a day ago, and a video
+   * already in the library never had a reason to ask a second time — which
+   * left no way at all to correct a panel fetched before the profiles were
+   * kept apart.
+   */
+  const [refreshingSuggestions, setRefreshingSuggestions] = useState(false);
+  const refreshSuggestions = useCallback(() => {
+    if (!id || refreshingSuggestions) return;
+    setRefreshingSuggestions(true);
+    api.videoSuggestions(id, true)
+      .then((result) => setRelated((current) => withSuggestions(current, result.suggestions)))
+      .catch(() => {})
+      .finally(() => setRefreshingSuggestions(false));
+  }, [id, refreshingSuggestions]);
+
   // When a video finishes: record completion, advance the playlist if any.
   const handleEnded = useCallback(() => {
     if (!id) return;
@@ -1634,6 +1652,8 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     progressRef,
     queue,
     related,
+    refreshSuggestions,
+    refreshingSuggestions,
     reload,
     reloadDownloadedPlayer,
     requestDownload,

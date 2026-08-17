@@ -676,8 +676,14 @@ CREATE TABLE IF NOT EXISTS bulk_undo (
 -- The panel of suggestions YouTube shows beside a video, kept as it was read
 -- from the watch page the import had already downloaded. Not videos: a video
 -- gets a row of its own only if somebody acts on it.
+-- A panel of suggestions is read from YouTube as somebody, so it carries that
+-- account's taste and belongs to the profile it was fetched for. Keyed on the
+-- video alone it was fetched once by whoever opened the video first and served
+-- to everyone after, which is the opposite of what a recommendation is.
 CREATE TABLE IF NOT EXISTS video_related (
-  video_id   TEXT PRIMARY KEY REFERENCES videos(video_id) ON DELETE CASCADE,
+  video_id   TEXT NOT NULL REFERENCES videos(video_id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   payload    TEXT NOT NULL,
-  fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+  fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (video_id, user_id)
 );

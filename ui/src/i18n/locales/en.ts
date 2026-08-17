@@ -799,6 +799,7 @@ export const en = {
     showAllResults: "Show all results",
     subscribers: "subscribers",
     moreLikeThis: "More like this",
+    refreshSuggestions: "Refresh suggestions",
     commentsTitle: "Comments",
     commentsSortLabel: "Sort comments",
     commentsSortTop: "Most popular",
