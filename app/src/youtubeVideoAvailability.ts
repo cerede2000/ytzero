@@ -57,16 +57,43 @@ export function videoOEmbedAvailabilityFromStatus(status: number): VideoOEmbedAv
   return "unknown";
 }
 
-export async function fetchVideoOEmbedAvailability(
+export interface VideoOEmbed {
+  availability: VideoOEmbedAvailability;
+  /**
+   * The uploader's own title, or null when the answer carried none.
+   *
+   * oEmbed is the one YouTube endpoint that does not translate. Asked with
+   * `Accept-Language: en-US`, it still answers "Donnez-moi 15 minutes. Vous ne
+   * verrez plus l'argent pareil." — measured on three French videos whose watch
+   * pages, asked the same way, answered in English. That makes it the only
+   * place a stored title can be corrected from without asking twice.
+   */
+  title: string | null;
+}
+
+export async function fetchVideoOEmbed(
   videoId: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<VideoOEmbedAvailability> {
+): Promise<VideoOEmbed> {
   const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
   const response = await fetchImpl(
     `https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`,
     { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "en-US,en;q=0.9" } },
   );
   if (response.status === 429) throw new Error("YouTube oEmbed availability failed (429)");
-  await response.body?.cancel().catch(() => {});
-  return videoOEmbedAvailabilityFromStatus(response.status);
+  const availability = videoOEmbedAvailabilityFromStatus(response.status);
+  if (availability !== "available") {
+    await response.body?.cancel().catch(() => {});
+    return { availability, title: null };
+  }
+  const payload = await response.json().catch(() => null) as { title?: unknown } | null;
+  const title = typeof payload?.title === "string" ? payload.title.trim() : "";
+  return { availability, title: title || null };
+}
+
+export async function fetchVideoOEmbedAvailability(
+  videoId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<VideoOEmbedAvailability> {
+  return (await fetchVideoOEmbed(videoId, fetchImpl)).availability;
 }
