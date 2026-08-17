@@ -59,9 +59,15 @@ export function recommendationProgress(candidate: Pick<RecommendationCandidate, 
 }
 
 export function isEligibleRecommendation(candidate: RecommendationCandidate): boolean {
-  // `is_short = NULL` means metadata has not been checked yet. Recommendations
-  // deliberately require a confirmed regular video so a Short cannot leak in.
-  if (candidate.is_short !== 0) return false;
+  // `is_short = NULL` means nobody has checked, and nobody will: the check
+  // costs a request per video and only ever runs while syncing a channel, so a
+  // video that arrived another way keeps null for good.
+  //
+  // Requiring a confirmed 0 therefore did not mean "no Shorts here", it meant
+  // "nothing that arrived outside a channel sync, ever" — a permanent
+  // exclusion dressed as a safety check. Not knowing what something is, is not
+  // a reason to act on it.
+  if (candidate.is_short === 1) return false;
   // Archived streams (`was_live`) are excluded together with live/upcoming.
   if (candidate.live_status !== "none") return false;
   // Queued videos already have an explicit destination in Scheduled.
