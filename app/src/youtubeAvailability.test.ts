@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DeletedVideoError,
   classifyIsShort,
+  fetchVideoOEmbed,
   isDeletedVideoError,
   isPrivateVideoError,
   PrivateVideoError,
@@ -54,5 +55,44 @@ describe("oEmbed availability", () => {
     const fetchImpl = (async () => new Response(null, { status: statuses.shift() })) as unknown as typeof fetch;
     expect(await classifyIsShort("deleted", "Ordinary title", fetchImpl)).toBeNull();
     expect(statuses).toEqual([]);
+  });
+});
+
+describe("the title oEmbed answers with", () => {
+  const answering = (body: unknown, status = 200) =>
+    (async () => new Response(status === 200 ? JSON.stringify(body) : null, { status })) as unknown as typeof fetch;
+
+  test("is the uploader's own, not a translation", async () => {
+    // Asked with Accept-Language: en-US, oEmbed still answers in the language
+    // the video was uploaded in. Measured on three French videos whose watch
+    // pages, asked the same way, answered in English.
+    const answer = await fetchVideoOEmbed("WjXDkL1FERs", answering({
+      title: "Donnez-moi 15 minutes. Vous ne verrez plus l'argent pareil.",
+    }));
+    expect(answer).toEqual({
+      availability: "available",
+      title: "Donnez-moi 15 minutes. Vous ne verrez plus l'argent pareil.",
+    });
+  });
+
+  test("is nothing at all when the video is gone", async () => {
+    expect(await fetchVideoOEmbed("deleted", answering(null, 404)))
+      .toEqual({ availability: "unavailable", title: null });
+  });
+
+  test("is nothing rather than an empty string", async () => {
+    // A blank title would overwrite a good one with nothing.
+    expect((await fetchVideoOEmbed("blank", answering({ title: "   " }))).title).toBe(null);
+    expect((await fetchVideoOEmbed("absent", answering({}))).title).toBe(null);
+    expect((await fetchVideoOEmbed("wrong", answering({ title: 42 }))).title).toBe(null);
+  });
+
+  test("does not cost the verdict when the body cannot be read", async () => {
+    const broken = (async () => new Response("not json", { status: 200 })) as unknown as typeof fetch;
+    expect(await fetchVideoOEmbed("video", broken)).toEqual({ availability: "available", title: null });
+  });
+
+  test("still refuses to answer through a rate limit", async () => {
+    expect(fetchVideoOEmbed("video", answering(null, 429))).rejects.toThrow("429");
   });
 });
