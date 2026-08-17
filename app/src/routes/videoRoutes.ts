@@ -457,12 +457,18 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   if (stored.length === 0) return [];
   const known = await attachLibraryState(uid, stored);
   const inLibrary = new Set(known.filter((video) => video.in_library === 1).map((video) => video.videoId));
-  const chosen = selectRelatedForPanel(stored, {
-    limit,
-    currentVideoId: videoId,
-    inLibrary,
-    hideKnown: Number(settings.related_hide_known ?? 0) === 1,
-  });
+  const hideKnown = Number(settings.related_hide_known ?? 0) === 1;
+  const chosen = selectRelatedForPanel(stored, { limit, currentVideoId: videoId, inLibrary, hideKnown });
+  // What was fetched and what survives are different numbers, and the gap
+  // between them is where a panel quietly loses the suggestions that made it
+  // worth having: the ones from channels somebody follows are in the library
+  // by definition, so hiding what is known strips the most relevant first.
+  if (chosen.length < Math.min(stored.length, limit)) {
+    log.info("related.narrowed", {
+      videoId, userId: uid, fetched: stored.length, shown: chosen.length,
+      limit, hideKnown, inLibrary: inLibrary.size,
+    });
+  }
   // Carried back through both so each card knows whether it is downloaded,
   // whether acting on it has to import it first, and whether this profile has
   // already watched it — the panel leaves out what has been watched, the same
