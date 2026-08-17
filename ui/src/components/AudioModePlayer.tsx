@@ -5,6 +5,7 @@ import { api } from "../api";
 import { audioStallStep, bufferedSecondsAhead, initialAudioStallState } from "../audioStallWatch";
 import { installInitialAudioPlaybackUnlock } from "../audioPlaybackUnlock";
 import { useI18n } from "../i18n";
+import { mediaPlaybackState } from "../mediaSessionState";
 import { img } from "../img";
 import { enforceLocalPlayerVolume } from "../localPlayerVolume";
 import type { WatchPlayerHandle } from "../playerHandle";
