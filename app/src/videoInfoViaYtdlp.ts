@@ -6,6 +6,7 @@ import type { AudioSource } from "./audioSourceResolver";
 import { audioSourceHeaders } from "./audioSourceResolver";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import type { VideoInfo } from "./youtube";
+import { audioLanguageFor, audioSelectorFor } from "./audioTrackLanguage";
 import { potArgsFor } from "./ytdlpPotProvider";
 
 /**
@@ -32,7 +33,6 @@ const INFO_FIELDS = "%(.{id,title,channel_id,channel,uploader,description,thumbn
 /** Printed once per requested format, in this order. */
 const PRINTED_FIELDS = [INFO_FIELDS, "urls", "%(http_headers)j", "%(acodec)s", "%(vcodec)s", "%(ext)s"];
 
-const AUDIO_SELECTOR = "bestaudio[acodec^=mp4a]/bestaudio[ext=m4a]/140/bestaudio/best";
 const PROGRESSIVE_SELECTOR = "22/18/best[ext=mp4][acodec!=none][vcodec!=none]";
 
 /** yt-dlp's own vocabulary for what a video is doing. */
@@ -195,7 +195,7 @@ async function runAttempt(
     // to decipher, and these are the two a page actually plays — the audio
     // track and the progressive file. A video offering neither prints one
     // block, or none, and the import carries on regardless.
-    "-f", `${AUDIO_SELECTOR},${PROGRESSIVE_SELECTOR}`,
+    "-f", `${audioSelectorFor(audioLanguageFor(userId))},${PROGRESSIVE_SELECTOR}`,
     ...PRINTED_FIELDS.flatMap((field) => ["--print", field]),
     ...potArgsFor(useCookies),
   ];
