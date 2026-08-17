@@ -19,7 +19,8 @@ describe("RSS video upsert", () => {
         members_only INTEGER NOT NULL DEFAULT 0,
         is_private INTEGER NOT NULL DEFAULT 0,
         is_unavailable INTEGER NOT NULL DEFAULT 0,
-        availability_checked_at TEXT
+        availability_checked_at TEXT,
+        embeddable INTEGER
       );
       INSERT INTO videos (video_id, channel_id, title, members_only, is_unavailable)
       VALUES ('unlock-me', 'channel', 'Members preview', 1, 1);
@@ -60,7 +61,8 @@ describe("direct video info upsert", () => {
         external INTEGER NOT NULL DEFAULT 0,
         is_private INTEGER NOT NULL DEFAULT 0,
         is_unavailable INTEGER NOT NULL DEFAULT 0,
-        availability_checked_at TEXT
+        availability_checked_at TEXT,
+        embeddable INTEGER
       );
       INSERT INTO videos
         (video_id, channel_id, title, description, thumbnail, live_status, status, duration, external)
@@ -78,6 +80,7 @@ describe("direct video info upsert", () => {
       "live",
       123,
       null,
+      null
     );
 
     expect(db.query(`
@@ -113,12 +116,14 @@ describe("direct video info upsert", () => {
         external INTEGER NOT NULL DEFAULT 0,
         is_private INTEGER NOT NULL DEFAULT 0,
         is_unavailable INTEGER NOT NULL DEFAULT 0,
-        availability_checked_at TEXT
+        availability_checked_at TEXT,
+        embeddable INTEGER
       );
     `);
 
     db.query(DIRECT_VIDEO_INFO_UPSERT_SQL).run(
       "live-radio", "channel", "Live radio", "", "live.jpg", null, "live", 123, null,
+      null
     );
 
     expect(db.query("SELECT live_status, external FROM videos WHERE video_id = 'live-radio'").get())
