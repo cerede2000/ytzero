@@ -1101,6 +1101,7 @@ export default function WatchPage() {
                 {formatTimeAgo(v.published_at, language)}
               </div>
             </div>
+            <VideoQuickActions video={v} />
           </div>
         ))}
         </>}

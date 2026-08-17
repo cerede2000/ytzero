@@ -18,15 +18,22 @@ import { videoFromSearchResult } from "./searchResultVideo";
  * The waterfall keeps the job it always had — a video YouTube offers nothing
  * for, and a panel deliberately kept local by setting the count to zero.
  */
-export function withSuggestions(local: Video[], suggested: SearchResult[] | undefined): Video[] {
+export function withSuggestions(
+  local: Video[],
+  suggested: SearchResult[] | undefined,
+  // What this profile may do with a suggestion. Hard-coded to false here, the
+  // panel could never offer to download one — the one list in the app where a
+  // card was drawn without the actions that card carries everywhere else.
+  downloads: { allowed?: boolean; enabled?: boolean } = {},
+): Video[] {
   if (!suggested?.length) return local;
   const now = Date.now();
   // They are not library rows — nothing was imported to show them — but the
   // card the panel draws reads a video, and a search result already knows how
   // to become one. Acting on a suggestion imports it, exactly as in search.
   return suggested.map((result) => videoFromSearchResult(result, {
-    downloadsAllowed: false,
-    downloadsEnabled: false,
+    downloadsAllowed: downloads.allowed === true,
+    downloadsEnabled: downloads.enabled === true,
     now,
   }));
 }
