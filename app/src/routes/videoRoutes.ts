@@ -136,7 +136,10 @@ api.get("/channels/:id/live", async (c) => {
 api.get("/watchlist", async (c) => {
   const uid = currentUserId(c);
   const rows = await database
-    .prepare(`${videoSelect(uid)} WHERE uv.status = 'queued' AND ${shortsUiVisibilitySql(uid)} ORDER BY uv.queued_at DESC`)
+    // Scheduled to be watched, so the same rule applies: a video nobody can
+    // open is not offered. Left out, a deleted upload sits in Scheduled with a
+    // day against it and fails when its turn comes.
+    .prepare(`${videoSelect(uid)} WHERE uv.status = 'queued' AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0 AND ${shortsUiVisibilitySql(uid)} ORDER BY uv.queued_at DESC`)
     .all() as VideoRow[];
   return c.json({ videos: await attachTags(uid, rows) });
 });
