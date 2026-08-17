@@ -458,7 +458,12 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   const known = await attachLibraryState(uid, stored);
   const inLibrary = new Set(known.filter((video) => video.in_library === 1).map((video) => video.videoId));
   const hideKnown = Number(settings.related_hide_known ?? 0) === 1;
-  const chosen = selectRelatedForPanel(stored, { limit, currentVideoId: videoId, inLibrary, hideKnown });
+  // Watched is judged on the whole answer, before it is cut to length: a
+  // suggestion already seen gives its place to the next one rather than
+  // leaving a gap, so a panel never arrives short for having been useful.
+  const seen = await attachWatchedState(uid, stored, (video) => video.videoId);
+  const watched = new Set(seen.filter((video) => video.watched === 1).map((video) => video.videoId));
+  const chosen = selectRelatedForPanel(stored, { limit, currentVideoId: videoId, inLibrary, hideKnown, watched });
   // What was fetched and what survives are different numbers, and the gap
   // between them is where a panel quietly loses the suggestions that made it
   // worth having: the ones from channels somebody follows are in the library
@@ -466,7 +471,7 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   if (chosen.length < Math.min(stored.length, limit)) {
     log.info("related.narrowed", {
       videoId, userId: uid, fetched: stored.length, shown: chosen.length,
-      limit, hideKnown, inLibrary: inLibrary.size,
+      limit, hideKnown, inLibrary: inLibrary.size, watched: watched.size,
     });
   }
   // Carried back through both so each card knows whether it is downloaded,

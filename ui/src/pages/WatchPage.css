@@ -1042,3 +1042,44 @@ body.cinema .watch-layout.theater .watch-actions .ui-button--secondary:not(.ui-p
 /* Where the panel came from, said plainly: a screenshot should not need a log
    file beside it to be understood. */
 .related-origin { color: var(--muted); font-size: 11px; font-weight: 400; margin-left: 8px; text-transform: none; }
+
+/*
+ * The suggestions scroll on their own, and the video stays where it was.
+ *
+ * The column is as tall as its list, so reading to the end of the panel
+ * scrolled the player off the top — on a long list the video was gone before
+ * the third suggestion. Sticking the column under the header and giving it its
+ * own scrollbar keeps the two independent, which is what the same layout does
+ * everywhere else it appears.
+ */
+@media (min-width: 1281px) {
+  .watch-layout > aside {
+    align-self: start;
+    position: sticky;
+    top: 72px;
+    max-height: calc(100vh - 88px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room for the scrollbar without the cards shifting when it appears. */
+    padding-right: 6px;
+    scrollbar-width: thin;
+  }
+  .watch-layout.theater > aside {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+/* Narrow enough that the panel sits under the video rather than beside it:
+   the player holds the top of the screen instead, the way it does on a phone,
+   so scrolling the list never takes the picture away. */
+@media (max-width: 1280px) {
+  .watch-player-stage {
+    position: sticky;
+    top: 56px;
+    z-index: 3;
+    background: var(--bg);
+  }
+  body.cinema .watch-player-stage { position: static; }
+}
