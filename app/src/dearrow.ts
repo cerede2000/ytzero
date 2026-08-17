@@ -21,17 +21,6 @@ interface DeArrowThumbnail extends DeArrowCandidate {
 export interface DeArrowApiBranding {
   titles?: DeArrowTitle[];
   thumbnails?: DeArrowThumbnail[];
-  /**
-   * A fraction of the way through the video, returned for every video whether
-   * or not anybody has submitted a thumbnail for it.
-   *
-   * It is how DeArrow answers the far commoner case: nobody has chosen a frame,
-   * and showing the uploader's is showing the thing the reader asked not to
-   * see. Measured on a channel of 213 videos, not one had a community
-   * thumbnail and every one had this.
-   */
-  randomTime?: number;
-  videoDuration?: number | null;
 }
 
 export interface DeArrowBranding {
@@ -45,23 +34,33 @@ export function deArrowHashPrefix(videoId: string): string {
   return createHash("sha256").update(videoId).digest("hex").slice(0, 4);
 }
 
-/**
- * The frame to show when the community has chosen none.
- *
- * `randomTime` is a fraction of the way through, so it needs the duration to
- * become a time. Without one there is nothing to ask the thumbnail service for,
- * and the uploader's own image is the honest answer.
- */
-export function deArrowFallbackTimestamp(branding: DeArrowApiBranding | undefined): number | null {
-  const fraction = Number(branding?.randomTime);
-  const duration = Number(branding?.videoDuration);
-  if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) return null;
-  if (!Number.isFinite(duration) || duration <= 0) return null;
-  return fraction * duration;
-}
-
 function trusted<T extends DeArrowCandidate>(candidate: T | undefined): candidate is T {
   return Boolean(candidate && (candidate.locked || candidate.votes >= 0));
+}
+
+/**
+ * Where to get a frame for this video.
+ *
+ * A submitted frame is asked for by its timestamp. For everything else the time
+ * is left off entirely, and that is the whole trick: the service picks the
+ * frame, and it is the one it would have named anyway. Measured on the video
+ * that started this, one request each:
+ *
+ *     ?videoID=WjXDkL1FERs&time=637.3726402459293   200  6644 bytes
+ *     ?videoID=WjXDkL1FERs                          200  6644 bytes
+ *     ?videoID=WjXDkL1FERs&time=200                 204
+ *
+ * Asking for a time nobody has asked for before means asking the service to
+ * render it, and it answers 204 until it has. Leaving the time off is what the
+ * extension does on youtube.com, and it is why frames appear there and not
+ * here: on 12 videos of one followed channel, the branding API carried no entry
+ * at all — no chosen frame and no suggested time — so every one of them fell
+ * back to the uploader's image. Untimed, 5 of those 6 sampled answered 200 at
+ * once; the sixth was a day old and needed rendering.
+ */
+function thumbnailUrl(videoId: string, timestamp: number | null): string {
+  const at = timestamp != null && timestamp >= 0 ? `&time=${encodeURIComponent(String(timestamp))}` : "";
+  return `${THUMBNAIL_API}?videoID=${encodeURIComponent(videoId)}${at}`;
 }
 
 export function selectDeArrowBranding(videoId: string, branding: DeArrowApiBranding | undefined): DeArrowBranding {
@@ -73,16 +72,7 @@ export function selectDeArrowBranding(videoId: string, branding: DeArrowApiBrand
   const chosen = trusted(thumbnailCandidate) && !thumbnailCandidate.original && Number.isFinite(thumbnailCandidate.timestamp)
     ? Number(thumbnailCandidate.timestamp)
     : null;
-  // Nobody has chosen a frame for most videos, and stopping there left the
-  // setting doing nothing at all on whole channels: the uploader's thumbnail
-  // stayed, which is the one the reader turned this on to avoid. DeArrow
-  // answers that with a point in the video, and its own extension shows the
-  // frame there — so this does too.
-  const timestamp = chosen ?? deArrowFallbackTimestamp(branding);
-  const thumbnail = timestamp != null && timestamp >= 0
-    ? `${THUMBNAIL_API}?videoID=${encodeURIComponent(videoId)}&time=${encodeURIComponent(String(timestamp))}`
-    : null;
-  return { title, thumbnail };
+  return { title, thumbnail: thumbnailUrl(videoId, chosen) };
 }
 
 async function brandingForPrefix(prefix: string): Promise<Record<string, DeArrowApiBranding>> {

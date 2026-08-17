@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { deArrowHashPrefix, deArrowFallbackTimestamp, selectDeArrowBranding } from "./dearrow";
+import { deArrowHashPrefix, selectDeArrowBranding } from "./dearrow";
+
+const THUMB = "https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=";
 
 describe("DeArrow branding", () => {
   test("uses the documented four-character SHA-256 prefix", () => {
@@ -16,44 +18,46 @@ describe("DeArrow branding", () => {
     });
   });
 
-  test("keeps originals and rejects negatively rated candidates", () => {
+  test("keeps original titles and rejects negatively rated candidates", () => {
     expect(selectDeArrowBranding("video-id", {
       titles: [{ title: "Untrusted", original: false, votes: -1, locked: false }],
       thumbnails: [{ timestamp: null, original: true, votes: 4, locked: false }],
-    })).toEqual({ title: null, thumbnail: null });
+    })).toEqual({ title: null, thumbnail: `${THUMB}video-id` });
   });
 });
 
 describe("when the community has chosen no frame", () => {
-  test("the point DeArrow returns for every video is used instead", () => {
-    // Measured on a channel of 213 videos: not one had a community thumbnail,
-    // and every one had this. Stopping at the community's choice left the
-    // setting doing nothing at all there — the uploader's image stayed, which
-    // is the one the reader turned it on to avoid.
-    const branding = selectDeArrowBranding("abc", { thumbnails: [], randomTime: 0.5, videoDuration: 600 });
-    expect(branding.thumbnail).toBe("https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=abc&time=300");
+  test("the service is asked for one without being told where", () => {
+    // The report this comes from: on a followed channel, the branding API
+    // carried no entry at all for any of 12 videos, so there was no timestamp
+    // to build a URL from and every card kept the uploader's thumbnail — the
+    // one the reader turned this on to avoid. Untimed, the service picks the
+    // frame itself and answers 200.
+    expect(selectDeArrowBranding("abc", {}).thumbnail).toBe(`${THUMB}abc`);
+    expect(selectDeArrowBranding("abc", undefined).thumbnail).toBe(`${THUMB}abc`);
+    expect(selectDeArrowBranding("abc", { thumbnails: [] }).thumbnail).toBe(`${THUMB}abc`);
   });
 
-  test("a chosen frame still wins over it", () => {
-    const branding = selectDeArrowBranding("abc", {
+  test("an untrusted or original submission does not name a frame either", () => {
+    expect(selectDeArrowBranding("abc", {
+      thumbnails: [{ original: true, votes: 9, locked: false, timestamp: 42 }],
+    }).thumbnail).toBe(`${THUMB}abc`);
+    expect(selectDeArrowBranding("abc", {
+      thumbnails: [{ original: false, votes: -2, locked: false, timestamp: 42 }],
+    }).thumbnail).toBe(`${THUMB}abc`);
+  });
+
+  test("a chosen frame is still asked for by its timestamp", () => {
+    // Submitted frames are already rendered, so naming one costs nothing —
+    // and it is the frame somebody picked rather than the one that came up.
+    expect(selectDeArrowBranding("abc", {
       thumbnails: [{ original: false, votes: 3, locked: false, timestamp: 42 }],
-      randomTime: 0.5,
-      videoDuration: 600,
-    });
-    expect(branding.thumbnail).toBe("https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=abc&time=42");
+    }).thumbnail).toBe(`${THUMB}abc&time=42`);
   });
 
-  test("without a duration there is nothing to ask for", () => {
-    // The fraction alone is not a time, and the uploader's image is the honest
-    // answer rather than a guess at second zero.
-    expect(selectDeArrowBranding("abc", { randomTime: 0.5 }).thumbnail).toBe(null);
-    expect(selectDeArrowBranding("abc", { randomTime: 0.5, videoDuration: 0 }).thumbnail).toBe(null);
-    expect(selectDeArrowBranding("abc", { videoDuration: 600 }).thumbnail).toBe(null);
-  });
-
-  test("a fraction outside the video is not a frame in it", () => {
-    expect(deArrowFallbackTimestamp({ randomTime: 1.4, videoDuration: 600 })).toBe(null);
-    expect(deArrowFallbackTimestamp({ randomTime: -0.1, videoDuration: 600 })).toBe(null);
-    expect(deArrowFallbackTimestamp(undefined)).toBe(null);
+  test("a submission with no timestamp is not asked for at second zero", () => {
+    expect(selectDeArrowBranding("abc", {
+      thumbnails: [{ original: false, votes: 3, locked: false, timestamp: null }],
+    }).thumbnail).toBe(`${THUMB}abc`);
   });
 });
