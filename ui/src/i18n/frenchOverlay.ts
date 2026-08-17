@@ -285,6 +285,8 @@ const FRENCH: Record<string, string> = {
   "Test connection": "Tester la connexion",
   "Sync now": "Synchroniser maintenant",
   "Save": "Enregistrer",
+  "No longer recognised by YouTube — export them again": "Plus reconnus par YouTube — réexportez-les",
+  "Recognised by YouTube": "Reconnus par YouTube",
 };
 
 /** The French for a string these screens carry in English, when there is one. */
