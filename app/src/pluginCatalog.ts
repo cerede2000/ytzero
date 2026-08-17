@@ -209,6 +209,21 @@ export const DISCOVERY_SETTINGS: PluginSettingSource[] = [
 
 export const RELATED_SETTINGS: PluginSettingSource[] = [
   {
+    key: "related_source",
+    type: "select",
+    label: { en: "Suggestions about", pl: "Propozycje dotyczą", de: "Vorschläge zu" },
+    description: {
+      en: "Asked as nobody, YouTube answers about the video: open a documentary on IMAX and it offers two more on IMAX. Asked as you, it answers about you — closer to your habits, and much the same list whichever video you opened. Your account is only ever asked with your own cookies, never another profile's.",
+      pl: "Zapytane anonimowo, YouTube odpowiada o filmie: otwórz dokument o IMAX-ie, a zaproponuje dwa kolejne o IMAX-ie. Zapytane jako Ty, odpowiada o Tobie — bliżej Twoich nawyków, ale lista bywa ta sama niezależnie od filmu. Twoje konto jest pytane wyłącznie Twoimi ciasteczkami, nigdy cudzymi.",
+      de: "Anonym gefragt, antwortet YouTube über das Video: Öffne eine Doku über IMAX, und es schlägt zwei weitere über IMAX vor. Als du gefragt, antwortet es über dich — näher an deinen Gewohnheiten, aber oft dieselbe Liste, welches Video du auch öffnest. Dein Konto wird nur mit deinen eigenen Cookies gefragt, nie mit denen eines anderen Profils.",
+    },
+    options: [
+      { value: "video", label: { en: "The video", pl: "Filmu", de: "Das Video" } },
+      { value: "account", label: { en: "Your account", pl: "Twojego konta", de: "Dein Konto" } },
+    ],
+    defaultValue: "video",
+  },
+  {
     key: "related_count",
     min: 0, max: 25, step: 1,
     label: { en: "Suggestions from YouTube", pl: "Propozycje z YouTube", de: "Vorschläge von YouTube" },

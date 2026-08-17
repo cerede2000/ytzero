@@ -447,7 +447,9 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   const { settings } = await getPluginSettings(uid, "related");
   const limit = Number(settings.related_count ?? 15);
   if (limit <= 0) return [];
-  const stored = fetchMissing ? await fetchRelatedVideos(videoId, uid, refresh) : await readRelatedVideos(videoId, uid, 25);
+  const stored = fetchMissing
+    ? await fetchRelatedVideos(videoId, uid, refresh, String(settings.related_source ?? "video") === "account")
+    : await readRelatedVideos(videoId, uid, 25);
   if (stored.length === 0) return [];
   const known = await attachLibraryState(uid, stored);
   const inLibrary = new Set(known.filter((video) => video.in_library === 1).map((video) => video.videoId));
