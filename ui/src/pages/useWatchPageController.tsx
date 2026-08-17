@@ -111,6 +111,16 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [related, setRelated] = useState<Video[]>([]);
   const [relatedPending, setRelatedPending] = useState(false);
+  /**
+   * Which video the panel on screen belongs to, once YouTube has answered.
+   *
+   * The page asks for the row more than once — the import lands, an external
+   * video is refreshed — and each answer rebuilt the panel from the library's
+   * own list plus whatever was stored, which is nothing until the suggestions
+   * are written down. So a good panel was replaced, moments after arriving, by
+   * the fallback it had just superseded.
+   */
+  const suggestionsFor = useRef<string | null>(null);
   const [copyKey, setCopyKey] = useState(0);
   const [scheduleToast, setScheduleToast] = useState<{ id: number; message: string; variant: "default" | "danger"; anchor: "desktop" | "overflow" } | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -749,6 +759,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     setVideo(null);
     setMissingVideoId(null);
     setRelatedPending(false);
+    suggestionsFor.current = null;
     setVideoInfo(null);
     setPlayerSource("auto");
     setSourceChoice("undecided");
@@ -763,14 +774,14 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       .then((r) => {
         if (cancelled) return;
         setVideo(r.video);
-        setRelated(withSuggestions(r.related, r.related_external));
+        if (suggestionsFor.current !== id) setRelated(withSuggestions(r.related, r.related_external));
         setRelatedPending(Boolean(r.related_pending));
         // External video already in DB but its RSS siblings were cleared:
         // refresh them in the background so the "related" panel refills.
         if (r.video.external && r.related.length === 0) {
           api.videoInfo(id, true)
             .then(() => api.video(id))
-            .then((r2) => { if (!cancelled) setRelated(withSuggestions(r2.related, r2.related_external)); })
+            .then((r2) => { if (!cancelled && suggestionsFor.current !== id) setRelated(withSuggestions(r2.related, r2.related_external)); })
             .catch(() => {});
         }
       })
@@ -787,7 +798,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
               return api.video(id).then((full) => {
                 if (cancelled) return;
                 setVideo(full.video);
-                setRelated(withSuggestions(full.related, full.related_external));
+                if (suggestionsFor.current !== id) setRelated(withSuggestions(full.related, full.related_external));
                 setRelatedPending(Boolean(full.related_pending));
                 setMissingVideoId(null);
                 setVideoInfo(null);
@@ -843,6 +854,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     api.videoSuggestions(id)
       .then((result) => {
         if (cancelled || !result.suggestions.length) return;
+        suggestionsFor.current = id;
         setRelated((current) => withSuggestions(current, result.suggestions));
       })
       .catch(() => {});
@@ -862,7 +874,10 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     if (!id || refreshingSuggestions) return;
     setRefreshingSuggestions(true);
     api.videoSuggestions(id, true)
-      .then((result) => setRelated((current) => withSuggestions(current, result.suggestions)))
+      .then((result) => {
+        if (result.suggestions.length) suggestionsFor.current = id;
+        setRelated((current) => withSuggestions(current, result.suggestions));
+      })
       .catch(() => {})
       .finally(() => setRefreshingSuggestions(false));
   }, [id, refreshingSuggestions]);
