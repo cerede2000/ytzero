@@ -100,18 +100,6 @@ describe("asking again on purpose", () => {
 });
 
 describe("whose panel it is", () => {
-  test("the reader's own account comes before the anonymous one", async () => {
-    // Credentials used only as a fallback for a refused address means that the
-    // moment the address recovers, everyone silently goes back to the panel
-    // YouTube shows a stranger — same profile, same cookies, another taste.
-    const { fetch, saved, loads } = fetcher({
-      asSomebody: (videoId) => [suggestion(`${videoId}-mine`)],
-    });
-    expect((await fetch("both-available", 1)).map((v) => v.videoId)).toEqual(["both-available-mine"]);
-    expect(saved["1:both-available"]?.length).toBe(1);
-    expect(loads()).toBe(0);
-  });
-
   test("a profile with no account still gets the panel about the video", async () => {
     const { fetch, loads } = fetcher();
     expect((await fetch("anon", 3)).map((v) => v.videoId)).toEqual(["anon-a"]);
@@ -178,8 +166,8 @@ describe("a video with no library row", () => {
       async (videoId) => { signedInFetches++; return [suggestion(`${videoId}-mine`)]; },
       async () => {},
     );
-    expect((await fetch("no-row", 1)).map((v) => v.videoId)).toEqual(["no-row-mine"]);
-    expect((await fetch("no-row", 1)).map((v) => v.videoId)).toEqual(["no-row-mine"]);
+    expect((await fetch("no-row", 1, false, true)).map((v) => v.videoId)).toEqual(["no-row-mine"]);
+    expect((await fetch("no-row", 1, false, true)).map((v) => v.videoId)).toEqual(["no-row-mine"]);
     expect(signedInFetches).toBe(1);
   });
 });
@@ -199,8 +187,41 @@ describe("being known, rather than merely presenting a jar", () => {
       async (videoId, _userId, recognised) => { told = recognised; return [suggestion(`${videoId}-a`)]; },
       async () => {},
     );
-    await fetch("asked-as-somebody", 9);
+    await fetch("asked-as-somebody", 9, false, true);
     expect(told !== undefined).toBe(true);
     expect(told?.signedIn).toBe(false);
+  });
+});
+
+describe("whose question the panel answers", () => {
+  function asking(preferAccount: boolean) {
+    const asked: string[] = [];
+    return {
+      asked,
+      fetch: createRelatedVideoFetcher(
+        async () => [],
+        async () => {},
+        async (videoId, related) => { asked.push("anonymous"); related.videos = [suggestion(`${videoId}-about-the-video`)]; return {} as never; },
+        () => 1_000,
+        async (videoId) => { asked.push("account"); return [suggestion(`${videoId}-about-me`)]; },
+        async () => {},
+      ),
+      preferAccount,
+    };
+  }
+
+  test("about the video by default, which is what a panel beside a video is for", async () => {
+    // Measured on two unrelated videos: asked as nobody, a documentary on IMAX
+    // is answered with two more on IMAX. Asked as an account, the same list
+    // comes back whichever video was opened.
+    const { fetch, asked, preferAccount } = asking(false);
+    expect((await fetch("v1", 1, false, preferAccount)).map((v) => v.videoId)).toEqual(["v1-about-the-video"]);
+    expect(asked).toEqual(["anonymous"]);
+  });
+
+  test("about the account when the reader says so", async () => {
+    const { fetch, asked, preferAccount } = asking(true);
+    expect((await fetch("v2", 1, false, preferAccount)).map((v) => v.videoId)).toEqual(["v2-about-me"]);
+    expect(asked).toEqual(["account"]);
   });
 });
