@@ -113,7 +113,11 @@ api.get("/live", async (c) => {
   const uid = currentUserId(c);
   if (childHidesLive(uid)) return c.json({ videos: [] });
   const rows = await database
-    .prepare(`${videoSelect(uid)} WHERE v.live_status IN ('live','upcoming') AND ${followedExists(uid)} ORDER BY v.live_status = 'live' DESC, v.published_at DESC`)
+    // Dismissing a video is how somebody says they are not going to watch it,
+    // and every other list honours that. This one did not, so a stream put
+    // aside stayed on the page it was put aside from — for good, because a
+    // scheduled stream that never starts is never anything but upcoming.
+    .prepare(`${videoSelect(uid)} WHERE v.live_status IN ('live','upcoming') AND COALESCE(uv.status, 'inbox') != 'archived' AND ${followedExists(uid)} ORDER BY v.live_status = 'live' DESC, v.published_at DESC`)
     .all() as VideoRow[];
   return c.json({ videos: await attachTags(uid, rows) });
 });

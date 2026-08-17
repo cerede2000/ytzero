@@ -129,6 +129,12 @@ export async function fetchLiveInfo(channelId: string, userId?: number): Promise
   const isUpcoming = /"isUpcoming"\s*:\s*true/.test(html);
   const isLiveNow = !isUpcoming && /"isLive"\s*:\s*true/.test(html);
   if (!isLiveNow && !isUpcoming) return null;
+  // A channel's /live slot is held by its next scheduled stream, and a stream
+  // that was never going to happen holds it for good: this page canonicalised
+  // to a stream scheduled for July 2016 and still announced as upcoming ten
+  // years later. Reported as active, it is re-announced on every refresh — so
+  // the demotion that clears finished streams can never reach it.
+  if (isUpcoming && isAbandonedSchedule(html.match(/"scheduledStartTime"\s*:\s*"?(\d+)"?/)?.[1])) return null;
 
   const titleMatch = html.match(/<meta name="title" content="([^"]*)"/);
   return {
@@ -824,6 +830,35 @@ export interface ChannelSearchResult {
   videoCount: string;
 }
 
+/**
+ * How long past its scheduled start a stream is still credibly upcoming.
+ *
+ * Streams start late, and a premiere pushed by a day is ordinary. A week is
+ * not: nothing that was going to happen is still going to happen a week after
+ * it was announced for.
+ */
+const ABANDONED_SCHEDULE_MS = 7 * 24 * 60 * 60_000;
+
+/**
+ * A scheduled stream that was never going to happen.
+ *
+ * YouTube keeps answering "upcoming" for these forever — measured on a stream
+ * scheduled for July 2016 and still reported as upcoming ten years later. Taken
+ * at face value it sits on the Live page for good, because nothing about it
+ * will ever change again: it never starts, so it never ends.
+ *
+ * Read with its date, the same answer settles itself. It stops being upcoming
+ * and falls through to what it plainly is — live content that is not live.
+ */
+export function isAbandonedSchedule(
+  scheduledStartTime: string | number | null | undefined,
+  now: () => number = Date.now,
+): boolean {
+  const seconds = Number(scheduledStartTime);
+  if (!Number.isFinite(seconds) || seconds <= 0) return false;
+  return now() - seconds * 1000 > ABANDONED_SCHEDULE_MS;
+}
+
 export interface PublishedAgo {
   value: number;
   unit: "second" | "minute" | "hour" | "day" | "week" | "month" | "year";
@@ -993,7 +1028,7 @@ export function videoInfoFromPlayerResponse(videoId: string, pr: any): VideoInfo
     ?.offlineSlate?.liveStreamOfflineSlateRenderer?.scheduledStartTime;
   const liveStatus: VideoInfo["liveStatus"] = vd.isLive === true
     ? "live"
-    : scheduledStart || pr?.playabilityStatus?.status === "LIVE_STREAM_OFFLINE"
+    : (scheduledStart || pr?.playabilityStatus?.status === "LIVE_STREAM_OFFLINE") && !isAbandonedSchedule(scheduledStart)
       ? "upcoming"
       : vd.isLiveContent === true
         ? "was_live"
