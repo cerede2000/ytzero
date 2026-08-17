@@ -35,6 +35,16 @@ export interface PluginSettingDef {
   defaultValue: number | string;
   scope?: "user" | "global";
   adminOnly?: boolean;
+  /**
+   * Kept, and not offered.
+   *
+   * A setting withdrawn rather than deleted: the code that reads it stays, so
+   * turning it back on is one word, and a value already stored keeps working.
+   * What goes is the invitation to turn it on — which matters when the answer
+   * to "what does this do" turned out to be "empties the panel of the
+   * suggestions that made it worth having".
+   */
+  hidden?: boolean;
 }
 
 export type PluginSettingValue = number | string;
@@ -238,6 +248,12 @@ export const RELATED_SETTINGS: PluginSettingSource[] = [
   {
     key: "related_hide_known",
     type: "toggle",
+    // Withdrawn: it removes a suggestion for being in the library, and the
+    // suggestions in the library are the ones from channels the reader
+    // follows — so it strips the best of the panel first. What it was for is
+    // now done properly, by leaving out what has actually been watched and
+    // filling the freed place from further down the answer.
+    hidden: true,
     label: { en: "Only suggest videos you do not have", pl: "Proponuj tylko filmy, których nie masz", de: "Nur Videos vorschlagen, die du nicht hast" },
     description: {
       en: "Off by default: a suggestion is no worse for already being in the library, and opening it costs nothing when the video is already here. Turn it on to use the panel purely for discovery — the next suggestion takes the freed place.",

@@ -68,7 +68,7 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     const args = [
       `https://www.youtube.com/watch?v=${videoId}`,
       "--ignore-config", "--no-playlist", "--no-warnings",
-      "-f", "bestaudio[acodec^=mp4a]/bestaudio[ext=m4a]/140",
+      "-f", audioSelectorFor(audioLanguageFor(userId)),
       "--print", "urls",
       "--print", "%(ext)s",
       "--print", "%(http_headers)j",

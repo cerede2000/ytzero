@@ -179,7 +179,8 @@ export async function getPluginSettings(uid: number, pluginId: string, language?
     settings[def.key] = normalizeSettingValue(values.get(def.key), def);
   }
   return {
-    definitions: defs.map((def) => localizeSetting(def, language)),
+    // A withdrawn setting is still read, still stored, and no longer offered.
+    definitions: defs.filter((def) => !def.hidden).map((def) => localizeSetting(def, language)),
     settings,
     terms: pluginId === "discovery" ? await discoveryTermState(uid) : undefined,
   };
