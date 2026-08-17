@@ -35,24 +35,40 @@ const PANEL_TTL_MS = 24 * 60 * 60_000;
  * finished, or at all. The row is a condition of the write rather than a hope,
  * and the panel that could not be stored is still the one returned to the page.
  */
-export async function saveRelatedVideos(videoId: string, userId: number, videos: readonly RelatedVideo[]): Promise<void> {
+export async function saveRelatedVideos(
+  videoId: string,
+  userId: number,
+  videos: readonly RelatedVideo[],
+  source = "video",
+): Promise<void> {
   if (videos.length === 0) return;
   try {
     await database.prepare(
       `INSERT INTO video_related (video_id, user_id, payload, fetched_at)
        SELECT ?, ?, ?, datetime('now') WHERE EXISTS (SELECT 1 FROM videos WHERE video_id = ?)
        ON CONFLICT(video_id, user_id) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at`
-    ).run(videoId, userId, JSON.stringify(videos.slice(0, MAX_STORED)), videoId);
+    ).run(videoId, userId, JSON.stringify({ source, videos: videos.slice(0, MAX_STORED) }), videoId);
   } catch (error) {
     // A panel nobody has yet asked for is not worth failing an import over.
     log.warn("related.save_failed", { videoId, userId, error: error instanceof Error ? error.message : String(error) });
   }
 }
 
+/**
+ * A panel is the answer to a particular question, and it stops being an answer
+ * when the question changes.
+ *
+ * Asked about the video, about the account, or about both, YouTube gives three
+ * different lists. Kept without recording which was asked, a panel outlives
+ * the setting that produced it: changing the setting appeared to do nothing
+ * for a day, and every experiment had to be preceded by a manual refresh
+ * nobody could be expected to know about.
+ */
 export async function readRelatedVideos(
   videoId: string,
   userId: number,
   limit: number,
+  source = "video",
   now: () => number = Date.now,
 ): Promise<RelatedVideo[]> {
   if (limit <= 0) return [];
@@ -63,7 +79,11 @@ export async function readRelatedVideos(
   if (Number.isFinite(fetchedAt) && now() - fetchedAt > PANEL_TTL_MS) return [];
   try {
     const parsed = JSON.parse(row.payload);
-    return Array.isArray(parsed) ? parsed.slice(0, limit) : [];
+    // The older shape was the bare list, from before a panel recorded which
+    // question it answered. It cannot say, so it is not an answer any more.
+    if (Array.isArray(parsed)) return [];
+    if (!parsed || typeof parsed !== "object" || parsed.source !== source) return [];
+    return Array.isArray(parsed.videos) ? parsed.videos.slice(0, limit) : [];
   } catch {
     return [];
   }

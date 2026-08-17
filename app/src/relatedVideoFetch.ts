@@ -108,7 +108,7 @@ export function createRelatedVideoFetcher(
   },
 ) {
   return async function fetchRelatedVideos(videoId: string, userId: number, refresh = false, source: RelatedSource = "video"): Promise<RelatedVideo[]> {
-    const key = `${userId}:${videoId}`;
+    const key = `${userId}:${source}:${videoId}`;
     // Asking again is what the reader just pressed. Nothing stored, nothing
     // remembered about an empty answer, and no sharing with a request that was
     // already running under the old answer.
@@ -117,7 +117,7 @@ export function createRelatedVideoFetcher(
       emptyAt.delete(key);
       remembered.delete(key);
     } else {
-      const stored = await read(videoId, userId, 25);
+      const stored = await read(videoId, userId, 25, source);
       if (stored.length > 0) return stored;
       const held = recall(key, now);
       if (held) return held;
@@ -154,7 +154,7 @@ export function createRelatedVideoFetcher(
         : [];
       if (mine.length > 0) {
         remember(key, mine, now);
-        await save(videoId, userId, mine);
+        await save(videoId, userId, mine, source);
         // `recognised` is the answer; `credentialed` was only the attempt.
         log.info("related.fetched", {
           videoId, userId, suggestions: mine.length, source,
@@ -187,7 +187,7 @@ export function createRelatedVideoFetcher(
           : [];
         if (authenticated.length > 0) {
           remember(key, authenticated, now);
-          await save(videoId, userId, authenticated);
+          await save(videoId, userId, authenticated, source);
           log.info("related.fetched", { videoId, userId, suggestions: authenticated.length, credentialed: true, recognised: recognised.signedIn });
           return authenticated;
         }
@@ -199,7 +199,7 @@ export function createRelatedVideoFetcher(
         return [];
       }
       remember(key, related.videos, now);
-      await save(videoId, userId, related.videos);
+      await save(videoId, userId, related.videos, source);
       log.info("related.fetched", {
         videoId, userId, suggestions: related.videos.length, source: "video",
         first: related.videos.slice(0, 3).map((video) => `${video.channelTitle} — ${video.title}`.slice(0, 70)),
