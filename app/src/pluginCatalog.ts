@@ -134,6 +134,21 @@ export const SOCIAL_SETTINGS: PluginSettingSource[] = [
 
 export const SEARCH_SUGGEST_SETTINGS: PluginSettingSource[] = [
   {
+    key: "search_recent",
+    type: "toggle",
+    label: {
+      en: "Remember recent searches",
+      pl: "Zapamiętuj ostatnie wyszukiwania",
+      de: "Letzte Suchanfragen merken",
+    },
+    description: {
+      en: "Offer back what this profile searched for, the way youtube.com does. The completion service knows what everyone searches, not what you did — so these are kept in this browser and never sent anywhere. Each profile has its own list, and any entry can be removed from it.",
+      pl: "Podpowiada to, czego szukał ten profil, tak jak robi to youtube.com. Wpisy pozostają w tej przeglądarce i nigdzie nie są wysyłane. Każdy profil ma własną listę, a każdy wpis można z niej usunąć.",
+      de: "Schlägt vor, wonach dieses Profil gesucht hat, wie youtube.com es tut. Die Einträge bleiben in diesem Browser und werden nirgendwohin gesendet. Jedes Profil hat seine eigene Liste, und jeder Eintrag lässt sich entfernen.",
+    },
+    defaultValue: 1,
+  },
+  {
     key: "suggestion_language",
     type: "select",
     label: { en: "Suggestion language", pl: "Język podpowiedzi", de: "Sprache der Vorschläge" },

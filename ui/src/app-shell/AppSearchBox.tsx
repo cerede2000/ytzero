@@ -1,10 +1,11 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Clock, Search, X } from "lucide-react";
 import { api, type SearchSuggestChannel } from "../api";
 import { FloatingPopover } from "../components/ui";
 import { useI18n } from "../i18n";
 import { img } from "../img";
+import { forgetSearch, matchingRecentSearches, readRecentSearches, rememberSearch, withRecentSearch } from "../recentSearches";
 import "./AppSearchBox.css";
 
 const MIN_QUERY_LENGTH = 2;
@@ -13,7 +14,8 @@ const DEBOUNCE_MS = 160;
 /** A channel jump or a query completion, flattened so one index can walk both. */
 type Entry =
   | { kind: "channel"; channel: SearchSuggestChannel }
-  | { kind: "query"; query: string };
+  | { kind: "query"; query: string }
+  | { kind: "recent"; query: string };
 
 /**
  * The top bar's search field with type-ahead. Followed channels come from the
@@ -37,6 +39,32 @@ export default function AppSearchBox() {
   // Set while navigating from a chosen entry, so the value change it causes
   // doesn't immediately re-open the list behind the new page.
   const suppressRef = useRef(false);
+  // Bumped whenever the list is closed on purpose. A completion already on its
+  // way answers into a box the reader has finished with, and re-opened the list
+  // behind the page they had just asked for — often enough to be maddening,
+  // rarely enough to look random, because it depends on where the reply lands
+  // relative to the Enter.
+  const requestRef = useRef(0);
+  const [recentEnabled, setRecentEnabled] = useState(false);
+  const [recent, setRecent] = useState<string[]>([]);
+  const recentRef = useRef<string[]>([]);
+  recentRef.current = recentEnabled ? recent : [];
+
+  // The plugin owns whether this is offered at all, so it is asked once rather
+  // than assumed: a profile that turned it off should not have a list built for
+  // it in the background.
+  useEffect(() => {
+    let cancelled = false;
+    api.pluginSettings("search-suggest")
+      .then((r) => {
+        if (cancelled) return;
+        const on = String(r.settings?.search_recent ?? "1") === "1";
+        setRecentEnabled(on);
+        setRecent(on ? readRecentSearches() : []);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => setQ(params.get("q") ?? ""), [params]);
 
@@ -47,17 +75,33 @@ export default function AppSearchBox() {
     }
     const query = q.trim();
     if (query.length < MIN_QUERY_LENGTH) {
-      setEntries([]);
+      // Arriving at an empty box, what is offered is what this profile searched
+      // for — there is nothing to complete yet, and that is the moment those are
+      // most useful.
+      const mine = recentEnabled ? matchingRecentSearches(recent, query) : [];
+      setEntries(mine.map((entry) => ({ kind: "recent" as const, query: entry })));
+      setActive(-1);
+      setWidth(formRef.current?.getBoundingClientRect().width ?? 0);
       setOpen(false);
       return;
     }
     const controller = new AbortController();
+    const requestId = ++requestRef.current;
     const timer = window.setTimeout(() => {
       api.searchSuggest(query, language, controller.signal)
         .then((r) => {
+          if (requestId !== requestRef.current) return;
+          // The reader's own searches first, then the channels they follow,
+          // then what everyone else is looking for. A completion that repeats a
+          // recent search is dropped rather than shown twice.
+          const mine = matchingRecentSearches(recentRef.current, query);
+          const seen = new Set(mine.map((entry) => entry.toLowerCase()));
           const next: Entry[] = [
+            ...mine.map((entry) => ({ kind: "recent" as const, query: entry })),
             ...r.channels.map((channel) => ({ kind: "channel" as const, channel })),
-            ...r.suggestions.map((query) => ({ kind: "query" as const, query })),
+            ...r.suggestions
+              .filter((suggestion) => !seen.has(suggestion.toLowerCase()))
+              .map((query) => ({ kind: "query" as const, query })),
           ];
           setEntries(next);
           setActive(-1);
@@ -71,11 +115,25 @@ export default function AppSearchBox() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [q, language]);
+  }, [q, language, recent, recentEnabled]);
 
   const close = () => {
+    // Any completion still on its way is no longer wanted. Without this the
+    // reply lands after the list was closed and opens it again.
+    requestRef.current++;
     setOpen(false);
     setActive(-1);
+  };
+
+  const remember = (query: string) => {
+    if (!recentEnabled) return;
+    rememberSearch(query);
+    setRecent((current) => withRecentSearch(current, query));
+  };
+
+  const forget = (query: string) => {
+    forgetSearch(query);
+    setRecent((current) => current.filter((entry) => entry !== query));
   };
 
   const go = (path: string) => {
@@ -91,6 +149,7 @@ export default function AppSearchBox() {
       return;
     }
     setQ(entry.query);
+    remember(entry.query);
     go(`/search?q=${encodeURIComponent(entry.query)}`);
   };
 
@@ -101,6 +160,8 @@ export default function AppSearchBox() {
       return;
     }
     close();
+    inputRef.current?.blur();
+    if (q.trim()) remember(q.trim());
     navigate(q.trim() ? `/search?q=${encodeURIComponent(q.trim())}` : "/");
   };
 
@@ -150,7 +211,16 @@ export default function AppSearchBox() {
             value={q}
             onChange={(event) => setQ(event.target.value)}
             onKeyDown={onKeyDown}
-            onFocus={() => { if (entries.length > 0) setOpen(true); }}
+            onFocus={() => {
+              if (entries.length > 0) { setOpen(true); return; }
+              // Nothing typed and nothing fetched: the recent list is all there
+              // is to show, and showing it is the point.
+              const mine = recentEnabled ? matchingRecentSearches(recentRef.current, "") : [];
+              if (mine.length === 0) return;
+              setEntries(mine.map((entry) => ({ kind: "recent" as const, query: entry })));
+              setWidth(formRef.current?.getBoundingClientRect().width ?? 0);
+              setOpen(true);
+            }}
             role="combobox"
             aria-expanded={open && entries.length > 0}
             aria-controls="search-suggest-list"
@@ -172,7 +242,7 @@ export default function AppSearchBox() {
         style={width ? { width: `${width - 12}px` } : undefined}
       >
         {entries.map((entry, index) => (
-          <li key={entry.kind === "channel" ? entry.channel.channel_id : `q:${entry.query}`} role="none">
+          <li key={entry.kind === "channel" ? entry.channel.channel_id : entry.kind + ":" + entry.query} className={entry.kind === "recent" ? "search-suggest-row is-recent" : "search-suggest-row"} role="none">
             <button
               type="button"
               id={optionId(index)}
@@ -190,6 +260,12 @@ export default function AppSearchBox() {
                   <span className="search-suggest-label">{entry.channel.title}</span>
                   <span className="search-suggest-kind">{t("searchSuggestionChannel")}</span>
                 </>
+              ) : entry.kind === "recent" ? (
+                <>
+                  <Clock className="search-suggest-icon" size={16} aria-hidden="true" />
+                  <span className="search-suggest-label">{entry.query}</span>
+                  <span className="search-suggest-kind">{t("searchSuggestionRecent")}</span>
+                </>
               ) : (
                 <>
                   <Search className="search-suggest-icon" size={16} aria-hidden="true" />
@@ -197,6 +273,18 @@ export default function AppSearchBox() {
                 </>
               )}
             </button>
+            {/* Beside the option rather than inside it: a button nested in a
+                button is not something a browser or a keyboard handles well. */}
+            {entry.kind === "recent" && (
+              <button
+                type="button"
+                className="search-suggest-forget"
+                aria-label={t("searchSuggestionForget")}
+                title={t("searchSuggestionForget")}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => forget(entry.query)}
+              ><X size={14} /></button>
+            )}
           </li>
         ))}
       </ul>
