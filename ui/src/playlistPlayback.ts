@@ -39,6 +39,19 @@ export function playlistContinueTarget<T extends Pick<Video, "status" | "watched
   return null;
 }
 
+/**
+ * Where a single press of play on a whole list should land.
+ *
+ * The playlist's own page can afford two buttons and shows both: resume where
+ * this list was left, and start it over. A row in the sidebar cannot, and one
+ * of the two has to be what the press means. Resuming is the one that is never
+ * wrong — a list nobody has started resumes at its first video anyway, which is
+ * exactly what starting it over would have done.
+ */
+export function playlistStartTarget<T extends Pick<Video, "status" | "watched">>(videos: readonly T[]): T | null {
+  return playlistContinueTarget(videos) ?? videos[0] ?? null;
+}
+
 export function videosInPlaylistOrder<T extends Pick<Video, "video_id">>(videos: readonly T[], order: readonly string[]): T[] {
   const byId = new Map(videos.map((video) => [video.video_id, video]));
   const seen = new Set<string>();

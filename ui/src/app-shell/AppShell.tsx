@@ -1,6 +1,4 @@
-import { useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { type Video } from "../api";
+import { useLocation } from "react-router-dom";
 import AppRoutes from "../AppRoutes";
 import ChildLockScreen from "../components/ChildLockScreen";
 import ChildNowWatching from "../components/ChildNowWatching";
@@ -8,8 +6,8 @@ import { Toast } from "../components/ui";
 import { DeArrowProvider } from "../dearrow";
 import { ENHANCE_CONFIGURATION_ELEMENT_ID, serializeEnhanceConfiguration } from "../enhanceBridge";
 import { splitNavItems } from "../nav";
-import type { PlaybackQueueContext, PlayOptions } from "../playbackQueue";
 import { AppNameContext } from "../useDocumentTitle";
+import { usePlayVideo } from "../usePlayVideo";
 import AppBootstrap from "./AppBootstrap";
 import AppSidebar from "./AppSidebar";
 import AppTopBar from "./AppTopBar";
@@ -26,7 +24,6 @@ import "../AppShell.css";
 export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
   const { ready: i18nReady } = useI18n();
   const location = useLocation();
-  const navigate = useNavigate();
   const preferences = useAppPreferences();
   const plugins = usePluginRoutes();
   const profile = useProfileSession();
