@@ -203,7 +203,7 @@ function isSubscriberText(text: string): boolean {
 }
 
 function isVideoCountText(text: string): boolean {
-  return /\b(videos?|film(?:y|ów)?)\b/i.test(text) || /vidéos?/i.test(text);
+  return /\b(vid(?:e|é)os?|film(?:y|ów)?)\b/i.test(text);
 }
 
 function isViewCountText(text: string): boolean {
@@ -746,6 +746,9 @@ async function fetchChannelTabVideos(channelId: string, tab: "videos" | "streams
     seen.add(r.videoId);
     const viewStr =
       r?.viewCountText?.simpleText ?? r?.viewCountText?.runs?.[0]?.text ?? "";
+    // "12K views" and "12 k vues" are both twelve thousand; stripping every
+    // non-digit made them both twelve.
+    const viewNum = parseCompactCount(viewStr, libraryLanguage()) ?? NaN;
     out.push({
       videoId: r.videoId,
       title: decodeHtmlEntities(r.title?.runs?.[0]?.text ?? r.title?.simpleText ?? ""),
@@ -826,49 +829,18 @@ export interface PublishedAgo {
   unit: "second" | "minute" | "hour" | "day" | "week" | "month" | "year";
 }
 
+/**
+ * YouTube only exposes a relative label here ("3 days ago", "il y a 2 semaines",
+ * "Streamed 2 weeks ago").
+ *
+ * It used to be read by regexes kept here, which is why the request had to be
+ * pinned to English: the label arrives in whatever language the page was asked
+ * for, and these knew three of the four the app speaks. The grammars now live
+ * in one table beside the panel's, and this reads the label without being told
+ * which language wrote it — a page can be fetched in any of them.
+ */
 export function parsePublishedTimeText(text: string | undefined): PublishedAgo | null {
-  if (!text) return null;
-  const english = text.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i);
-  if (english) return { value: parseInt(english[1], 10), unit: english[2].toLowerCase() as PublishedAgo["unit"] };
-
-  const polish = text.match(/(\d+)\s+(sekund(?:ę|y)?|minut(?:ę|y)?|godzin(?:ę|y)?|dzień|dni|tydzień|tygodnie|tygodni|miesiąc|miesiące|miesięcy|rok|lata|lat)\s+temu/i);
-  if (polish) {
-    const word = polish[2].toLowerCase();
-    const unit: PublishedAgo["unit"] = word.startsWith("sekund") ? "second"
-      : word.startsWith("minut") ? "minute"
-      : word.startsWith("godzin") ? "hour"
-      : word === "dzień" || word === "dni" ? "day"
-      : word.startsWith("tygod") ? "week"
-      : word.startsWith("miesi") ? "month"
-      : "year";
-    return { value: parseInt(polish[1], 10), unit };
-  }
-
-  const german = text.match(/vor\s+(\d+)\s+(Sekunde[n]?|Minute[n]?|Stunde[n]?|Tag(?:en)?|Woche[n]?|Monat(?:en)?|Jahr(?:en)?)/i);
-  if (german) {
-    const word = german[2].toLowerCase();
-    const unit: PublishedAgo["unit"] = word.startsWith("sekunde") ? "second"
-      : word.startsWith("minute") ? "minute"
-      : word.startsWith("stunde") ? "hour"
-      : word.startsWith("tag") ? "day"
-      : word.startsWith("woche") ? "week"
-      : word.startsWith("monat") ? "month"
-      : "year";
-    return { value: parseInt(german[1], 10), unit };
-  }
-
-  // French: "il y a 3 jours", "il y a 1 mois", "il y a 2 ans"
-  const french = text.match(/il y a\s+(\d+)\s+(seconde|minute|heure|jour|semaine|mois|an)s?/i);
-  if (!french) return null;
-  const word = french[2].toLowerCase();
-  const unit: PublishedAgo["unit"] = word === "seconde" ? "second"
-    : word === "minute" ? "minute"
-    : word === "heure" ? "hour"
-    : word === "jour" ? "day"
-    : word === "semaine" ? "week"
-    : word === "mois" ? "month"
-    : "year";
-  return { value: parseInt(french[1], 10), unit };
+  return parsePublishedTextAnyLanguage(text);
 }
 
 export function relativePublishedAt(published: PublishedAgo, now = new Date()): string {

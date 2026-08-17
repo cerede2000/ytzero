@@ -1,5 +1,6 @@
 import { decodeHtmlEntities } from "./htmlEntities";
 import type { ChannelSearchResult, PublishedAgo, SearchResult } from "./youtube";
+import { parseCompactCount, type PanelLanguage } from "./relatedVideoText";
 
 interface YoutubeSearchDependencies {
   requestHeaders: (userId?: number) => Record<string, string>;
@@ -130,7 +131,7 @@ function collectSearchVideos(data: any): SearchResult[] {
     if (!r?.videoId || seen.has(r.videoId)) continue;
     seen.add(r.videoId);
     const viewStr = r?.viewCountText?.simpleText ?? r?.viewCountText?.runs?.[0]?.text ?? "";
-    const owner = r.ownerText ?? r.shortBylineText;
+    const viewNum = parseCompactCount(viewStr, countLanguage()) ?? NaN;
     out.push({
       videoId: r.videoId,
       title: decodeHtmlEntities(r.title?.runs?.[0]?.text ?? r.title?.simpleText ?? ""),
@@ -250,7 +251,7 @@ async function fetchSearchSuggestions(query: string, language = "en", limit = SU
   const url = "https://suggestqueries.google.com/complete/search"
     + `?client=firefox&ds=yt&hl=${encodeURIComponent(language)}&q=${encodeURIComponent(query)}`;
   // Suggestions are a nicety typed against: never let one hang the search box.
-  const res = await fetch(url, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS) });
+  const res = await fetch(url, { headers: fetchHeaders(), signal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`YouTube suggestions failed (${res.status})`);
   const payload = JSON.parse(await res.text());
   const data = (Array.isArray(payload?.[1]) ? payload[1] : [])

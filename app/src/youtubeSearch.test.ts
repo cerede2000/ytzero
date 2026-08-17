@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseAbbreviatedCount } from "./youtubeSearch";
-import { collectSearchVideos, searchChannelFromLockup, searchVideoFromLockup } from "./youtube";
+import { searchChannelFromLockup, searchVideoFromLockup } from "./youtube";
+import { configureLibraryLanguageProvider } from "./libraryLanguage";
 
 // Shapes captured from a live youtube.com/results page after the migration
 // from videoRenderer/channelRenderer to lockupViewModel.
@@ -124,3 +125,30 @@ describe("searchChannelFromLockup", () => {
     expect(searchChannelFromLockup(videoLockup)).toBeNull();
   });
 });
+
+describe("a results page fetched in French", () => {
+  // Same lockup, as youtube.com writes it when asked in French. The page is
+  // fetched in the library's language, so its counts and ages are read in it.
+  const frenchLockup = JSON.parse(JSON.stringify(videoLockup));
+  frenchLockup.metadata.lockupMetadataViewModel.metadata.contentMetadataViewModel.metadataRows[0].metadataParts = [
+    { text: { content: "Lofi Girl", commandRuns: [{ onTap: { innertubeCommand: { browseEndpoint: { browseId: "UCSJ4gkVC6NrvII8umztf0Ow" } } } }] } },
+    { text: { content: "4,7 M de vues" } },
+    { text: { content: "il y a 2 ans" } },
+  ];
+
+  test("reads the count and the age rather than mangling both", () => {
+    // "4,7 M" is four point seven million. Read with the comma taken for a
+    // thousands separator it becomes forty-seven million, and the age — which
+    // is found by elimination — becomes the channel's name.
+    configureLibraryLanguageProvider(() => "fr");
+    try {
+      const result = searchVideoFromLockup(frenchLockup);
+      expect(result?.viewCount).toBe(4_700_000);
+      expect(result?.published).toEqual({ value: 2, unit: "year" });
+      expect(result?.channelTitle).toBe("Lofi Girl");
+    } finally {
+      configureLibraryLanguageProvider(() => "en");
+    }
+  });
+});
+

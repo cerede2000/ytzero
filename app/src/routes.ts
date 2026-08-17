@@ -150,6 +150,10 @@ const primaryUserIdValue = (await primaryUserIdStmt.get() as { id: number }).id;
 function primaryUserId(): number {
   return primaryUserIdValue;
 }
+// The library is one set of rows shared by every profile, so the titles in it
+// are fetched in one language rather than each reader's. The primary profile's
+// is that language: it is whoever set the instance up.
+configureLibraryLanguageProvider(() => panelLanguage(getUserSetting(primaryUserIdValue, "language")));
 function isPrimaryUser(c: any): boolean {
   return currentUserId(c) === primaryUserId();
 }

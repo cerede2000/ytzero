@@ -102,3 +102,23 @@ describe("a count that spells out what it counts", () => {
     expect(parseCompactCount("1 vue", "fr")).toBe(1);
   });
 });
+
+describe("the counts a channel page and a search page write", () => {
+  test("the comma means opposite things and both must survive", () => {
+    // Measured on youtube.com, same page, two Accept-Language headers:
+    // "10,552,539 views" and "10 179 387 vues" are both eight-figure counts.
+    // Stripping commas reads the French one as ten.
+    expect(parseCompactCount("10,552,539 views", "en")).toBe(10_552_539);
+    expect(parseCompactCount("10 179 387 vues", "fr")).toBe(10_179_387);
+    expect(parseCompactCount("10M views", "en")).toBe(10_000_000);
+    expect(parseCompactCount("10 M de vues", "fr")).toBe(10_000_000);
+  });
+
+  test("the abbreviated counts a channel page writes", () => {
+    // These were read as twelve by stripping every non-digit — in English too,
+    // which is how a channel page's view counts were wrong before any of this.
+    expect(parseCompactCount("12K views", "en")).toBe(12_000);
+    expect(parseCompactCount("12 k vues", "fr")).toBe(12_000);
+  });
+});
+
