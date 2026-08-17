@@ -142,6 +142,7 @@ export function VideoCard({
   selected = false,
   onSelectToggle,
   readOnly = false,
+  onRemoveFromContinue,
   allowReject = true,
   allowMarkWatched = true,
   keepAfter,
@@ -169,6 +170,8 @@ export function VideoCard({
   /** Preview mode (e.g. cleanup's "what stays" column): no swipe, no hover actions, still clickable to open. */
   readOnly?: boolean;
   /** Keep the archive/reject action and its left-swipe gesture available. */
+  /** Offered on the Continue-watching shelf, which is the only place it means anything. */
+  onRemoveFromContinue?: (videoId: string) => void;
   allowReject?: boolean;
   /** Keep watched/unwatched actions and the right-swipe gesture available. */
   allowMarkWatched?: boolean;
