@@ -91,7 +91,7 @@ export function createRelatedVideoFetcher(
   },
   forget = forgetRelatedVideos,
 ) {
-  return async function fetchRelatedVideos(videoId: string, userId: number, refresh = false): Promise<RelatedVideo[]> {
+  return async function fetchRelatedVideos(videoId: string, userId: number, refresh = false, preferAccount = false): Promise<RelatedVideo[]> {
     const key = `${userId}:${videoId}`;
     // Asking again is what the reader just pressed. Nothing stored, nothing
     // remembered about an empty answer, and no sharing with a request that was
@@ -113,24 +113,25 @@ export function createRelatedVideoFetcher(
 
     const started = (async () => {
       /*
-       * The reader's own account first, whenever they have lent one.
+       * Whose question this is.
        *
-       * A panel is assembled from what an account watches — that is the whole
-       * of what separates a recommendation from a list of what is popular
-       * nearby. Treating the credentials as a fallback for a refused address
-       * meant they were used only when YouTube was turning us away: the moment
-       * the address recovered, everyone silently went back to the panel
-       * YouTube shows a stranger. Same profile, same cookies, and a panel that
-       * had nothing to do with the reader.
+       * Asked as nobody, YouTube answers about the video: a documentary on
+       * IMAX is answered with two more on IMAX, measured on two unrelated
+       * videos. Asked as an account, it answers about the account — closer to
+       * that person's habits, and much the same list whichever video was
+       * opened, which is not what a panel beside a video is for.
        *
-       * A profile with no jar of its own returns from here at once, having
-       * asked nothing.
+       * Neither is wrong, so neither is hard-coded: the reader says which
+       * question is theirs. A profile with no jar of its own returns from the
+       * account attempt at once, having asked nothing.
        */
       const recognised = { signedIn: false };
-      const mine = await loadAsSomebody(videoId, userId, recognised).catch((failure) => {
-        log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
-        return [] as RelatedVideo[];
-      });
+      const mine = preferAccount
+        ? await loadAsSomebody(videoId, userId, recognised).catch((failure) => {
+            log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
+            return [] as RelatedVideo[];
+          })
+        : [];
       if (mine.length > 0) {
         remember(key, mine, now);
         await save(videoId, userId, mine);
@@ -139,9 +140,6 @@ export function createRelatedVideoFetcher(
         return mine;
       }
 
-      // Otherwise the panel YouTube shows a stranger: about the video rather
-      // than about a person, which is the honest answer for a profile that has
-      // lent no account.
       const related: { videos: RelatedVideo[] } = { videos: [] };
       try {
         await load(videoId, related, userId);
@@ -153,7 +151,18 @@ export function createRelatedVideoFetcher(
         }
         // A refusal answers nothing about this video: the question was never
         // put. Remembering it as empty would hold the panel shut for six hours
-        // over a refusal that lasts ninety seconds.
+        // over a refusal that lasts ninety seconds. The account can still be
+        // asked — being known is what gets an answer from a refused address —
+        // even when the reader would rather the panel were about the video.
+        const authenticated = preferAccount
+          ? []
+          : await loadAsSomebody(videoId, userId, recognised).catch(() => [] as RelatedVideo[]);
+        if (authenticated.length > 0) {
+          remember(key, authenticated, now);
+          await save(videoId, userId, authenticated);
+          log.info("related.fetched", { videoId, userId, suggestions: authenticated.length, credentialed: true, recognised: recognised.signedIn });
+          return authenticated;
+        }
         log.info("related.unavailable_while_refused", { videoId, userId });
         return [];
       }
