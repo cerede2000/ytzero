@@ -121,6 +121,10 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
    * the fallback it had just superseded.
    */
   const suggestionsFor = useRef<string | null>(null);
+  // Shown beside the panel's heading. Six rounds were spent asking whether a
+  // screenshot was YouTube's answer or the library's fallback; the panel can
+  // simply say which it is.
+  const [relatedFromYoutube, setRelatedFromYoutube] = useState(false);
   const [copyKey, setCopyKey] = useState(0);
   const [scheduleToast, setScheduleToast] = useState<{ id: number; message: string; variant: "default" | "danger"; anchor: "desktop" | "overflow" } | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -760,6 +764,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     setMissingVideoId(null);
     setRelatedPending(false);
     suggestionsFor.current = null;
+    setRelatedFromYoutube(false);
     setVideoInfo(null);
     setPlayerSource("auto");
     setSourceChoice("undecided");
@@ -774,7 +779,10 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       .then((r) => {
         if (cancelled) return;
         setVideo(r.video);
-        if (suggestionsFor.current !== id) setRelated(withSuggestions(r.related, r.related_external));
+        if (suggestionsFor.current !== id) {
+          setRelated(withSuggestions(r.related, r.related_external));
+          setRelatedFromYoutube((r.related_external?.length ?? 0) > 0);
+        }
         setRelatedPending(Boolean(r.related_pending));
         // External video already in DB but its RSS siblings were cleared:
         // refresh them in the background so the "related" panel refills.
@@ -855,6 +863,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       .then((result) => {
         if (cancelled || !result.suggestions.length) return;
         suggestionsFor.current = id;
+        setRelatedFromYoutube(true);
         setRelated((current) => withSuggestions(current, result.suggestions));
       })
       .catch(() => {});
@@ -875,7 +884,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     setRefreshingSuggestions(true);
     api.videoSuggestions(id, true)
       .then((result) => {
-        if (result.suggestions.length) suggestionsFor.current = id;
+        if (result.suggestions.length) { suggestionsFor.current = id; setRelatedFromYoutube(true); }
         setRelated((current) => withSuggestions(current, result.suggestions));
       })
       .catch(() => {})
@@ -1673,6 +1682,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     progressRef,
     queue,
     related,
+    relatedFromYoutube,
     refreshSuggestions,
     refreshingSuggestions,
     reload,

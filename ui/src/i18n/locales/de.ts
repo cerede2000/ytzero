@@ -800,6 +800,8 @@ export const de: Locale = {
     subscribers: "Abonnenten",
     moreLikeThis: "Mehr davon",
     refreshSuggestions: "Vorschläge aktualisieren",
+    relatedFromYoutube: "von YouTube",
+    relatedFromLibrary: "aus deiner Bibliothek",
     commentsTitle: "Kommentare",
     commentsSortLabel: "Kommentare sortieren",
     commentsSortTop: "Am beliebtesten",

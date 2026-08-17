@@ -1038,3 +1038,7 @@ body.cinema .watch-layout.theater .watch-actions .ui-button--secondary:not(.ui-p
 .related-refresh--spinning { animation: related-refresh-spin 900ms linear infinite; }
 @keyframes related-refresh-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .related-refresh--spinning { animation: none; } }
+
+/* Where the panel came from, said plainly: a screenshot should not need a log
+   file beside it to be understood. */
+.related-origin { color: var(--muted); font-size: 11px; font-weight: 400; margin-left: 8px; text-transform: none; }
