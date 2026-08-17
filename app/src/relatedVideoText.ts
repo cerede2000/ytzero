@@ -16,7 +16,8 @@ import type { PublishedAgo } from "./youtube";
  * grammar that does not know the language does not merely lose the age, it
  * starts reading the age as the channel's name.
  */
-export type PanelLanguage = "en" | "fr" | "de" | "pl";
+export const PANEL_LANGUAGES = ["en", "fr", "de", "pl"] as const;
+export type PanelLanguage = (typeof PANEL_LANGUAGES)[number];
 
 export function panelLanguage(value: string | null | undefined): PanelLanguage {
   return value === "fr" || value === "de" || value === "pl" ? value : "en";
@@ -63,24 +64,57 @@ const GRAMMARS: Record<PanelLanguage, Grammar> = {
     magnitudes: [["b", 1e9], ["m", 1e6], ["k", 1e3]],
     decimalComma: false,
   },
+  /*
+   * Each language carries both the short forms the suggestion panel writes and
+   * the spelled-out ones a channel page writes: "il y a 4 j" beside "il y a 4
+   * jours". They are the same grammar seen at two sizes, and a table that knows
+   * only the small one reads a channel page as having no dates at all.
+   *
+   * Longest alternative first — "minutes" before "min", "jahren" before "jahr"
+   * — so the end anchor is never reached by a prefix that merely started well.
+   */
   fr: {
     views: /\s*(?:de\s+)?vues?$/i,
-    ago: /^il y a\s+(\d+)\s*(s|min|h|j|sem|mois|ans|an)\.?$/i,
-    units: { s: "second", min: "minute", h: "hour", j: "day", sem: "week", mois: "month", an: "year", ans: "year" },
+    ago: /^il y a\s+(\d+)\s*(secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|sem|min|s|h|j)\.?$/i,
+    units: {
+      s: "second", seconde: "second", secondes: "second",
+      min: "minute", minute: "minute", minutes: "minute",
+      h: "hour", heure: "hour", heures: "hour",
+      j: "day", jour: "day", jours: "day",
+      sem: "week", semaine: "week", semaines: "week",
+      mois: "month",
+      an: "year", ans: "year",
+    },
     magnitudes: [["md", 1e9], ["mrd", 1e9], ["m", 1e6], ["k", 1e3]],
     decimalComma: true,
   },
   de: {
     views: /\s*Aufrufe?$/i,
-    ago: /^vor\s+(\d+)\s*(sek|min|std|tagen|tag|tg|wochen|wo|monaten|mon|jahren|jahr|j)\.?$/i,
-    units: { sek: "second", min: "minute", std: "hour", tag: "day", tagen: "day", tg: "day", wo: "week", wochen: "week", mon: "month", monaten: "month", j: "year", jahr: "year", jahren: "year" },
+    ago: /^vor\s+(\d+)\s*(sekunden?|minuten?|stunden?|monaten|monat|wochen|woche|jahren|jahre|jahr|tagen|tage|tag|sek|min|std|mon|wo|tg|j)\.?$/i,
+    units: {
+      sek: "second", sekunde: "second", sekunden: "second",
+      min: "minute", minute: "minute", minuten: "minute",
+      std: "hour", stunde: "hour", stunden: "hour",
+      tag: "day", tage: "day", tagen: "day", tg: "day",
+      wo: "week", woche: "week", wochen: "week",
+      mon: "month", monat: "month", monaten: "month",
+      j: "year", jahr: "year", jahre: "year", jahren: "year",
+    },
     magnitudes: [["mrd", 1e9], ["mio", 1e6], ["tsd", 1e3]],
     decimalComma: true,
   },
   pl: {
     views: /\s*wyświetle(?:ń|nia|nie)$/i,
-    ago: /^(\d+)\s*(sek|min|godz|dni|dnia|dzień|tyg|mies|lata|lat|rok)\.?\s+temu$/i,
-    units: { sek: "second", min: "minute", godz: "hour", "dzień": "day", dni: "day", dnia: "day", tyg: "week", mies: "month", rok: "year", lata: "year", lat: "year" },
+    ago: /^(\d+)\s*(sekund[ayę]?|minut[yę]?|godzin[yę]?|miesiąc[ae]?|miesięcy|tygodnie|tygodni|tydzień|dzień|dnia|dni|godz|mies|lata|lat|rok|sek|min|tyg)\.?\s+temu$/i,
+    units: {
+      sek: "second", sekund: "second", sekunda: "second", sekundy: "second", "sekundę": "second",
+      min: "minute", minut: "minute", minuty: "minute", "minutę": "minute",
+      godz: "hour", godzin: "hour", godziny: "hour", "godzinę": "hour",
+      "dzień": "day", dnia: "day", dni: "day",
+      tyg: "week", "tydzień": "week", tygodnie: "week", tygodni: "week",
+      mies: "month", "miesiąc": "month", "miesiące": "month", "miesięcy": "month",
+      rok: "year", lata: "year", lat: "year",
+    },
     magnitudes: [["mld", 1e9], ["mln", 1e6], ["tys", 1e3]],
     decimalComma: true,
   },
@@ -95,6 +129,32 @@ export function parseCompactPublishedText(text: string | undefined, language: Pa
   if (!match) return null;
   const unit = grammar.units[match[2].toLowerCase().replace(/\.$/, "")];
   return unit ? { value: parseInt(match[1], 10), unit } : null;
+}
+
+/**
+ * The same age, read without being told which language wrote it.
+ *
+ * A page is fetched in one language, but the label can arrive with something in
+ * front of it — "Streamed 2 weeks ago", "Diffusé en direct il y a 2 semaines" —
+ * so the start anchor is dropped while the end anchor is kept. The end is what
+ * makes these safe to read: "ago" and "temu" close the phrase, and "il y a" and
+ * "vor" cannot begin one anywhere but at a date.
+ */
+const UNANCHORED: Array<[PanelLanguage, RegExp]> = PANEL_LANGUAGES.map((language) => [
+  language,
+  new RegExp(GRAMMARS[language].ago.source.replace(/^\^/, ""), GRAMMARS[language].ago.flags),
+]);
+
+export function parsePublishedTextAnyLanguage(text: string | undefined): PublishedAgo | null {
+  const cleaned = text?.trim().replace(SPACES, " ");
+  if (!cleaned) return null;
+  for (const [language, pattern] of UNANCHORED) {
+    const match = cleaned.match(pattern);
+    if (!match) continue;
+    const unit = GRAMMARS[language].units[match[2].toLowerCase().replace(/\.$/, "")];
+    if (unit) return { value: parseInt(match[1], 10), unit };
+  }
+  return null;
 }
 
 export function parseCompactCount(text: string | undefined, language: PanelLanguage = "en"): number | null {
