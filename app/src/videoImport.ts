@@ -2,7 +2,9 @@ import type { AudioSource } from "./audioSourceResolver";
 import { childHidesLive } from "./childTime";
 import { database } from "./database";
 import { primeAudioSource, primeVideoSource } from "./downloader";
+import { getUserSetting } from "./db";
 import { log } from "./logger";
+import { panelLanguage } from "./relatedVideoText";
 import { askWithBorrowedCredentials } from "./metadataCredentials";
 import { persistDirectVideoInfo } from "./videoInfoPersistence";
 import { saveRelatedVideos } from "./relatedVideoStore";
@@ -48,7 +50,7 @@ export class LiveDisabledForProfileError extends Error {
  */
 async function fetchVideoInfoForImport(userId: number, videoId: string, related: { videos: RelatedVideo[] }): Promise<VideoInfo> {
   try {
-    return await fetchVideoInfo(videoId, { related });
+    return await fetchVideoInfo(videoId, { related, language: panelLanguage(getUserSetting(userId, "language")) });
   } catch (error) {
     if (error instanceof PrivateVideoError || error instanceof DeletedVideoError) throw error;
     const audio: { source: AudioSource | null } = { source: null };

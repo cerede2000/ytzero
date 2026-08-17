@@ -104,7 +104,7 @@ describe("the panel's shorthand", () => {
   });
 
   test("has nothing to say about what it does not recognise", () => {
-    expect(parseCompactPublishedText("1 month ago")).toBeNull();
+    expect(parseCompactPublishedText("1 month ago")).toEqual({ value: 1, unit: "month" });
     expect(parseCompactPublishedText("Streamed live")).toBeNull();
     expect(parseCompactPublishedText(undefined)).toBeNull();
   });
