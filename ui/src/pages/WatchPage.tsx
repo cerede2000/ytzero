@@ -189,6 +189,7 @@ export default function WatchPage() {
     privateVideoNotice,
     queue,
     related,
+    relatedFromYoutube,
     refreshSuggestions,
     refreshingSuggestions,
     reload,
@@ -1032,7 +1033,10 @@ export default function WatchPage() {
         )}
         {showRelated && <>
         <div className="related-heading">
-          <h2 className="related-title">{t("moreLikeThis")}</h2>
+          <h2 className="related-title">
+            {t("moreLikeThis")}
+            <span className="related-origin">{relatedFromYoutube ? t("relatedFromYoutube") : t("relatedFromLibrary")}</span>
+          </h2>
           <button
             type="button"
             className="related-refresh"

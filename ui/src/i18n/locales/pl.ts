@@ -827,6 +827,8 @@ export const pl: Locale = {
     subscribers: "subskrybentów",
     moreLikeThis: "Więcej podobnych",
     refreshSuggestions: "Odśwież propozycje",
+    relatedFromYoutube: "z YouTube",
+    relatedFromLibrary: "z Twojej biblioteki",
     commentsTitle: "Komentarze",
     commentsSortLabel: "Sortuj komentarze",
     commentsSortTop: "Najpopularniejsze",
