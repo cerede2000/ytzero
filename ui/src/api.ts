@@ -211,7 +211,7 @@ export const api = {
   setSocialCommentLike: (id: string, liked: boolean) =>
     http<{ comment: SocialComment }>(`/social/comments/${id}/like`, { method: liked ? "PUT" : "DELETE", body: liked ? "{}" : undefined }),
   ...createSocialWatchPartyApi(http),
-  downloadCookies: () => http<{ configured: boolean }>("/downloads/cookies"),
+  downloadCookies: () => http<{ configured: boolean; recognised: boolean | null; recognised_at: string | null }>("/downloads/cookies"),
   uploadDownloadCookies: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);

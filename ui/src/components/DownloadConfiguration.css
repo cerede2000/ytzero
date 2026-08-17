@@ -16,6 +16,9 @@
 .dl-cookie-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; margin-top: 10px; }
 .dl-cookie-status { color: var(--text-2); display: block; font-size: 12px; margin-bottom: 10px; }
 .dl-cookie-status.is-configured { color: #68d391; }
+/* A jar that is present but no longer honoured: everything looks configured
+   and nothing signed-in works, which is the state worth naming. */
+.dl-cookie-status.is-stale { color: #f6ad55; }
 .dl-cookie-paste { display: flex; flex-direction: column; gap: 9px; }
 .dl-cookie-paste .ui-textarea { font-family: var(--font-mono); min-height: 150px; }
 .dl-cookie-paste .ui-button { align-self: flex-end; }

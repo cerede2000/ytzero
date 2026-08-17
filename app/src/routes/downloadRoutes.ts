@@ -4,6 +4,7 @@ import { publishAppEvent } from "../appEvents";
 import { database } from "../database";
 import { getUserSetting } from "../db";
 import { childLocalOnly, isChildUser } from "../childTime";
+import { cookieHealth, forgetCookieHealth } from "../youtubeCookieHealth";
 import { dlSettings, downloadCookiesConfigured, DOWNLOADS_ADMIN_SETTING_KEYS, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
 import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, fetchSubtitles, getDirectVideoResponse, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, getVideoResponse, hasHlsSession, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
 import { createDownloadRule, deleteDownloadRule, DownloadRuleValidationError, listDownloadRules, previewDownloadRule, updateDownloadRule, type DownloadRuleInput } from "../downloadRules";
@@ -140,7 +141,17 @@ api.delete("/downloads/automation/:id", async (c) => {
 
 api.get("/downloads/cookies", async (c) => {
   const uid = currentUserId(c);
-  return await isChildUser(uid) ? c.json({ error: "not allowed" }, 403) : c.json({ configured: downloadCookiesConfigured(uid) });
+  if (await isChildUser(uid)) return c.json({ error: "not allowed" }, 403);
+  // Configured and recognised are different questions, and only the second one
+  // decides whether anything works. An expired jar is not refused: it is
+  // answered as a stranger would be, so nothing says it stopped working until
+  // playback fails hours later for an apparently unrelated reason.
+  const health = cookieHealth(uid);
+  return c.json({
+    configured: downloadCookiesConfigured(uid),
+    recognised: health?.recognised ?? null,
+    recognised_at: health ? new Date(health.at).toISOString() : null,
+  });
 });
 
 api.post("/downloads/cookies", async (c) => {
@@ -151,6 +162,9 @@ api.post("/downloads/cookies", async (c) => {
     const file = form.get("file");
     if (!(file instanceof File)) return c.json({ error: "cookies.txt file required" }, 400);
     saveDownloadCookies(uid, await file.text());
+    // A fresh jar has not been put to YouTube yet, so what was known about the
+    // old one says nothing about this one.
+    forgetCookieHealth(uid);
     invalidateAudioSources(uid);
     invalidateDirectVideoSources(uid);
     return c.json({ configured: true });
@@ -163,6 +177,7 @@ api.delete("/downloads/cookies", async (c) => {
   const uid = currentUserId(c);
   if (await isChildUser(uid)) return c.json({ error: "not allowed" }, 403);
   removeDownloadCookies(uid);
+  forgetCookieHealth(uid);
   invalidateAudioSources(uid);
   invalidateDirectVideoSources(uid);
   return c.json({ configured: false });

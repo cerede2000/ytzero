@@ -18,13 +18,17 @@ export default function DownloadConfiguration({ shortsEnabled }: { shortsEnabled
   const [config, setConfig] = useState<DownloadConfigResponse | null>(null);
   const [error, setError] = useState("");
   const [cookies, setCookies] = useState(false);
+  // Configured and recognised are different questions, and only the second
+  // decides whether anything works: an expired jar is not refused, it is
+  // answered as a stranger would be. null until YouTube has been asked.
+  const [recognised, setRecognised] = useState<boolean | null>(null);
   const [uploading, setUploading] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pastedCookies, setPastedCookies] = useState("");
   const [updatingYtdlp, setUpdatingYtdlp] = useState(false);
   const [ytdlpNotice, setYtdlpNotice] = useState("");
 
-  const load = useCallback(() => api.downloadConfig().then((result) => { setConfig(result); setCookies(result.cookies_configured); }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason))), []);
+  const load = useCallback(() => Promise.all([api.downloadConfig(), api.downloadCookies().catch(() => null)]).then(([result, jar]) => { setConfig(result); setCookies(result.cookies_configured); setRecognised(jar?.recognised ?? null); }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason))), []);
   useEffect(() => { void load(); }, [load]);
 
   const defs = useMemo(() => new Map(config?.definitions.map((definition) => [definition.key, definition]) ?? []), [config]);
