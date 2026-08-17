@@ -710,6 +710,9 @@ export function VideoCard({
               >
                 <VideoThumbnail
                   src={displayThumbnail}
+                  // A DeArrow frame that comes back empty leaves the card's own
+                  // image to stand in, rather than a hole where one belongs.
+                  fallbackSrc={displayThumbnail === video.thumbnail ? undefined : video.thumbnail}
                   watched={watched}
                   progress={video.status !== "archived" || showWatchProgress
                     ? watchProgress(video.watch_position, video.watch_duration)

@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { img, youtubeThumbnailFallback } from "../img";
+import { type ReactNode, useState } from "react";
+import { img } from "../img";
 import "./VideoThumbnail.css";
 
 export type VideoThumbnailVariant =
@@ -54,6 +54,7 @@ export function VideoThumbnail({
   alt = "",
   loading,
   draggable,
+  fallbackSrc,
   children,
 }: {
   src: string;
@@ -63,37 +64,33 @@ export function VideoThumbnail({
   alt?: string;
   loading?: "eager" | "lazy";
   draggable?: boolean;
+  /** Shown when `src` renders nothing — a replacement that came back empty. */
+  fallbackSrc?: string;
   children?: ReactNode;
 }) {
-  const [image, setImage] = useState(() => ({ source: src, displayedSource: img(src), fallbackAttempted: false }));
-
-  useEffect(() => {
-    setImage({ source: src, displayedSource: img(src), fallbackAttempted: false });
-  }, [src]);
-
-  const handleImageError = () => {
-    setImage((current) => {
-      if (current.source !== src || current.fallbackAttempted) return current;
-
-      const fallback = youtubeThumbnailFallback(src);
-      return fallback
-        ? { source: src, displayedSource: img(fallback), fallbackAttempted: true }
-        : { ...current, fallbackAttempted: true };
-    });
-  };
-
   const classes = VARIANT_CLASSES[variant];
+  /*
+   * A replacement image that renders nothing must not leave a hole.
+   *
+   * DeArrow generates its frames on demand and answers 204 while it has none —
+   * which is every video too new for anyone to have asked before, and any video
+   * at all while the service is busy. The <img> then draws a broken placeholder
+   * where a thumbnail belongs. The uploader's image is still perfectly good, so
+   * it is what a failed replacement falls back to.
+   */
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const shown = fallbackSrc && failedSrc === src ? fallbackSrc : src;
   const watchedClass = watched ? " watched-thumbnail--watched" : "";
   const progressClass = watched || (progress != null && progress > 0) ? " watched-thumbnail--has-progress" : "";
   return (
     <span className={`video-thumbnail watched-thumbnail ${classes.frame}${watchedClass}${progressClass}`}>
       <img
         className={`video-thumbnail-image watched-thumbnail-image ${classes.image}`.trim()}
-        src={image.displayedSource}
+        src={img(shown)}
         alt={alt}
         loading={loading}
         draggable={draggable}
-        onError={handleImageError}
+        onError={() => { if (fallbackSrc && failedSrc !== src) setFailedSrc(src); }}
       />
       {children}
       <PlaybackIndicator watched={watched} progress={progress} />
