@@ -156,7 +156,15 @@ export function createRelatedVideoFetcher(
         remember(key, mine, now);
         await save(videoId, userId, mine);
         // `recognised` is the answer; `credentialed` was only the attempt.
-        log.info("related.fetched", { videoId, userId, suggestions: mine.length, source, recognised: recognised.signedIn });
+        log.info("related.fetched", {
+          videoId, userId, suggestions: mine.length, source,
+          // Only the page read learns whether YouTube knew us; the endpoint
+          // answers without saying, so reporting it there was a false no.
+          ...(source === "account" ? { recognised: recognised.signedIn } : {}),
+          // What came back, so a panel can be judged from the log rather than
+          // from a screenshot of it.
+          first: mine.slice(0, 3).map((video) => `${video.channelTitle} — ${video.title}`.slice(0, 70)),
+        });
         return mine;
       }
 
@@ -192,7 +200,10 @@ export function createRelatedVideoFetcher(
       }
       remember(key, related.videos, now);
       await save(videoId, userId, related.videos);
-      log.info("related.fetched", { videoId, userId, suggestions: related.videos.length });
+      log.info("related.fetched", {
+        videoId, userId, suggestions: related.videos.length, source: "video",
+        first: related.videos.slice(0, 3).map((video) => `${video.channelTitle} — ${video.title}`.slice(0, 70)),
+      });
       return related.videos;
     })();
 
