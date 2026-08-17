@@ -166,8 +166,8 @@ describe("a video with no library row", () => {
       async (videoId) => { signedInFetches++; return [suggestion(`${videoId}-mine`)]; },
       async () => {},
     );
-    expect((await fetch("no-row", 1, false, true)).map((v) => v.videoId)).toEqual(["no-row-mine"]);
-    expect((await fetch("no-row", 1, false, true)).map((v) => v.videoId)).toEqual(["no-row-mine"]);
+    expect((await fetch("no-row", 1, false, "account")).map((v) => v.videoId)).toEqual(["no-row-mine"]);
+    expect((await fetch("no-row", 1, false, "account")).map((v) => v.videoId)).toEqual(["no-row-mine"]);
     expect(signedInFetches).toBe(1);
   });
 });
@@ -187,14 +187,14 @@ describe("being known, rather than merely presenting a jar", () => {
       async (videoId, _userId, recognised) => { told = recognised; return [suggestion(`${videoId}-a`)]; },
       async () => {},
     );
-    await fetch("asked-as-somebody", 9, false, true);
+    await fetch("asked-as-somebody", 9, false, "account");
     expect(told !== undefined).toBe(true);
     expect(told?.signedIn).toBe(false);
   });
 });
 
 describe("whose question the panel answers", () => {
-  function asking(preferAccount: boolean) {
+  function asking(source: "video" | "personal" | "account") {
     const asked: string[] = [];
     return {
       asked,
@@ -206,7 +206,7 @@ describe("whose question the panel answers", () => {
         async (videoId) => { asked.push("account"); return [suggestion(`${videoId}-about-me`)]; },
         async () => {},
       ),
-      preferAccount,
+      source,
     };
   }
 
@@ -214,14 +214,48 @@ describe("whose question the panel answers", () => {
     // Measured on two unrelated videos: asked as nobody, a documentary on IMAX
     // is answered with two more on IMAX. Asked as an account, the same list
     // comes back whichever video was opened.
-    const { fetch, asked, preferAccount } = asking(false);
-    expect((await fetch("v1", 1, false, preferAccount)).map((v) => v.videoId)).toEqual(["v1-about-the-video"]);
+    const { fetch, asked, source } = asking("video");
+    expect((await fetch("v1", 1, false, source)).map((v) => v.videoId)).toEqual(["v1-about-the-video"]);
     expect(asked).toEqual(["anonymous"]);
   });
 
   test("about the account when the reader says so", async () => {
-    const { fetch, asked, preferAccount } = asking(true);
-    expect((await fetch("v2", 1, false, preferAccount)).map((v) => v.videoId)).toEqual(["v2-about-me"]);
+    const { fetch, asked, source } = asking("account");
+    expect((await fetch("v2", 1, false, source)).map((v) => v.videoId)).toEqual(["v2-about-me"]);
     expect(asked).toEqual(["account"]);
+  });
+});
+
+describe("the panel youtube.com itself shows", () => {
+  test("asks YouTube's own endpoint, not the page", async () => {
+    // Reading the page signed in gives a panel that leans towards the feed;
+    // reading it anonymously gives the video's own and knows nothing of the
+    // reader. Neither is what a browser shows, which is both at once — and a
+    // browser gets it by calling the endpoint rather than reading the page.
+    const asked: string[] = [];
+    const fetch = createRelatedVideoFetcher(
+      async () => [],
+      async () => {},
+      async (videoId, related) => { asked.push("page:anonymous"); related.videos = [suggestion(`${videoId}-anon`)]; return {} as never; },
+      () => 1_000,
+      async (videoId) => { asked.push("page:account"); return [suggestion(`${videoId}-feed`)]; },
+      async () => {},
+      async (videoId) => { asked.push("endpoint"); return [suggestion(`${videoId}-mine-and-the-video`)]; },
+    );
+    expect((await fetch("v3", 1, false, "personal")).map((v) => v.videoId)).toEqual(["v3-mine-and-the-video"]);
+    expect(asked).toEqual(["endpoint"]);
+  });
+
+  test("falls back to the video's own panel when the endpoint says nothing", async () => {
+    const fetch = createRelatedVideoFetcher(
+      async () => [],
+      async () => {},
+      async (videoId, related) => { related.videos = [suggestion(`${videoId}-anon`)]; return {} as never; },
+      () => 1_000,
+      async () => [],
+      async () => {},
+      async () => { throw new Error("the endpoint refused"); },
+    );
+    expect((await fetch("v4", 1, false, "personal")).map((v) => v.videoId)).toEqual(["v4-anon"]);
   });
 });

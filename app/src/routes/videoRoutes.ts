@@ -13,7 +13,7 @@ import { ageMs, CHAPTERS_DB_TTL, CREATORS_DB_TTL } from "../routeCache";
 import { attachLibraryState, attachWatchedState, videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSupport";
 import { selectRelatedForPanel } from "../relatedVideos";
 import { readRelatedVideos } from "../relatedVideoStore";
-import { fetchRelatedVideos } from "../relatedVideoFetch";
+import { fetchRelatedVideos, type RelatedSource } from "../relatedVideoFetch";
 import { registerVideoCommentRoutes } from "./videoCommentRoutes";
 import { refreshExternalWatchVideo } from "../externalVideoRefresh";
 import type { AudioSource } from "../audioSourceResolver";
@@ -436,6 +436,10 @@ api.get("/videos/:id/creators", async (c) => {
  * list and nothing else. Asking anyway, and then rendering none of the answer,
  * is a request nobody wanted made.
  */
+function relatedSource(value: unknown): RelatedSource {
+  return value === "personal" || value === "account" ? value : "video";
+}
+
 async function relatedPanelWanted(uid: number): Promise<boolean> {
   if (!pluginEnabled("related")) return false;
   const { settings } = await getPluginSettings(uid, "related");
@@ -448,7 +452,7 @@ async function suggestedVideos(uid: number, videoId: string, fetchMissing = fals
   const limit = Number(settings.related_count ?? 15);
   if (limit <= 0) return [];
   const stored = fetchMissing
-    ? await fetchRelatedVideos(videoId, uid, refresh, String(settings.related_source ?? "video") === "account")
+    ? await fetchRelatedVideos(videoId, uid, refresh, relatedSource(settings.related_source))
     : await readRelatedVideos(videoId, uid, 25);
   if (stored.length === 0) return [];
   const known = await attachLibraryState(uid, stored);

@@ -213,13 +213,14 @@ export const RELATED_SETTINGS: PluginSettingSource[] = [
     type: "select",
     label: { en: "Suggestions about", pl: "Propozycje dotyczą", de: "Vorschläge zu" },
     description: {
-      en: "Asked as nobody, YouTube answers about the video: open a documentary on IMAX and it offers two more on IMAX. Asked as you, it answers about you — closer to your habits, and much the same list whichever video you opened. Your account is only ever asked with your own cookies, never another profile's.",
-      pl: "Zapytane anonimowo, YouTube odpowiada o filmie: otwórz dokument o IMAX-ie, a zaproponuje dwa kolejne o IMAX-ie. Zapytane jako Ty, odpowiada o Tobie — bliżej Twoich nawyków, ale lista bywa ta sama niezależnie od filmu. Twoje konto jest pytane wyłącznie Twoimi ciasteczkami, nigdy cudzymi.",
-      de: "Anonym gefragt, antwortet YouTube über das Video: Öffne eine Doku über IMAX, und es schlägt zwei weitere über IMAX vor. Als du gefragt, antwortet es über dich — näher an deinen Gewohnheiten, aber oft dieselbe Liste, welches Video du auch öffnest. Dein Konto wird nur mit deinen eigenen Cookies gefragt, nie mit denen eines anderen Profils.",
+      en: "The video: asked as nobody, YouTube answers about the subject — a documentary on IMAX is answered with two more on IMAX. You and the video: the panel youtube.com itself shows you, the video's own channel first and then your interests, which is what a browser gets by asking YouTube's own endpoint rather than reading the page. Your account alone: your habits, and much the same list whichever video you opened. An account is only ever asked with its own profile's cookies, never another's.",
+      pl: "Film: zapytane anonimowo, YouTube odpowiada o temacie — dokument o IMAX-ie dostaje dwa kolejne o IMAX-ie. Ty i film: panel, który pokazuje sam youtube.com — najpierw kanał filmu, potem Twoje zainteresowania. Samo konto: Twoje nawyki, ale często ta sama lista niezależnie od filmu. Konto jest pytane wyłącznie ciasteczkami własnego profilu.",
+      de: "Das Video: anonym gefragt, antwortet YouTube über das Thema — eine IMAX-Doku bekommt zwei weitere über IMAX. Du und das Video: das Panel, das youtube.com selbst zeigt — erst der Kanal des Videos, dann deine Interessen. Nur dein Konto: deine Gewohnheiten, aber oft dieselbe Liste, welches Video du auch öffnest. Ein Konto wird nur mit den Cookies des eigenen Profils gefragt.",
     },
     options: [
       { value: "video", label: { en: "The video", pl: "Filmu", de: "Das Video" } },
-      { value: "account", label: { en: "Your account", pl: "Twojego konta", de: "Dein Konto" } },
+      { value: "personal", label: { en: "You and the video", pl: "Ciebie i filmu", de: "Dich und das Video" } },
+      { value: "account", label: { en: "Your account alone", pl: "Samego konta", de: "Nur dein Konto" } },
     ],
     defaultValue: "video",
   },
