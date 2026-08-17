@@ -63,6 +63,9 @@ export function videoFromSearchResult(
     channel_thumbnail: result.channelAvatar,
     channel_subscriber_count: null,
     download_status: (result.download_status ?? null) as DownloadStatus | null,
+    // Carried through so an action on this card knows whether it must import
+    // first. Dropped here, every action had to assume the worst.
+    in_library: result.in_library,
     downloads_enabled: context.downloadsEnabled,
     downloads_allowed: context.downloadsAllowed,
     tags: [],
