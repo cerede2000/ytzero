@@ -141,6 +141,7 @@ export function VideoCard({
   selected = false,
   onSelectToggle,
   readOnly = false,
+  onRemoveFromContinue,
   allowReject = true,
   allowMarkWatched = true,
   entering = false,
@@ -167,6 +168,8 @@ export function VideoCard({
   /** Preview mode (e.g. cleanup's "what stays" column): no swipe, no hover actions, still clickable to open. */
   readOnly?: boolean;
   /** Keep the archive/reject action and its left-swipe gesture available. */
+  /** Offered on the Continue-watching shelf, which is the only place it means anything. */
+  onRemoveFromContinue?: (videoId: string) => void;
   allowReject?: boolean;
   /** Keep watched/unwatched actions and the right-swipe gesture available. */
   allowMarkWatched?: boolean;
@@ -586,6 +589,13 @@ export function VideoCard({
         return showRestore ? <button key={id} className="action-btn" aria-label={t("restore")} onClick={(e) => act(e, () => api.restore(video.video_id), "restored")}><Undo2 /></button> : null;
       case "remove":
         if (onRemoveFromPlaylist) return <button key={id} className="action-btn" aria-label={t("removeFromPlaylist")} onClick={(e) => act(e, () => onRemoveFromPlaylist(video.video_id))}><Trash2 /></button>;
+        // Leaving a shelf that fills itself, which is neither rejecting the
+        // video nor deleting a record of it — hence the cross rather than the
+        // bin, and a place in this cluster rather than a control of its own
+        // fighting the others for the same corner.
+        if (onRemoveFromContinue) return <Tooltip key={id} text={t("continueRemove")} portal={actionsInBar}>
+          <button className="action-btn" aria-label={t("continueRemove")} onClick={(e) => act(e, async () => onRemoveFromContinue(video.video_id))}><X /></button>
+        </Tooltip>;
         return onRemoveFromHistory && video.history_id != null ? <button key={id} className="action-btn" aria-label={t("removeFromHistory")} onClick={(e) => act(e, () => onRemoveFromHistory(video.history_id!), "removed")}><Trash2 /></button> : null;
       case "otherPlaybackMode": {
         if (otherPlaybackModeIsAudio && (video.is_private === 1 || video.members_only === 1 || video.live_status === "upcoming")) return null;

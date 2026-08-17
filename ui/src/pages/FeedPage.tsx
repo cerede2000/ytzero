@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./FeedPage.css";
 import { emit, subscribe } from "../events";
 import { Link } from "react-router-dom";
-import { ArrowRight, Clock, Eye, Inbox, Plus, RefreshCw, Upload, X } from "lucide-react";
+import { ArrowRight, Clock, Eye, Inbox, Plus, RefreshCw, Upload } from "lucide-react";
 import { isShort } from "../shortVideos";
 import { api, type Bucket, type Channel, type Tag, type Video } from "../api";
 import { useI18n } from "../i18n";
@@ -450,25 +450,24 @@ export default function FeedPage({
               ref={inProgressScroll.ref}
             >
               {inProgress.map((v) => (
-                <div key={v.video_id} className="h-scroll-card continue-card" style={{ width: hCardWidth }}>
-                  <VideoCard video={v} onPlay={(video) => onPlay(video, video.playback_context ?? inProgressQueue)} onChanged={handleInProgressChanged} />
+                <div key={v.video_id} className="h-scroll-card" style={{ width: hCardWidth }}>
                   {/*
-                    Leaving this shelf is not the same as rejecting the video or
-                    claiming to have finished it — the two actions the card
-                    already offers. It is "I am not coming back to this one",
-                    which is what a remembered position means and the only thing
-                    cleared here: the video keeps its place everywhere else.
+                    Leaving this shelf is not rejecting the video or claiming to
+                    have finished it — the two the card already offers. It is "I
+                    am not coming back to this one", which is what a remembered
+                    position means and the only thing cleared. It belongs in the
+                    card's own actions rather than beside them, where it merely
+                    fought the menu for the same corner.
                   */}
-                  <button
-                    type="button"
-                    className="continue-card-remove"
-                    aria-label={t("continueRemove")}
-                    title={t("continueRemove")}
-                    onClick={() => {
-                      setInProgress((current) => current.filter((video) => video.video_id !== v.video_id));
-                      api.clearProgress(v.video_id).catch(() => loadInProgress());
+                  <VideoCard
+                    video={v}
+                    onPlay={(video) => onPlay(video, video.playback_context ?? inProgressQueue)}
+                    onChanged={handleInProgressChanged}
+                    onRemoveFromContinue={(videoId) => {
+                      setInProgress((current) => current.filter((video) => video.video_id !== videoId));
+                      api.clearProgress(videoId).catch(() => loadInProgress());
                     }}
-                  ><X size={15} /></button>
+                  />
                 </div>
               ))}
             </div>
