@@ -88,3 +88,17 @@ describe("choosing the language to ask in", () => {
     expect(acceptLanguage("en")).toBe("en-US,en;q=0.9");
   });
 });
+
+describe("a count that spells out what it counts", () => {
+  test("the endpoint writes what the page leaves out", () => {
+    // The page's lockups write "699 k"; the same count from YouTube's own
+    // endpoint arrives as "699 k vues". Read without allowing for the word,
+    // the card loses its views and its age at once.
+    expect(parseCompactCount("699 k vues", "fr")).toBe(699_000);
+    expect(parseCompactCount("1,6 M de vues", "fr")).toBe(1_600_000);
+    expect(parseCompactCount("699K views", "en")).toBe(699_000);
+    expect(parseCompactCount("699 Tsd. Aufrufe", "de")).toBe(699_000);
+    expect(parseCompactCount("699 tys. wyświetleń", "pl")).toBe(699_000);
+    expect(parseCompactCount("1 vue", "fr")).toBe(1);
+  });
+});

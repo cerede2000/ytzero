@@ -27,6 +27,16 @@ export function acceptLanguage(language: PanelLanguage): string {
 }
 
 interface Grammar {
+  /**
+   * The word each language puts after a view count.
+   *
+   * The watch page's lockups write the count bare — "699K", "699 k" — but the
+   * same count arrives from YouTube's own endpoint spelled out, "699 k vues".
+   * Read without allowing for it, the count is unreadable and the card loses
+   * its view count and its age; worse, a text that is neither a count nor an
+   * age is what the channel is found by, so the elimination starts guessing.
+   */
+  views: RegExp;
   /** Captures the number and the unit token, in that order. */
   ago: RegExp;
   units: Record<string, PublishedAgo["unit"]>;
@@ -38,6 +48,7 @@ interface Grammar {
 
 const GRAMMARS: Record<PanelLanguage, Grammar> = {
   en: {
+    views: /\s*views?$/i,
     // The panel writes "1mo ago"; the watch page sometimes spells it out.
     ago: /^(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?|months?|years?|sec|min|hr|mo|s|m|h|d|w|y)\s*ago$/i,
     units: {
@@ -53,18 +64,21 @@ const GRAMMARS: Record<PanelLanguage, Grammar> = {
     decimalComma: false,
   },
   fr: {
+    views: /\s*(?:de\s+)?vues?$/i,
     ago: /^il y a\s+(\d+)\s*(s|min|h|j|sem|mois|ans|an)\.?$/i,
     units: { s: "second", min: "minute", h: "hour", j: "day", sem: "week", mois: "month", an: "year", ans: "year" },
     magnitudes: [["md", 1e9], ["mrd", 1e9], ["m", 1e6], ["k", 1e3]],
     decimalComma: true,
   },
   de: {
+    views: /\s*Aufrufe?$/i,
     ago: /^vor\s+(\d+)\s*(sek|min|std|tagen|tag|tg|wochen|wo|monaten|mon|jahren|jahr|j)\.?$/i,
     units: { sek: "second", min: "minute", std: "hour", tag: "day", tagen: "day", tg: "day", wo: "week", wochen: "week", mon: "month", monaten: "month", j: "year", jahr: "year", jahren: "year" },
     magnitudes: [["mrd", 1e9], ["mio", 1e6], ["tsd", 1e3]],
     decimalComma: true,
   },
   pl: {
+    views: /\s*wyświetle(?:ń|nia|nie)$/i,
     ago: /^(\d+)\s*(sek|min|godz|dni|dnia|dzień|tyg|mies|lata|lat|rok)\.?\s+temu$/i,
     units: { sek: "second", min: "minute", godz: "hour", "dzień": "day", dni: "day", dnia: "day", tyg: "week", mies: "month", rok: "year", lata: "year", lat: "year" },
     magnitudes: [["mld", 1e9], ["mln", 1e6], ["tys", 1e3]],
@@ -85,7 +99,7 @@ export function parseCompactPublishedText(text: string | undefined, language: Pa
 
 export function parseCompactCount(text: string | undefined, language: PanelLanguage = "en"): number | null {
   const grammar = GRAMMARS[language];
-  const trimmed = text?.trim().replace(SPACES, "");
+  const trimmed = text?.trim().replace(grammar.views, "").replace(SPACES, "");
   if (!trimmed) return null;
   const match = trimmed.match(/^([\d.,]+)([\p{L}]*)\.?$/u);
   if (!match) return null;
