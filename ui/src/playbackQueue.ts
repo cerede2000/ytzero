@@ -29,6 +29,20 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{6,20}$/;
  */
 export interface PlayOptions {
   fromStart?: boolean;
+  /**
+   * Start this in audio rather than video.
+   *
+   * The choice was made on the page being left, and the remembered preference
+   * it also writes is scoped to the profile this browser remembers being. A
+   * browser that has never been told which profile it is has nothing to key
+   * that on, so the preference is dropped and the page opens in video — the
+   * button appears to do nothing at all, on that device only.
+   *
+   * Travelling with the navigation, beside `fromStart`, makes the choice
+   * independent of what the browser happens to remember. The preference is
+   * still written, so it sticks for the videos that follow.
+   */
+  audio?: boolean;
 }
 
 export type PlayVideo = (video: Video, queue?: PlaybackQueueContext, options?: PlayOptions) => void;

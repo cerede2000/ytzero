@@ -40,6 +40,7 @@ export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
       state: {
         playbackQueue,
         fromStart: options?.fromStart,
+        audio: options?.audio,
         // What the card was already showing. A video that is not in the
         // library has to be imported before the page knows anything about it,
         // and that takes as long as it takes — but the title, the channel and

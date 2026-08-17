@@ -105,8 +105,8 @@ export default function ChannelPlaylistPage() {
   // Entering a list here is starting a run through it, and every entry the run
   // reaches afterwards begins where it begins. The first one should not be the
   // exception because it happens to have been watched on its own once.
-  const playPlaylistVideo = (video: Video) => {
-    if (id) navigate(`/watch/${video.video_id}/playlist/${id}${playlistSortSearch(sort)}`, { state: { fromStart: true } });
+  const playPlaylistVideo = (video: Video, audio?: boolean) => {
+    if (id) navigate(`/watch/${video.video_id}/playlist/${id}${playlistSortSearch(sort)}`, { state: { fromStart: true, audio } });
   };
 
   const sortOptions: Array<{ value: PlaylistSort; label: string }> = [

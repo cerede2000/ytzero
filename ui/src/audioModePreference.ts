@@ -39,9 +39,21 @@ export function setProfileAudioMode(enabled: boolean): void {
   rememberProfileAudioMode(rememberedProfileId(), enabled);
 }
 
-export function useProfileAudioMode(): [boolean, (enabled: boolean) => void] {
+/**
+ * The mode a page opens in.
+ *
+ * A stated mode wins over the remembered one: it is the more recent thing the
+ * reader said — they pressed "listen" a second ago — and it is the only thing
+ * that carries the choice on a browser with no remembered profile, where the
+ * preference has nowhere to be written and reads back false for ever.
+ */
+export function resolveAudioMode(requested: boolean | undefined, profileId: number | null): boolean {
+  return requested ?? profileAudioModeEnabled(profileId);
+}
+
+export function useProfileAudioMode(requested?: boolean): [boolean, (enabled: boolean) => void] {
   const [profileId] = useState(rememberedProfileId);
-  const [enabled, setEnabled] = useState(() => profileAudioModeEnabled(profileId));
+  const [enabled, setEnabled] = useState(() => resolveAudioMode(requested, profileId));
   const update = useCallback((next: boolean) => {
     setEnabled(next);
     rememberProfileAudioMode(profileId, next);
