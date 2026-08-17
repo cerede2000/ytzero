@@ -1083,3 +1083,53 @@ body.cinema .watch-layout.theater .watch-actions .ui-button--secondary:not(.ui-p
   }
   body.cinema .watch-player-stage { position: static; }
 }
+
+/*
+ * Queue and download, on a suggestion.
+ *
+ * The panel's rows are as wide as the column and have no room to spare, so the
+ * actions sit over the bottom-right corner and appear on hover — the same trade
+ * the sidebar's playlists make. Nothing moves when they show.
+ */
+.related-item { position: relative; }
+.related-quick-actions {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  gap: 4px;
+  padding: 3px 3px 3px 14px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, transparent, var(--surface) 12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+.related-item:hover .related-quick-actions,
+.related-item:focus-within .related-quick-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.related-quick-actions .action-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text);
+  cursor: pointer;
+}
+.related-quick-actions .action-btn svg { width: 15px; height: 15px; }
+.related-quick-actions .action-btn:hover { background: var(--accent); color: #fff; }
+.related-quick-actions .action-btn.active { background: var(--accent); color: #fff; }
+/* A touch screen has no hover to reveal them with. */
+@media (hover: none) {
+  .related-quick-actions {
+    opacity: 1;
+    pointer-events: auto;
+    background: linear-gradient(90deg, transparent, var(--bg) 12px);
+  }
+}

@@ -580,10 +580,15 @@ api.get("/videos/:id", async (c) => {
   (video as any).channel_caption_language = channelPlayerRow?.caption_language ?? null;
 
   const suggested = await suggestedVideos(uid, row.video_id);
+  // The same two flags search and /suggestions send, so the panel drawn on the
+  // first paint carries the same actions as the one that replaces it.
+  const downloadsAllowed = !await isChildUser(uid);
   return c.json({
     video,
     related: await attachTags(uid, related),
     related_external: suggested,
+    downloads_allowed: downloadsAllowed,
+    downloads_enabled: downloadsAllowed && await profileDownloadsEnabled(uid),
     // The panel was never read for this video. Saying so lets the page open on
     // what it has and ask for the rest, rather than wait a second for it.
     related_pending: suggested.length === 0 && await relatedPanelWanted(uid),
@@ -595,9 +600,17 @@ api.get("/videos/:id", async (c) => {
 api.get("/videos/:id/suggestions", async (c) => {
   const uid = currentUserId(c);
   const videoId = c.req.param("id");
-  if (childLocalOnly(uid) || !validYouTubeVideoId(videoId)) return c.json({ suggestions: [] });
+  if (childLocalOnly(uid) || !validYouTubeVideoId(videoId)) return c.json({ suggestions: [], downloads_allowed: false, downloads_enabled: false });
   // `refresh` is the reader saying the panel is not theirs, or not current.
-  return c.json({ suggestions: await suggestedVideos(uid, videoId, true, c.req.query("refresh") === "1") });
+  // A suggestion is a card like any other, and the actions on it are the
+  // card's own — the same two flags search sends, so the panel can offer to
+  // download what search would have offered to download.
+  const downloadsAllowed = !await isChildUser(uid);
+  return c.json({
+    suggestions: await suggestedVideos(uid, videoId, true, c.req.query("refresh") === "1"),
+    downloads_allowed: downloadsAllowed,
+    downloads_enabled: downloadsAllowed && await profileDownloadsEnabled(uid),
+  });
 });
 
 }

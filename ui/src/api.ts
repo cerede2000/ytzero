@@ -285,9 +285,9 @@ export const api = {
     http<{ ok: true }>(`/notification-preferences/sources/${sourceType}/${encodeURIComponent(sourceId)}`, { method: "PUT", body: JSON.stringify({ enabled }) }),
   live: () => http<{ videos: Video[] }>("/live"),
   channelLive: (id: string) => http<{ videos: Video[] }>(`/channels/${id}/live`),
-  video: (id: string) => sharedGet<{ video: Video; related: Video[]; related_external?: SearchResult[]; related_pending?: boolean }>(`video:${id}`, `/videos/${id}`),
+  video: (id: string) => sharedGet<{ video: Video; related: Video[]; related_external?: SearchResult[]; related_pending?: boolean; downloads_allowed?: boolean; downloads_enabled?: boolean }>(`video:${id}`, `/videos/${id}`),
   videoSuggestions: (id: string, refresh = false) =>
-    http<{ suggestions: SearchResult[] }>(`/videos/${id}/suggestions${refresh ? "?refresh=1" : ""}`),
+    http<{ suggestions: SearchResult[]; downloads_allowed?: boolean; downloads_enabled?: boolean }>(`/videos/${id}/suggestions${refresh ? "?refresh=1" : ""}`),
   videoComments: (id: string, sort: VideoCommentSort = "top", refresh = false) =>
     http<VideoCommentsResponse>(`/videos/${id}/comments?sort=${sort}${refresh ? "&refresh=1" : ""}`),
   watchlist: () => sharedGet<{ videos: Video[] }>("watchlist", "/watchlist"),

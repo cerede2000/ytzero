@@ -20,6 +20,8 @@ import { isPlaybackQueueContext, type PlaybackQueueContext } from "../playbackQu
 import { sessionPlayQueueContext, useSessionPlayQueue } from "../sessionPlayQueue";
 import { effectivePlaybackQueue } from "../sessionPlayQueuePlayback";
 import { isContinuousPlaylistQueue, playbackEndAction } from "../playlistPlayback";
+import { useSessionQueue } from "../sessionQueue";
+import { effectivePlaybackQueue } from "../watchQueueTakeover";
 import type { NeighbouringTrack as Track } from "../components/AudioModePlayer";
 import { restoreSidebarVisibility } from "../app-shell/sidebarVisibility";
 import { canAutoArchiveVideo, isMissingVideoError, loadYouTubeApi, resolveShareTimestamp, resolveWatchPlayerTarget } from "./watchRuntime";
@@ -800,7 +802,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
         setVideo(r.video);
         recordVisit(id);
         if (suggestionsFor.current !== id) {
-          setRelated(withSuggestions(r.related, r.related_external));
+          setRelated(withSuggestions(r.related, r.related_external, { allowed: r.downloads_allowed, enabled: r.downloads_enabled }));
           setRelatedFromYoutube((r.related_external?.length ?? 0) > 0);
         }
         setRelatedPending(Boolean(r.related_pending));
@@ -809,7 +811,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
         if (r.video.external && r.related.length === 0) {
           api.videoInfo(id, true)
             .then(() => api.video(id))
-            .then((r2) => { if (!cancelled && suggestionsFor.current !== id) setRelated(withSuggestions(r2.related, r2.related_external)); })
+            .then((r2) => { if (!cancelled && suggestionsFor.current !== id) setRelated(withSuggestions(r2.related, r2.related_external, { allowed: r2.downloads_allowed, enabled: r2.downloads_enabled })); })
             .catch(() => {});
         }
       })
@@ -829,7 +831,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
                 // The import has just created the row, so the visit has
                 // somewhere to point now.
                 recordVisit(id);
-                if (suggestionsFor.current !== id) setRelated(withSuggestions(full.related, full.related_external));
+                if (suggestionsFor.current !== id) setRelated(withSuggestions(full.related, full.related_external, { allowed: full.downloads_allowed, enabled: full.downloads_enabled }));
                 setRelatedPending(Boolean(full.related_pending));
                 setMissingVideoId(null);
                 setVideoInfo(null);
@@ -881,7 +883,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
         if (cancelled || !result.suggestions.length) return;
         suggestionsFor.current = id;
         setRelatedFromYoutube(true);
-        setRelated((current) => withSuggestions(current, result.suggestions));
+        setRelated((current) => withSuggestions(current, result.suggestions, { allowed: result.downloads_allowed, enabled: result.downloads_enabled }));
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -902,7 +904,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     api.videoSuggestions(id, true)
       .then((result) => {
         if (result.suggestions.length) { suggestionsFor.current = id; setRelatedFromYoutube(true); }
-        setRelated((current) => withSuggestions(current, result.suggestions));
+        setRelated((current) => withSuggestions(current, result.suggestions, { allowed: result.downloads_allowed, enabled: result.downloads_enabled }));
       })
       .catch(() => {})
       .finally(() => setRefreshingSuggestions(false));

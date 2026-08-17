@@ -51,6 +51,8 @@ export interface Video {
   local_media_source?: "download" | "tubearchivist" | null;
   downloads_enabled?: boolean;
   downloads_allowed?: boolean;
+  /** The video already has a library row, so acting on it need not import it. */
+  in_library?: number;
   download_progress?: number | null;
   tags: Tag[];
   history_id?: number;
