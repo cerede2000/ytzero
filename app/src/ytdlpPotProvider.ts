@@ -63,16 +63,22 @@ export const POT_PROVIDER_ARGS: string[] = potProviderArgs();
 export const potProviderConfigured = POT_PROVIDER_ARGS.length > 0;
 
 /**
- * The arguments an attempt should carry, given how it authenticates.
+ * The arguments every attempt carries, however it authenticates.
  *
- * A token is what an unrecognised caller offers in place of an account, and
- * computing one costs a second and a half — measured on a refused address:
- * with cookies, 4.5 s without it and 6.0 s with, for the same answer. An
- * attempt that already carries cookies has nothing to gain from it and pays
- * for it on every track, so it goes without.
+ * A token used to be what an unrecognised caller offered in place of an
+ * account, so an attempt carrying cookies went without: measured on a refused
+ * address, cookies alone answered in 4.5 s where cookies and a token took 6.0
+ * for the same answer, and a second and a half on every track is worth having.
+ *
+ * That measurement has been overtaken. YouTube now challenges the player API
+ * of a signed-in caller too — the same jar that loads a watch page perfectly
+ * gets "Sign in to confirm you're not a bot" from yt-dlp — and the one thing
+ * that might answer the challenge was the thing being withheld, precisely
+ * because an account was present. A second and a half is worth having; it is
+ * not worth a video that will not play.
  */
-export function potArgsFor(useCookies: boolean): string[] {
-  return useCookies ? [] : POT_PROVIDER_ARGS;
+export function potArgsFor(_useCookies?: boolean): string[] {
+  return POT_PROVIDER_ARGS;
 }
 
 /** The script provider's home, when the bundled script is the one in use. */

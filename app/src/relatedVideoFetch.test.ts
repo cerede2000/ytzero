@@ -138,8 +138,8 @@ describe("when YouTube is refusing the address", () => {
       fail: () => { throw new YouTubeRefusingError(); },
       asSomebody: (_videoId, userId) => userId === 1 ? [suggestion("profile-one")] : [],
     });
-    expect(await fetch("refused", 2)).toEqual([]);
-    expect(saved["2:refused"] === undefined).toBe(true);
+    expect(await fetch("lent-nothing", 2)).toEqual([]);
+    expect(saved["2:lent-nothing"] === undefined).toBe(true);
     expect(asked).toEqual([2]);
   });
 
@@ -159,5 +159,27 @@ describe("when YouTube is refusing the address", () => {
     expect(await fetch("still-refused", 1)).toEqual([]);
     expect(await fetch("still-refused", 1)).toEqual([]);
     expect(loads()).toBe(2);
+  });
+});
+
+describe("a video with no library row", () => {
+  test("is asked about once, not once per ask", async () => {
+    // A panel is stored against the video's row, and a video opened from
+    // somebody else's panel has none until its import finishes — or ever, if
+    // the import fails. Every ask found nothing stored and bought another
+    // request: three signed-in fetches of the same page in twelve seconds, on
+    // an address that was already being refused.
+    let signedInFetches = 0;
+    const fetch = createRelatedVideoFetcher(
+      async () => [],
+      async () => { /* the row is missing, so nothing can be written */ },
+      async () => { throw new Error("the anonymous path is not reached here"); },
+      () => 1_000,
+      async (videoId) => { signedInFetches++; return [suggestion(`${videoId}-mine`)]; },
+      async () => {},
+    );
+    expect((await fetch("no-row", 1)).map((v) => v.videoId)).toEqual(["no-row-mine"]);
+    expect((await fetch("no-row", 1)).map((v) => v.videoId)).toEqual(["no-row-mine"]);
+    expect(signedInFetches).toBe(1);
   });
 });
