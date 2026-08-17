@@ -1071,7 +1071,21 @@ export default function WatchPage() {
             <RefreshCw size={15} className={refreshingSuggestions ? "related-refresh--spinning" : undefined} />
           </button>
         </div>
-        {related.filter((v) => v.is_short === 0 && v.watched !== 1).map((v) => (
+        {/*
+          * Watched is not a reason to hide a suggestion.
+          *
+          * The library's own list already excludes them, in SQL, four times
+          * over — dropping them again here only ever removed YouTube's, and it
+          * removed exactly the best of them: somebody who follows a channel
+          * has seen its videos, so the suggestions closest to what is playing
+          * are the ones most likely to be marked watched. On a Jamy video the
+          * panel opened on two more from Jamy and the page showed neither,
+          * leaving the tail that had nothing to do with anything.
+          *
+          * YouTube shows them too, dimmed, with the progress bar — which the
+          * card below already draws.
+          */}
+        {related.filter((v) => v.is_short === 0).map((v) => (
           <div key={v.video_id} className="related-item">
             <div className="related-thumb-shell">
               <Link className="related-thumb-link" to={`/watch/${v.video_id}`} aria-label={v.title} title={v.title}>
