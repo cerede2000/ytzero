@@ -240,6 +240,15 @@ export function VideoCard({
   const appliedActionConfig = useAppliedVideoCardActionConfig();
   const actionConfig = actionPreview?.config ?? appliedActionConfig;
   const actionsInBar = (actionPreview?.mode ?? appliedActionsMode) === "bar_always";
+  /*
+   * Action tooltips are always portalled.
+   *
+   * They used to be portalled only in bar mode, and over the thumbnail they are
+   * inside `.swipe-wrap`, which hides its overflow — so a label wider than the
+   * space left beside its button was simply cut off, and the longer the label
+   * the less of it survived. Fixed positioning outside that box is the only way
+   * a tooltip is legible wherever its button happens to sit.
+   */
   const actionsOpen = Boolean(actionPreview) || actionsPinned || actionsHovered || actionProximity > 0.52;
   const previewStartSeconds = video.watch_position && video.watch_duration && video.watch_position / video.watch_duration < 0.9
     ? Math.max(0, video.watch_position)
@@ -618,7 +627,7 @@ export function VideoCard({
           }}
         />;
       case "queue":
-        return <Tooltip key={id} text={queued ? t("removeFromPlayQueue") : t("addToPlayQueue")} portal={actionsInBar}>
+        return <Tooltip key={id} text={queued ? t("removeFromPlayQueue") : t("addToPlayQueue")} portal>
           <button
             className={`action-btn${queued ? " active" : ""}`}
             aria-pressed={queued}
@@ -632,7 +641,7 @@ export function VideoCard({
           return <button key={id} className="action-btn" aria-label={t("cancelDownload")} onClick={cancelLocalDownload}><X /></button>;
         }
         if (!(video.downloads_enabled || video.downloads_allowed) || downloadStatus === "done") return null;
-        return <Tooltip key={id} text={video.downloads_enabled ? t("downloadLocally") : t("enableDownloadsFeature")} portal={actionsInBar}>
+        return <Tooltip key={id} text={video.downloads_enabled ? t("downloadLocally") : t("enableDownloadsFeature")} portal>
           <button className="action-btn" aria-label={video.downloads_enabled ? t("downloadLocally") : t("enableDownloadsFeature")} onClick={requestLocalDownload}><ArrowDownToLine /></button>
         </Tooltip>;
       case "archive":
@@ -640,7 +649,7 @@ export function VideoCard({
           <button className="action-btn" aria-label={t("reject")} onClick={(e) => act(e, () => api.archiveVideo(video.video_id), "rejected")}><Archive /></button>
         </Tooltip> : null;
       case "watched":
-        return allowMarkWatched && watched ? <Tooltip key={id} text={t("markUnwatched")} portal={actionsInBar}>
+        return allowMarkWatched && watched ? <Tooltip key={id} text={t("markUnwatched")} portal>
           <button className="action-btn" aria-label={t("markUnwatched")} onClick={(e) => act(e, markUnwatched, "unwatched")}><EyeOff /></button>
         </Tooltip> : allowMarkWatched && status !== "archived" ? <Tooltip key={id} text={t("markWatched")} portal={actionsInBar}>
           <button className="action-btn" aria-label={t("markWatched")} onClick={(e) => act(e, markWatched, "watched")}><Eye /></button>
