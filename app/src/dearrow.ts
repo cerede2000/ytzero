@@ -21,6 +21,17 @@ interface DeArrowThumbnail extends DeArrowCandidate {
 export interface DeArrowApiBranding {
   titles?: DeArrowTitle[];
   thumbnails?: DeArrowThumbnail[];
+  /**
+   * A fraction of the way through the video, returned for every video whether
+   * or not anybody has submitted a thumbnail for it.
+   *
+   * It is how DeArrow answers the far commoner case: nobody has chosen a frame,
+   * and showing the uploader's is showing the thing the reader asked not to
+   * see. Measured on a channel of 213 videos, not one had a community
+   * thumbnail and every one had this.
+   */
+  randomTime?: number;
+  videoDuration?: number | null;
 }
 
 export interface DeArrowBranding {
@@ -34,6 +45,21 @@ export function deArrowHashPrefix(videoId: string): string {
   return createHash("sha256").update(videoId).digest("hex").slice(0, 4);
 }
 
+/**
+ * The frame to show when the community has chosen none.
+ *
+ * `randomTime` is a fraction of the way through, so it needs the duration to
+ * become a time. Without one there is nothing to ask the thumbnail service for,
+ * and the uploader's own image is the honest answer.
+ */
+export function deArrowFallbackTimestamp(branding: DeArrowApiBranding | undefined): number | null {
+  const fraction = Number(branding?.randomTime);
+  const duration = Number(branding?.videoDuration);
+  if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) return null;
+  if (!Number.isFinite(duration) || duration <= 0) return null;
+  return fraction * duration;
+}
+
 function trusted<T extends DeArrowCandidate>(candidate: T | undefined): candidate is T {
   return Boolean(candidate && (candidate.locked || candidate.votes >= 0));
 }
@@ -44,9 +70,15 @@ export function selectDeArrowBranding(videoId: string, branding: DeArrowApiBrand
   const title = trusted(titleCandidate) && !titleCandidate.original
     ? titleCandidate.title.replaceAll(">", "").trim() || null
     : null;
-  const timestamp = trusted(thumbnailCandidate) && !thumbnailCandidate.original && Number.isFinite(thumbnailCandidate.timestamp)
+  const chosen = trusted(thumbnailCandidate) && !thumbnailCandidate.original && Number.isFinite(thumbnailCandidate.timestamp)
     ? Number(thumbnailCandidate.timestamp)
     : null;
+  // Nobody has chosen a frame for most videos, and stopping there left the
+  // setting doing nothing at all on whole channels: the uploader's thumbnail
+  // stayed, which is the one the reader turned this on to avoid. DeArrow
+  // answers that with a point in the video, and its own extension shows the
+  // frame there — so this does too.
+  const timestamp = chosen ?? deArrowFallbackTimestamp(branding);
   const thumbnail = timestamp != null && timestamp >= 0
     ? `${THUMBNAIL_API}?videoID=${encodeURIComponent(videoId)}&time=${encodeURIComponent(String(timestamp))}`
     : null;
