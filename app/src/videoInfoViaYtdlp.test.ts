@@ -26,6 +26,7 @@ describe("video info from yt-dlp", () => {
       publishedAt: "2026-08-13T00:00:00.000Z",
       duration: "12:34",
       liveStatus: "none",
+    playableInEmbed: null,
     });
   });
 

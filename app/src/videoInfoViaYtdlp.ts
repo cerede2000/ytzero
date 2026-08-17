@@ -89,6 +89,9 @@ export function videoInfoFromYtdlpJson(videoId: string, json: Record<string, unk
     publishedAt: publishedAtFrom(json),
     duration: durationFrom(json),
     liveStatus: liveStatusFrom(json),
+    // yt-dlp answers about the video, not about the embed. Unknown stays
+    // unknown rather than being read as a refusal.
+    playableInEmbed: null,
   };
 }
 

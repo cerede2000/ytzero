@@ -922,6 +922,13 @@ export interface VideoInfo {
   publishedAt: string | null;
   duration: string | null;
   liveStatus: "none" | "live" | "upcoming" | "was_live";
+  /**
+   * Whether the uploader allows playback outside youtube.com.
+   *
+   * null when the answer did not carry it — the InnerTube and embed fallbacks
+   * do not — so an unknown is never mistaken for a refusal.
+   */
+  playableInEmbed: boolean | null;
 }
 
 export interface VideoCreatorInfo {
@@ -994,7 +1001,7 @@ export async function fetchVideoCreators(videoId: string, userId?: number): Prom
 const VIDEO_INFO_TTL = 10 * 60_000;
 const videoInfoCache = new AsyncTtlCache<VideoInfo>({ ttlMs: VIDEO_INFO_TTL });
 
-function videoInfoFromPlayerResponse(videoId: string, pr: any): VideoInfo {
+export function videoInfoFromPlayerResponse(videoId: string, pr: any): VideoInfo {
   const vd = pr?.videoDetails;
   if (!vd?.videoId) {
     // Surface why YouTube withheld the video: a stripped player response with
@@ -1042,6 +1049,11 @@ function videoInfoFromPlayerResponse(videoId: string, pr: any): VideoInfo {
     publishedAt: mf?.publishDate ?? null,
     duration,
     liveStatus,
+    // Only the watch page carries it; the InnerTube and embed fallbacks do
+    // not, and there an unknown must stay unknown.
+    playableInEmbed: typeof pr?.playabilityStatus?.playableInEmbed === "boolean"
+      ? pr.playabilityStatus.playableInEmbed
+      : typeof vd?.playableInEmbed === "boolean" ? vd.playableInEmbed : null,
   };
 }
 

@@ -14,5 +14,6 @@ export async function persistDirectVideoInfo(info: VideoInfo): Promise<void> {
     info.liveStatus,
     info.viewCount,
     info.duration,
+    info.playableInEmbed === null ? null : info.playableInEmbed ? 1 : 0,
   );
 }
