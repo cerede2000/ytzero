@@ -99,8 +99,28 @@ describe("asking again on purpose", () => {
   });
 });
 
+describe("whose panel it is", () => {
+  test("the reader's own account comes before the anonymous one", async () => {
+    // Credentials used only as a fallback for a refused address means that the
+    // moment the address recovers, everyone silently goes back to the panel
+    // YouTube shows a stranger — same profile, same cookies, another taste.
+    const { fetch, saved, loads } = fetcher({
+      asSomebody: (videoId) => [suggestion(`${videoId}-mine`)],
+    });
+    expect((await fetch("both-available", 1)).map((v) => v.videoId)).toEqual(["both-available-mine"]);
+    expect(saved["1:both-available"]?.length).toBe(1);
+    expect(loads()).toBe(0);
+  });
+
+  test("a profile with no account still gets the panel about the video", async () => {
+    const { fetch, loads } = fetcher();
+    expect((await fetch("anon", 3)).map((v) => v.videoId)).toEqual(["anon-a"]);
+    expect(loads()).toBe(1);
+  });
+});
+
 describe("when YouTube is refusing the address", () => {
-  test("asks again as the profile looking at the video, and only as them", async () => {
+  test("asks as the profile looking at the video, and only as them", async () => {
     const { fetch, saved, asked } = fetcher({
       fail: () => { throw new YouTubeRefusingError(); },
       asSomebody: (videoId, userId) => userId === 2 ? [suggestion(`${videoId}-signed-in`)] : [],
@@ -123,14 +143,15 @@ describe("when YouTube is refusing the address", () => {
     expect(asked).toEqual([2]);
   });
 
-  test("recognises the first refusal, which arrives as a plain failure", async () => {
+  test("recognises the refusal that opens a cycle, which arrives as a plain failure", async () => {
+    // Only the second refusal and after are the sentinel class; the first is
+    // what three real attempts came back with. Read as an ordinary failure it
+    // would be remembered as "this video has no panel", for six hours.
     const refused = new Error("video info failed: html=videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you’re not a bot); innertube=HTTP error! status: 400");
-    const { fetch, saved } = fetcher({
-      fail: () => { throw refused; },
-      asSomebody: (videoId) => [suggestion(`${videoId}-signed-in`)],
-    });
-    expect((await fetch("first-of-the-cycle", 2)).map((v) => v.videoId)).toEqual(["first-of-the-cycle-signed-in"]);
-    expect(saved["2:first-of-the-cycle"]?.length).toBe(1);
+    const { fetch, loads } = fetcher({ fail: () => { throw refused; } });
+    expect(await fetch("plain-refusal", 1)).toEqual([]);
+    expect(await fetch("plain-refusal", 1)).toEqual([]);
+    expect(loads()).toBe(2);
   });
 
   test("does not hold the video shut for six hours over a ninety-second refusal", async () => {

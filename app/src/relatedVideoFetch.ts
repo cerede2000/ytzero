@@ -67,6 +67,33 @@ export function createRelatedVideoFetcher(
     }
 
     const started = (async () => {
+      /*
+       * The reader's own account first, whenever they have lent one.
+       *
+       * A panel is assembled from what an account watches — that is the whole
+       * of what separates a recommendation from a list of what is popular
+       * nearby. Treating the credentials as a fallback for a refused address
+       * meant they were used only when YouTube was turning us away: the moment
+       * the address recovered, everyone silently went back to the panel
+       * YouTube shows a stranger. Same profile, same cookies, and a panel that
+       * had nothing to do with the reader.
+       *
+       * A profile with no jar of its own returns from here at once, having
+       * asked nothing.
+       */
+      const mine = await loadAsSomebody(videoId, userId).catch((failure) => {
+        log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
+        return [] as RelatedVideo[];
+      });
+      if (mine.length > 0) {
+        await save(videoId, userId, mine);
+        log.info("related.fetched", { videoId, userId, suggestions: mine.length, credentialed: true });
+        return mine;
+      }
+
+      // Otherwise the panel YouTube shows a stranger: about the video rather
+      // than about a person, which is the honest answer for a profile that has
+      // lent no account.
       const related: { videos: RelatedVideo[] } = { videos: [] };
       try {
         await load(videoId, related);
@@ -79,17 +106,8 @@ export function createRelatedVideoFetcher(
         // A refusal answers nothing about this video: the question was never
         // put. Remembering it as empty would hold the panel shut for six hours
         // over a refusal that lasts ninety seconds.
-        const authenticated = await loadAsSomebody(videoId, userId).catch((failure) => {
-          log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
-          return [] as RelatedVideo[];
-        });
-        if (authenticated.length === 0) {
-          log.info("related.unavailable_while_refused", { videoId, userId });
-          return [];
-        }
-        await save(videoId, userId, authenticated);
-        log.info("related.fetched", { videoId, userId, suggestions: authenticated.length, credentialed: true });
-        return authenticated;
+        log.info("related.unavailable_while_refused", { videoId, userId });
+        return [];
       }
       if (related.videos.length === 0) {
         emptyAt.set(key, now());
