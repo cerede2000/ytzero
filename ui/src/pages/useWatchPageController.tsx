@@ -774,11 +774,31 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     archivedRef.current = false;
     setVideoUnavailable(false);
     window.scrollTo(0, 0);
+    /**
+     * Record the visit, once there is something to attach it to.
+     *
+     * "Continue watching" is built by joining a saved position to a history
+     * row, and a history row can only point at a video the library has. Sent
+     * as the page opened, this arrived before the import that creates that row
+     * for a video reached from search: the server found nothing to attach it
+     * to, wrote nothing, and said ok. The video kept its position, never got
+     * its history row, and so never came back — which is exactly the video
+     * somebody most wants offered back to them.
+     */
+    const recordVisit = (videoId: string) => {
+      // React StrictMode re-runs effects in development. Record one visit per
+      // actual route transition instead of inserting duplicate history rows.
+      if (isIncognitoMode() || watchedVisitRef.current === videoId) return;
+      watchedVisitRef.current = videoId;
+      api.watch(videoId, routePlaybackQueue ?? undefined).catch(() => {});
+    };
+
     api
       .video(id)
       .then((r) => {
         if (cancelled) return;
         setVideo(r.video);
+        recordVisit(id);
         if (suggestionsFor.current !== id) {
           setRelated(withSuggestions(r.related, r.related_external));
           setRelatedFromYoutube((r.related_external?.length ?? 0) > 0);
@@ -806,6 +826,9 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
               return api.video(id).then((full) => {
                 if (cancelled) return;
                 setVideo(full.video);
+                // The import has just created the row, so the visit has
+                // somewhere to point now.
+                recordVisit(id);
                 if (suggestionsFor.current !== id) setRelated(withSuggestions(full.related, full.related_external));
                 setRelatedPending(Boolean(full.related_pending));
                 setMissingVideoId(null);
@@ -818,12 +841,6 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
           console.error(e);
         }
       });
-    // React StrictMode re-runs effects in development. Record one visit per
-    // actual route transition instead of inserting duplicate history rows.
-    if (!isIncognitoMode() && watchedVisitRef.current !== id) {
-      watchedVisitRef.current = id;
-      api.watch(id, routePlaybackQueue ?? undefined).catch(() => {});
-    }
     return () => { cancelled = true; };
   }, [id, loadAttempt]);
 

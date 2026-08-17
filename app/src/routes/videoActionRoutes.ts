@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { database } from "../database";
+import { log } from "../logger";
 import { childLocalOnly, isChildUser, recordWatchTick } from "../childTime";
 import { ensureVideoImported } from "../videoImport";
 import { computeShowFrom } from "../scheduleTime";
@@ -94,13 +95,20 @@ api.post("/videos/:id/dequeue", async (c) => {
 api.post("/videos/:id/watch", async (c) => {
   const uid = currentUserId(c);
   const id = c.req.param("id");
-  if (await videoExistsStmt.get(id)) {
-    const body = await c.req.json().catch(() => ({})) as { playback_context?: unknown };
-    if (body.playback_context !== undefined) await savePlaybackContext(uid, id, body.playback_context);
-    await database.prepare("INSERT INTO history (video_id, user_id) VALUES (?, ?)").run(id, uid);
-    refreshDiscoveryInBackground(uid);
+  // A visit can only be recorded against a video the library has. Asked about
+  // one it does not, this used to answer ok and write nothing — so a video
+  // opened from search, whose import had not finished yet, kept its position
+  // and never got the history row that "Continue watching" joins on. Saying
+  // which of the two happened is what makes the next one findable.
+  if (!await videoExistsStmt.get(id)) {
+    log.info("history.visit_unrecorded", { videoId: id, userId: uid, reason: "no_library_row" });
+    return c.json({ ok: true, recorded: false });
   }
-  return c.json({ ok: true });
+  const body = await c.req.json().catch(() => ({})) as { playback_context?: unknown };
+  if (body.playback_context !== undefined) await savePlaybackContext(uid, id, body.playback_context);
+  await database.prepare("INSERT INTO history (video_id, user_id) VALUES (?, ?)").run(id, uid);
+  refreshDiscoveryInBackground(uid);
+  return c.json({ ok: true, recorded: true });
 });
 
 api.post("/videos/:id/complete", async (c) => {
