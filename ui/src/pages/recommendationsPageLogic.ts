@@ -1,4 +1,5 @@
 import type { Video } from "../api";
+import { isShort } from "../shortVideos";
 
 export type RecommendationContent = Pick<Video, "video_id" | "is_short" | "live_status" | "watched" | "status">;
 
@@ -6,15 +7,13 @@ export type RecommendationContent = Pick<Video, "video_id" | "is_short" | "live_
  * The API excludes these formats too, but the page keeps a defensive boundary:
  * a recommendation surface must never flash a Short or any kind of live upload.
  *
- * This is the one place that asks for a confirmed `0` rather than "not a 1".
- * `is_short` is only ever filled in while syncing a channel, so a video that
- * arrived another way stays null — and elsewhere that must read as "not a
- * Short", or a video somebody watched half of vanishes from their shelves. A
- * recommendation is the opposite case: nobody has asked for these, so an
- * unchecked video is better left out than shown as something it might not be.
+ * A Short is one that has been confirmed to be one. Not knowing is not a reason
+ * to act, here or anywhere else — and since the check only ever runs while
+ * syncing a channel, treating "unchecked" as "Short" excluded every video that
+ * arrived another way, permanently.
  */
 export function isEligibleRecommendation(video: RecommendationContent): boolean {
-  return video.is_short === 0 && video.live_status === "none" && video.watched !== 1 && video.status === "inbox";
+  return !isShort(video) && video.live_status === "none" && video.watched !== 1 && video.status === "inbox";
 }
 
 /** Preserve the ranking supplied by the backend while removing unsafe formats

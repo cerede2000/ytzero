@@ -17,12 +17,15 @@ describe("recommendation page filtering", () => {
     expect(isEligibleRecommendation(video("regular"))).toBe(true);
   });
 
-  test("excludes Shorts, unknown formats and every live format", () => {
+  test("excludes Shorts and every live format", () => {
     expect(isEligibleRecommendation(video("short", { short: 1 }))).toBe(false);
-    expect(isEligibleRecommendation(video("unknown", { short: null }))).toBe(false);
     expect(isEligibleRecommendation(video("upcoming", { live: "upcoming" }))).toBe(false);
     expect(isEligibleRecommendation(video("live", { live: "live" }))).toBe(false);
     expect(isEligibleRecommendation(video("past-live", { live: "was_live" }))).toBe(false);
+  });
+
+  test("keeps a video whose format nobody has checked", () => {
+    expect(isEligibleRecommendation(video("unknown", { short: null }))).toBe(true);
   });
 
   test("excludes completed videos but keeps a partially watched one", () => {

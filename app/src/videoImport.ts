@@ -11,6 +11,7 @@ import { saveRelatedVideos } from "./relatedVideoStore";
 import type { RelatedVideo } from "./relatedVideos";
 import { fetchVideoInfoViaYtdlp, type ProgressiveVideoSource } from "./videoInfoViaYtdlp";
 import { videoExistsStmt } from "./videoRoutesSupport";
+import { settleIsShort } from "./shortClassification";
 import {
   DeletedVideoError,
   fetchChannelAbout,
@@ -105,7 +106,13 @@ async function loadAndPersistVideoInfo(userId: number, videoId: string): Promise
   // The directly requested player response is authoritative for live state,
   // even when RSS imported this row earlier without a live marker.
   const existing = await videoExistsStmt.get(info.videoId);
-  await persistDirectVideoInfo(info);
+  // Settle the format while the video is being fetched anyway. Left unknown it
+  // stays unknown for good — nothing comes back for a video that is not part of
+  // a channel sync — and every list that hides Shorts then has to guess.
+  const isShort = info.liveStatus === "none"
+    ? await settleIsShort(info.videoId, info.title, info.duration).catch(() => null)
+    : false;
+  await persistDirectVideoInfo(info, isShort);
 
   // Insert the channel's recent uploads as external so the related panel fills.
   if (feed) {
