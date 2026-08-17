@@ -1097,14 +1097,13 @@ export async function fetchVideoInfo(videoId: string, options: { force?: boolean
       try {
         result = await fetchVideoInfoFromEmbed(videoId, options.userId);
       } catch (embedError) {
-        if (isYouTubeRefusalError(embedError)) throw youtubeRefusalGate.refused(embedError);
-        if ([htmlError, innerTubeError, embedError].some(isPrivateVideoError)) {
-          youtubeRefusalGate.answered();
-          throw new PrivateVideoError();
-        }
-        if ([htmlError, innerTubeError, embedError].some(isDeletedVideoError)) {
-          youtubeRefusalGate.answered();
-          throw new DeletedVideoError();
+        // In the order they were asked, rather than one verdict outranking the
+        // other whoever gave it. The watch page sees the most and answers
+        // first; letting the embed's "private" beat its "unavailable" is how a
+        // deleted video came to be filed as private.
+        for (const attempt of [htmlError, innerTubeError, embedError]) {
+          if (isPrivateVideoError(attempt)) throw new PrivateVideoError();
+          if (isDeletedVideoError(attempt)) throw new DeletedVideoError();
         }
         youtubeRefusalGate.releaseProbe();
         const primary = htmlError instanceof Error ? htmlError.message : String(htmlError);

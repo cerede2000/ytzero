@@ -44,3 +44,26 @@ describe("what says nothing about the video", () => {
     expect(deleted("ERROR: [youtube] abc: downloading webpage for 'my private life'")).toBe(false);
   });
 });
+
+describe("the page answers in the language it was asked in", () => {
+  test("a deleted video is recognised in each of the four", () => {
+    // The requests follow the library's language now, so an English-only test
+    // stopped recognising a deleted video the day that changed — and the row
+    // was never marked. Measured on one deleted video, one request per
+    // language, on youtube.com.
+    expect(isDeletedVideoError(new Error("Video unavailable"))).toBe(true);
+    expect(isDeletedVideoError(new Error("Vidéo non disponible"))).toBe(true);
+    expect(isDeletedVideoError(new Error("Video nicht verfügbar"))).toBe(true);
+    expect(isDeletedVideoError(new Error("Film niedostępny"))).toBe(true);
+  });
+
+  test("accents missing from a page are not a reason to miss it", () => {
+    expect(isDeletedVideoError(new Error("Video non disponible"))).toBe(true);
+    expect(isDeletedVideoError(new Error("Video nicht verfugbar"))).toBe(true);
+  });
+
+  test("and none of them matches a refusal in any language", () => {
+    expect(isDeletedVideoError(new Error("Sign in to confirm you’re not a bot"))).toBe(false);
+    expect(isDeletedVideoError(new Error("Connectez-vous pour confirmer que vous n’êtes pas un robot"))).toBe(false);
+  });
+});

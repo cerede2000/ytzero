@@ -21,9 +21,32 @@ export function isPrivateVideoError(error: unknown): boolean {
     || (error instanceof Error && /\bprivate video\b/i.test(error.message));
 }
 
+/**
+ * "This video is gone", in the languages the pages are asked for.
+ *
+ * The watch page answers in whatever language the request asked for, and the
+ * requests follow the library's language now — so an English-only test stopped
+ * recognising a deleted video the day that changed, and the row was never
+ * marked. Measured on the same deleted video, one request per language:
+ *
+ *     en  Video unavailable
+ *     fr  Vidéo non disponible
+ *     de  Video nicht verfügbar
+ *     pl  Film niedostępny
+ *
+ * yt-dlp's own wording is not localised, so the English phrasings below still
+ * carry the paths that read its stderr rather than a page.
+ */
+const DELETED_WORDINGS = [
+  /\b(?:video unavailable|video (?:has been|was) removed|removed by (?:the )?uploader)\b/i,
+  /vid(?:é|e)o non disponible/i,
+  /video nicht verf(?:ü|u)gbar/i,
+  /film niedost(?:ę|e)pny/i,
+];
+
 export function isDeletedVideoError(error: unknown): boolean {
-  return error instanceof DeletedVideoError
-    || (error instanceof Error && /\b(?:video unavailable|video (?:has been|was) removed|removed by (?:the )?uploader|vidéo non disponible|video nicht verfügbar|film niedostępny)\b/i.test(error.message));
+  if (error instanceof DeletedVideoError) return true;
+  return error instanceof Error && DELETED_WORDINGS.some((wording) => wording.test(error.message));
 }
 
 export type VideoOEmbedAvailability = "available" | "unavailable" | "unknown";
