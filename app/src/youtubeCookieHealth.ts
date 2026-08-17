@@ -1,6 +1,8 @@
 import { chmodSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { downloadCookiesConfigured, downloadCookiesFile } from "./downloadConfig";
 import { log } from "./logger";
+import { fetchYoutubeSessionState } from "./youtube";
+import { youtubeCookieHeader } from "./youtubeCookieHeader";
 import { mergeSetCookies } from "./youtubeCookieJar";
 
 /**
@@ -36,6 +38,41 @@ export function cookieHealth(userId: number): CookieHealth | null {
 
 export function forgetCookieHealth(userId: number): void {
   health.delete(userId);
+}
+
+/** How long an answer stands before the question is worth putting again. */
+const HEALTH_TTL_MS = 10 * 60_000;
+
+/**
+ * The answer, asking YouTube if nobody has lately.
+ *
+ * The panel is fetched anonymously unless the reader asked otherwise, so
+ * nothing else necessarily makes a signed-in request: a state that only
+ * recorded what happened to pass by would stay unknown for ever on most
+ * instances, which is the same as not having it.
+ */
+export async function currentCookieHealth(
+  userId: number,
+  now: () => number = Date.now,
+  ask = fetchYoutubeSessionState,
+  header = youtubeCookieHeader,
+): Promise<CookieHealth | null> {
+  const known = health.get(userId);
+  if (known && now() - known.at < HEALTH_TTL_MS) return known;
+  // One source of truth for "is there a jar worth asking with": the header
+  // builder already answers null when there is none.
+  const cookieHeader = header(userId);
+  if (!cookieHeader) return null;
+  try {
+    const state = await ask(cookieHeader);
+    recordCookieRecognition(userId, state.signedIn, now);
+    persistSetCookies(userId, state.setCookies);
+  } catch (error) {
+    // A question that could not be put is not an answer: whatever was known
+    // stands rather than being replaced by a network failure.
+    log.warn("cookies.check_failed", { userId, error: error instanceof Error ? error.message : String(error) });
+  }
+  return health.get(userId) ?? null;
 }
 
 /**
