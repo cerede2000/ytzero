@@ -27,6 +27,42 @@ const REFUSED_QUIET_MS = 6 * 60 * 60_000;
 const emptyAt = new Map<string, number>();
 
 /**
+ * The panels that could not be written down.
+ *
+ * A panel is stored against the video's library row, and a video opened from
+ * somebody's panel has no row until its import finishes — or ever, if the
+ * import fails. Every ask therefore found nothing stored and bought another
+ * request: three signed-in fetches of the same watch page in twelve seconds,
+ * on an address that was already being refused.
+ *
+ * So the answer is remembered here for as long as a stored one would live,
+ * and the store remains the durable copy for videos that have a row.
+ */
+const PANEL_MEMORY_MS = 24 * 60 * 60_000;
+const MEMORY_LIMIT = 200;
+const remembered = new Map<string, { at: number; videos: RelatedVideo[] }>();
+
+function recall(key: string, now: () => number): RelatedVideo[] | null {
+  const held = remembered.get(key);
+  if (!held) return null;
+  if (now() - held.at > PANEL_MEMORY_MS) {
+    remembered.delete(key);
+    return null;
+  }
+  return held.videos;
+}
+
+function remember(key: string, videos: RelatedVideo[], now: () => number): void {
+  remembered.set(key, { at: now(), videos });
+  // Map keeps insertion order, so the first key is the oldest written.
+  while (remembered.size > MEMORY_LIMIT) {
+    const oldest = remembered.keys().next().value;
+    if (oldest === undefined) break;
+    remembered.delete(oldest);
+  }
+}
+
+/**
  * Only this profile's own credentials, and never anybody else's.
  *
  * Metadata can be fetched with a borrowed jar: a title and a duration are the
@@ -63,9 +99,12 @@ export function createRelatedVideoFetcher(
     if (refresh) {
       await forget(videoId, userId);
       emptyAt.delete(key);
+      remembered.delete(key);
     } else {
       const stored = await read(videoId, userId, 25);
       if (stored.length > 0) return stored;
+      const held = recall(key, now);
+      if (held) return held;
       const running = inFlight.get(key);
       if (running) return running;
       const quietSince = emptyAt.get(key);
@@ -92,6 +131,7 @@ export function createRelatedVideoFetcher(
         return [] as RelatedVideo[];
       });
       if (mine.length > 0) {
+        remember(key, mine, now);
         await save(videoId, userId, mine);
         log.info("related.fetched", { videoId, userId, suggestions: mine.length, credentialed: true });
         return mine;
@@ -119,6 +159,7 @@ export function createRelatedVideoFetcher(
         emptyAt.set(key, now());
         return [];
       }
+      remember(key, related.videos, now);
       await save(videoId, userId, related.videos);
       log.info("related.fetched", { videoId, userId, suggestions: related.videos.length });
       return related.videos;
