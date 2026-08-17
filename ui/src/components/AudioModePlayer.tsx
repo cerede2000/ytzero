@@ -6,7 +6,6 @@ import { audioStallStep, bufferedSecondsAhead, initialAudioStallState } from "..
 import { installInitialAudioPlaybackUnlock } from "../audioPlaybackUnlock";
 import { useI18n } from "../i18n";
 import { mediaPlaybackState } from "../mediaSessionState";
-import { reportAudioDiagnostic } from "../audioDiagnostics";
 import { img } from "../img";
 import { enforceLocalPlayerVolume } from "../localPlayerVolume";
 import type { WatchPlayerHandle } from "../playerHandle";
@@ -432,11 +431,6 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     const audio = audioRef.current;
     if (!audio) return;
     startedAtRef.current = audio.currentTime;
-    reportAudioDiagnostic("stall_recovery", videoId, {
-      currentTime: Math.round(audio.currentTime),
-      readyState: audio.readyState,
-      paused: audio.paused,
-    });
     setSourceRevision((revision) => revision + 1);
   }, [videoId]);
 
@@ -463,24 +457,6 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     }, STALL_SAMPLE_MS);
     return () => window.clearInterval(timer);
   }, [live, nudgeStalledPlayback, recoverFromStall]);
-
-  // What the page is doing when the screen goes off and comes back — the one
-  // moment the controls are lost, and the one this cannot be watched during.
-  useEffect(() => {
-    if (live) return;
-    const report = () => {
-      const audio = audioRef.current;
-      reportAudioDiagnostic("visibility", videoId, {
-        playing: Boolean(audio && !audio.paused && !audio.ended),
-        currentTime: Math.round(audio?.currentTime ?? 0),
-        readyState: audio?.readyState ?? -1,
-        sessionState: (("mediaSession" in navigator) && navigator.mediaSession.playbackState) || "unknown",
-        hasMetadata: Boolean(("mediaSession" in navigator) && navigator.mediaSession.metadata),
-      });
-    };
-    document.addEventListener("visibilitychange", report);
-    return () => document.removeEventListener("visibilitychange", report);
-  }, [live, videoId]);
 
   // System-level controls keep the same <audio> element alive on the lock
   // screen; the custom controls below only replace its on-page chrome.
