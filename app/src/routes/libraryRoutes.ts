@@ -84,6 +84,10 @@ api.get("/in-progress", async (c) => {
     ${videoSelect(uid)}
     JOIN (SELECT video_id, MAX(watched_at) AS last_watched FROM history WHERE user_id = ${uid} GROUP BY video_id) lw ON lw.video_id = v.video_id
     WHERE v.published_at IS NOT NULL AND v.published_at != ''
+      -- Something to carry on with has to be openable. A video deleted since it
+      -- was started would otherwise head this shelf for good, being the most
+      -- recently watched thing on it.
+      AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0
       AND uv.watch_position IS NOT NULL AND uv.watch_duration IS NOT NULL
       AND uv.watch_duration > 30
       AND uv.watch_position >= 3
