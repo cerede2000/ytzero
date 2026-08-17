@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ListVideo, Play, Save, Trash2, X } from "lucide-react";
+import { Headphones, ListVideo, Play, Save, Trash2, X } from "lucide-react";
 import { api } from "../api";
+import { setProfileAudioMode } from "../audioModePreference";
 import { emit, emitToast } from "../events";
 import { useI18n } from "../i18n";
 import { img } from "../img";
 import { clearSessionQueue, removeFromSessionQueue, useSessionQueue, type SessionQueueEntry } from "../sessionQueue";
 import type { PlaybackQueueContext } from "../playbackQueue";
-import { Button, FloatingPopover, ScrollArea } from "./ui";
+import { Button, FloatingPopover, MenuItem, ScrollArea, SplitButton } from "./ui";
 import "./PlayQueueMenu.css";
 
 function queueContext(entries: readonly SessionQueueEntry[]): PlaybackQueueContext {
@@ -23,11 +24,19 @@ export default function PlayQueueMenu() {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const playFrom = (videoId: string) => {
+  /**
+   * `audio` left out means "however this browser was last playing" — that is
+   * what pressing an entry in the list asks for. The two buttons below state a
+   * mode instead, and a stated mode is written down as well as travelled with:
+   * the queue plays on past this video, and the ones after it open the way this
+   * one was asked for.
+   */
+  const playFrom = (videoId: string, audio?: boolean) => {
     setOpen(false);
+    if (audio !== undefined) setProfileAudioMode(audio);
     // fromStart: pressing play on a list is starting the list, not resuming
     // whatever position the first entry happens to remember.
-    navigate(`/watch/${videoId}`, { state: { playbackQueue: queueContext(queue), fromStart: true } });
+    navigate(`/watch/${videoId}`, { state: { playbackQueue: queueContext(queue), fromStart: true, audio } });
   };
 
   /**
@@ -121,7 +130,14 @@ export default function PlayQueueMenu() {
             </form>
           ) : (
             <div className="play-queue-actions">
-              <Button variant="primary" size="sm" leadingIcon={<Play size={15} />} onClick={() => playFrom(queue[0].videoId)}>{t("playQueuePlay")}</Button>
+              <SplitButton
+                variant="primary"
+                size="sm"
+                leadingIcon={<Play size={15} />}
+                menuLabel={t("playlistPlayModes")}
+                onClick={() => playFrom(queue[0].videoId, false)}
+                menu={<MenuItem icon={<Headphones />} onClick={() => playFrom(queue[0].videoId, true)}>{t("playQueuePlayAudio")}</MenuItem>}
+              >{t("playQueuePlay")}</SplitButton>
               <Button variant="ghost" size="sm" leadingIcon={<Save size={15} />} onClick={() => setNaming(true)}>{t("playQueueSave")}</Button>
               <Button variant="ghost" size="sm" leadingIcon={<Trash2 size={15} />} onClick={clearSessionQueue}>{t("playQueueClear")}</Button>
             </div>
