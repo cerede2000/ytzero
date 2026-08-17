@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { img } from "../img";
+import { thumbnailCandidates } from "../thumbnailFallback";
 import "./VideoThumbnail.css";
 
 export type VideoThumbnailVariant =
@@ -70,16 +71,19 @@ export function VideoThumbnail({
 }) {
   const classes = VARIANT_CLASSES[variant];
   /*
-   * A replacement image that renders nothing must not leave a hole.
+   * An image that renders nothing must not leave a hole.
    *
    * DeArrow generates its frames on demand and answers 204 while it has none —
-   * which is every video too new for anyone to have asked before, and any video
-   * at all while the service is busy. The <img> then draws a broken placeholder
-   * where a thumbnail belongs. The uploader's image is still perfectly good, so
-   * it is what a failed replacement falls back to.
+   * every video too new for anyone to have asked before, and any video at all
+   * while the service is busy. The uploader's image stands in for that. But the
+   * uploader's image can be gone too: a designed thumbnail is served under a
+   * numbered name that rotates when it is changed, and the stored URL then
+   * answers 404 for good. Both fall through to the plain name, which does not
+   * rotate. Each candidate is tried once, in order.
    */
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const shown = fallbackSrc && failedSrc === src ? fallbackSrc : src;
+  const [failed, setFailed] = useState<readonly string[]>([]);
+  const candidates = thumbnailCandidates(src, fallbackSrc);
+  const shown = candidates.find((candidate) => !failed.includes(candidate)) ?? candidates[0];
   const watchedClass = watched ? " watched-thumbnail--watched" : "";
   const progressClass = watched || (progress != null && progress > 0) ? " watched-thumbnail--has-progress" : "";
   return (
@@ -90,7 +94,7 @@ export function VideoThumbnail({
         alt={alt}
         loading={loading}
         draggable={draggable}
-        onError={() => { if (fallbackSrc && failedSrc !== src) setFailedSrc(src); }}
+        onError={() => setFailed((previous) => previous.includes(shown) ? previous : [...previous, shown])}
       />
       {children}
       <PlaybackIndicator watched={watched} progress={progress} />

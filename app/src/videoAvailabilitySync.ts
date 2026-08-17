@@ -2,7 +2,7 @@ import { database } from "./database";
 import { log } from "./logger";
 import {
   fetchVideoInfo,
-  fetchVideoOEmbedAvailability,
+  fetchVideoOEmbed,
   isDeletedVideoError,
   isPrivateVideoError,
 } from "./youtube";
@@ -13,24 +13,30 @@ const AVAILABILITY_CHECK_LIMIT = 12;
 
 export type VideoAvailabilityCheck = "available" | "deleted" | "private" | "unknown";
 
+export interface VideoAvailabilityAnswer {
+  check: VideoAvailabilityCheck;
+  /** The uploader's own title, when the oEmbed answer carried one. */
+  title: string | null;
+}
+
 export async function checkVideoAvailability(
   videoId: string,
   dependencies: {
-    oEmbed?: typeof fetchVideoOEmbedAvailability;
+    oEmbed?: typeof fetchVideoOEmbed;
     videoInfo?: typeof fetchVideoInfo;
   } = {},
-): Promise<VideoAvailabilityCheck> {
-  const oEmbed = dependencies.oEmbed ?? fetchVideoOEmbedAvailability;
+): Promise<VideoAvailabilityAnswer> {
+  const oEmbed = dependencies.oEmbed ?? fetchVideoOEmbed;
   const videoInfo = dependencies.videoInfo ?? fetchVideoInfo;
   const lightweight = await oEmbed(videoId);
-  if (lightweight === "available") return "available";
-  if (lightweight === "unknown") return "unknown";
+  if (lightweight.availability === "available") return { check: "available", title: lightweight.title };
+  if (lightweight.availability === "unknown") return { check: "unknown", title: null };
   try {
     await videoInfo(videoId, { force: true });
-    return "available";
+    return { check: "available", title: null };
   } catch (error) {
-    if (isPrivateVideoError(error)) return "private";
-    if (isDeletedVideoError(error)) return "deleted";
+    if (isPrivateVideoError(error)) return { check: "private", title: null };
+    if (isDeletedVideoError(error)) return { check: "deleted", title: null };
     throw error;
   }
 }
@@ -39,6 +45,7 @@ export interface ChannelAvailabilitySyncResult {
   checked: number;
   deleted: number;
   private: number;
+  retitled: number;
   failed: number;
   rateLimited: boolean;
 }
@@ -78,26 +85,47 @@ export async function syncChannelVideoAvailability(
       finished_at = datetime('now')
     WHERE video_id = ? AND status != 'done'
   `);
+  /**
+   * The title this pass has already been told, written down.
+   *
+   * These are exactly the videos the channel scrape can no longer reach — the
+   * candidates are the rows YouTube did not list this time round — so whatever
+   * their title was when they were imported is what they keep for ever. Rows
+   * imported while every request went out in English kept an auto-translated
+   * title: "Rebuilding Your Wealth at 44: His Plan" for a French video on a
+   * French instance, 22 of them on one followed channel.
+   *
+   * oEmbed does not translate, and this pass already asks it. So the answer is
+   * kept rather than thrown away, and a retitled upload is picked up with it.
+   */
+  const rewriteTitle = database.prepare("UPDATE videos SET title = ? WHERE video_id = ? AND title != ?");
   const result: ChannelAvailabilitySyncResult = {
-    checked: 0, deleted: 0, private: 0, failed: 0, rateLimited: false,
+    checked: 0, deleted: 0, private: 0, retitled: 0, failed: 0, rateLimited: false,
   };
 
   for (const row of candidates) {
     try {
-      const availability = await checkVideoAvailability(row.video_id);
+      const answer = await checkVideoAvailability(row.video_id);
       result.checked++;
-      if (availability === "deleted") {
+      if (answer.check === "deleted") {
         await markDeleted.run(row.video_id);
         await stopPendingDownload.run(row.video_id);
         result.deleted++;
         log.info("video.marked_unavailable", { videoId: row.video_id, channelId, source: "channel_sync" });
-      } else if (availability === "private") {
+      } else if (answer.check === "private") {
         await markPrivate.run(row.video_id);
         await stopPendingDownload.run(row.video_id);
         result.private++;
         log.info("video.marked_private", { videoId: row.video_id, channelId, source: "channel_sync" });
       } else {
         await markChecked.run(row.video_id);
+        if (answer.title) {
+          const rewritten = await rewriteTitle.run(answer.title, row.video_id, answer.title);
+          if (Number((rewritten as { changes?: number } | undefined)?.changes ?? 0) > 0) {
+            result.retitled++;
+            log.info("video.title_corrected", { videoId: row.video_id, channelId, title: answer.title });
+          }
+        }
       }
     } catch (error) {
       if (isYouTubeRateLimitError(error)) {
