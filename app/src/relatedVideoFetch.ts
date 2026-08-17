@@ -84,10 +84,10 @@ export function createRelatedVideoFetcher(
   load = (videoId: string, related: { videos: RelatedVideo[] }, userId: number) =>
     fetchVideoInfo(videoId, { force: true, related, language: panelLanguage(getUserSetting(userId, "language")) }),
   now: () => number = Date.now,
-  loadAsSomebody = async (videoId: string, userId: number): Promise<RelatedVideo[]> => {
+  loadAsSomebody = async (videoId: string, userId: number, recognised?: { signedIn: boolean }): Promise<RelatedVideo[]> => {
     const cookieHeader = cookieHeaderFor(userId);
     if (!cookieHeader) return [];
-    return fetchRelatedVideosAsSomebody(videoId, cookieHeader, panelLanguage(getUserSetting(userId, "language")));
+    return fetchRelatedVideosAsSomebody(videoId, cookieHeader, panelLanguage(getUserSetting(userId, "language")), recognised);
   },
   forget = forgetRelatedVideos,
 ) {
@@ -126,14 +126,16 @@ export function createRelatedVideoFetcher(
        * A profile with no jar of its own returns from here at once, having
        * asked nothing.
        */
-      const mine = await loadAsSomebody(videoId, userId).catch((failure) => {
+      const recognised = { signedIn: false };
+      const mine = await loadAsSomebody(videoId, userId, recognised).catch((failure) => {
         log.warn("related.credentialed_fetch_failed", { videoId, userId, error: failure instanceof Error ? failure.message : String(failure) });
         return [] as RelatedVideo[];
       });
       if (mine.length > 0) {
         remember(key, mine, now);
         await save(videoId, userId, mine);
-        log.info("related.fetched", { videoId, userId, suggestions: mine.length, credentialed: true });
+        // `recognised` is the answer; `credentialed` was only the attempt.
+        log.info("related.fetched", { videoId, userId, suggestions: mine.length, credentialed: true, recognised: recognised.signedIn });
         return mine;
       }
 
