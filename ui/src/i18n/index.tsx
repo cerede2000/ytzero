@@ -5,6 +5,7 @@ import { en } from "./locales/en";
 import type { I18nKey, Language, Locale } from "./types";
 import { DEFAULT_TIME_ZONE, normalizeTimeZone, parseAppTimestamp } from "../dateTime";
 import { subscribe } from "../events";
+import { timeAgoParts } from "../publishedAge";
 import { localeFormats } from "./localeFormats";
 import { LANGUAGE_CODES, LOCALE_TAGS, normalizeLanguage as normalizeLanguageCode, UI_LANGUAGES } from "../../../shared/uiLanguages";
 
@@ -224,19 +225,7 @@ export function formatTimeAgo(iso: string | null, language: Language): string {
   if (Math.abs(diffMs) < 60_000) {
     return localeFor(language).messages.notificationJustNow.toLocaleLowerCase(LOCALE_TAGS[language]);
   }
-  const min = Math.floor(diffMs / 60_000);
-  const h = Math.floor(min / 60);
-  const d = Math.floor(h / 24);
-  const mo = Math.floor(d / 30);
-  const y = Math.floor(d / 365);
-
-  const [value, unit]: [number, Intl.RelativeTimeFormatUnit] =
-    min < 60 ? [min, "minute"]
-    : h < 24 ? [h, "hour"]
-    : d < 30 ? [d, "day"]
-    : mo < 12 ? [mo, "month"]
-    : [y, "year"];
-
+  const [value, unit] = timeAgoParts(parseAppTimestamp(iso), new Date());
   return new Intl.RelativeTimeFormat(LOCALE_TAGS[language], { numeric: "always", style: "short" }).format(-value, unit);
 }
 
