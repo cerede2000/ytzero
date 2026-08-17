@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isContinuousPlaylistQueue, playbackEndAction, playlistContinueTarget, videosInPlaylistOrder } from "./playlistPlayback";
+import { isContinuousPlaylistQueue, playbackEndAction, playlistContinueTarget, playlistStartTarget, videosInPlaylistOrder } from "./playlistPlayback";
 import type { PlaybackQueueContext } from "./playbackQueue";
 
 const item = (id: string, watched: number | null = null, status: "inbox" | "archived" = "inbox") => ({ id, watched, status });
@@ -62,5 +62,31 @@ describe("playlist playback", () => {
       .toEqual([ready[0], processing[0], ready[1]]);
     expect(videosInPlaylistOrder([...ready, ...processing], ["ready-2", "missing", "ready-2"]))
       .toEqual([ready[1], ready[0], processing[0]]);
+  });
+});
+
+describe("one press of play on a whole list", () => {
+  test("resumes where the list was left", () => {
+    const videos = [item("seen", 1), item("next"), item("later")];
+    expect(playlistStartTarget(videos)?.id).toBe("next");
+  });
+
+  test("starts at the top when nothing in it has been watched", () => {
+    // A row in the sidebar has room for one button, not the page's two, so
+    // resuming has to cover starting as well. A list nobody has begun resumes
+    // at its first video, which is what starting it over would have done.
+    const videos = [item("first"), item("second")];
+    expect(playlistStartTarget(videos)?.id).toBe("first");
+  });
+
+  test("goes back to the top of a list that was watched to the end", () => {
+    // playlistContinueTarget answers null past the last item, which the page
+    // reads as "offer no continuation". Pressing play must still play.
+    const videos = [item("first", 1), item("second", 1)];
+    expect(playlistStartTarget(videos)?.id).toBe("first");
+  });
+
+  test("an empty list has nowhere to start", () => {
+    expect(playlistStartTarget([])).toBe(null);
   });
 });
