@@ -1,7 +1,9 @@
+import { getUserSetting } from "./db";
 import { log } from "./logger";
 import { forgetRelatedVideos, readRelatedVideos, saveRelatedVideos } from "./relatedVideoStore";
 import type { RelatedVideo } from "./relatedVideos";
 import { fetchRelatedVideosAsSomebody, fetchVideoInfo } from "./youtube";
+import { panelLanguage } from "./relatedVideoText";
 import { youtubeCookieHeader } from "./youtubeCookieHeader";
 import { isYouTubeRefusal } from "./youtubeRefusalQuiet";
 
@@ -40,12 +42,16 @@ function cookieHeaderFor(userId: number): string | null {
 export function createRelatedVideoFetcher(
   read = readRelatedVideos,
   save = saveRelatedVideos,
-  load = (videoId: string, related: { videos: RelatedVideo[] }) => fetchVideoInfo(videoId, { force: true, related }),
+  // Asked for in the reader's own language: the title is the one thing taken
+  // from the panel verbatim, and YouTube auto-translates it to whatever the
+  // request asks for.
+  load = (videoId: string, related: { videos: RelatedVideo[] }, userId: number) =>
+    fetchVideoInfo(videoId, { force: true, related, language: panelLanguage(getUserSetting(userId, "language")) }),
   now: () => number = Date.now,
   loadAsSomebody = async (videoId: string, userId: number): Promise<RelatedVideo[]> => {
     const cookieHeader = cookieHeaderFor(userId);
     if (!cookieHeader) return [];
-    return fetchRelatedVideosAsSomebody(videoId, cookieHeader);
+    return fetchRelatedVideosAsSomebody(videoId, cookieHeader, panelLanguage(getUserSetting(userId, "language")));
   },
   forget = forgetRelatedVideos,
 ) {
@@ -96,7 +102,7 @@ export function createRelatedVideoFetcher(
       // lent no account.
       const related: { videos: RelatedVideo[] } = { videos: [] };
       try {
-        await load(videoId, related);
+        await load(videoId, related, userId);
       } catch (error) {
         if (!isYouTubeRefusal(error)) {
           log.warn("related.fetch_failed", { videoId, userId, error: error instanceof Error ? error.message : String(error) });

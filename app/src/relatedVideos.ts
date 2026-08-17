@@ -1,4 +1,6 @@
 import { decodeHtmlEntities } from "./htmlEntities";
+import { looksLikeCount, looksLikePublished, parseCompactCount, parseCompactPublishedText, type PanelLanguage } from "./relatedVideoText";
+export { parseCompactCount, parseCompactPublishedText } from "./relatedVideoText";
 import type { PublishedAgo } from "./youtube";
 
 /**
@@ -26,34 +28,6 @@ export interface RelatedVideo {
   published: PublishedAgo | null;
 }
 
-/** A bare count as the side panel writes it: "539", "1.6M", "12M". */
-const COUNT = /^[\d.,]+\s*[KMB]?$/i;
-/** "1mo ago", "3w ago", "15y ago" — the panel's own shorthand. */
-const AGO = /^(\d+)\s*(mo|s|m|h|d|w|y)\s*ago$/i;
-const UNITS: Record<string, PublishedAgo["unit"]> = {
-  s: "second", m: "minute", h: "hour", d: "day", w: "week", mo: "month", y: "year",
-};
-
-export function parseCompactPublishedText(text: string | undefined): PublishedAgo | null {
-  const match = text?.trim().match(AGO);
-  // "mo" is tried before "m" by the alternation above; reading them the other
-  // way round turns three months old into three minutes old.
-  if (!match) return null;
-  const unit = UNITS[match[2].toLowerCase()];
-  return unit ? { value: parseInt(match[1], 10), unit } : null;
-}
-
-export function parseCompactCount(text: string | undefined): number | null {
-  if (!text || !COUNT.test(text.trim())) return null;
-  const match = text.replace(/,/g, "").match(/([\d.]+)\s*([KMB])?/i);
-  if (!match) return null;
-  const value = parseFloat(match[1]);
-  if (!Number.isFinite(value)) return null;
-  const multiplier = { k: 1e3, m: 1e6, b: 1e9 }[(match[2] ?? "").toLowerCase()] ?? 1;
-  const total = Math.round(value * multiplier);
-  return total > 0 ? total : null;
-}
-
 function collect(node: any, key: string, out: any[] = []): any[] {
   if (!node || typeof node !== "object") return out;
   if (Array.isArray(node)) {
@@ -73,7 +47,7 @@ function bestSourceUrl(node: any): string {
   return url.startsWith("//") ? `https:${url}` : url;
 }
 
-export function relatedFromLockup(vm: any): RelatedVideo | null {
+export function relatedFromLockup(vm: any, language: PanelLanguage = "en"): RelatedVideo | null {
   if (vm?.contentType !== "LOCKUP_CONTENT_TYPE_VIDEO" || typeof vm?.contentId !== "string") return null;
   const metadata = vm?.metadata?.lockupMetadataViewModel;
   const title = metadata?.title?.content;
@@ -84,7 +58,7 @@ export function relatedFromLockup(vm: any): RelatedVideo | null {
   const texts: string[] = parts.map((part: any) => String(part?.text?.content ?? "")).filter(Boolean);
   // The channel is whichever part is neither a count nor an age. Naming it by
   // what it is not is what makes this survive a row order that moves.
-  const channelTitle = texts.find((text) => !COUNT.test(text) && !AGO.test(text)) ?? "";
+  const channelTitle = texts.find((text) => !looksLikeCount(text, language) && !looksLikePublished(text, language)) ?? "";
   const badges = collect(vm?.contentImage, "thumbnailBadgeViewModel").map((badge: any) => String(badge?.text ?? ""));
 
   return {
@@ -98,8 +72,8 @@ export function relatedFromLockup(vm: any): RelatedVideo | null {
     ) || null,
     channelTitle: decodeHtmlEntities(channelTitle),
     channelAvatar: bestSourceUrl(metadata?.image) || null,
-    viewCount: parseCompactCount(texts.find((text) => COUNT.test(text))),
-    published: parseCompactPublishedText(texts.find((text) => AGO.test(text))),
+    viewCount: parseCompactCount(texts.find((text) => looksLikeCount(text, language)), language),
+    published: parseCompactPublishedText(texts.find((text) => looksLikePublished(text, language)), language),
   };
 }
 
@@ -128,13 +102,13 @@ export function selectRelatedForPanel(
  * Only `secondaryResults` is searched, so nothing from the player, the
  * comments or the end screen can be mistaken for a suggestion.
  */
-export function relatedVideosFromWatchPage(initialData: unknown, limit = 40): RelatedVideo[] {
+export function relatedVideosFromWatchPage(initialData: unknown, limit = 40, language: PanelLanguage = "en"): RelatedVideo[] {
   const secondary = collect(initialData, "secondaryResults");
   if (secondary.length === 0) return [];
   const seen = new Set<string>();
   const videos: RelatedVideo[] = [];
   for (const lockup of collect(secondary, "lockupViewModel")) {
-    const video = relatedFromLockup(lockup);
+    const video = relatedFromLockup(lockup, language);
     if (!video || seen.has(video.videoId)) continue;
     seen.add(video.videoId);
     videos.push(video);
