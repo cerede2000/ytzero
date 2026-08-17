@@ -4,7 +4,7 @@ import { publishAppEvent } from "../appEvents";
 import { database } from "../database";
 import { getUserSetting } from "../db";
 import { childLocalOnly, isChildUser } from "../childTime";
-import { cookieHealth, forgetCookieHealth } from "../youtubeCookieHealth";
+import { cookieHealth, currentCookieHealth, forgetCookieHealth } from "../youtubeCookieHealth";
 import { dlSettings, downloadCookiesConfigured, DOWNLOADS_ADMIN_SETTING_KEYS, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
 import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, fetchSubtitles, getDirectVideoResponse, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, getVideoResponse, hasHlsSession, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
 import { createDownloadRule, deleteDownloadRule, DownloadRuleValidationError, listDownloadRules, previewDownloadRule, updateDownloadRule, type DownloadRuleInput } from "../downloadRules";
@@ -146,7 +146,7 @@ api.get("/downloads/cookies", async (c) => {
   // decides whether anything works. An expired jar is not refused: it is
   // answered as a stranger would be, so nothing says it stopped working until
   // playback fails hours later for an apparently unrelated reason.
-  const health = cookieHealth(uid);
+  const health = await currentCookieHealth(uid);
   return c.json({
     configured: downloadCookiesConfigured(uid),
     recognised: health?.recognised ?? null,
