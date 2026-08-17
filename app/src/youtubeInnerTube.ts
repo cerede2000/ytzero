@@ -1,3 +1,4 @@
+import { log } from "./logger";
 import { relatedVideosFromWatchPage, type RelatedVideo } from "./relatedVideos";
 import { acceptLanguage, type PanelLanguage } from "./relatedVideoText";
 
@@ -86,5 +87,22 @@ export async function fetchWatchNextPanel(
     }),
   });
   if (!res.ok) throw new Error(`YouTube next failed (${res.status})`);
-  return relatedVideosFromWatchPage(await res.json(), 40, language);
+  const answer = await res.json();
+  const videos = relatedVideosFromWatchPage(answer, 40, language);
+  if (videos.length === 0) {
+    // Accepted and unread are different failures and must not look alike. The
+    // page renders its panel as lockups; if the endpoint answers in the older
+    // renderer instead, the parser finds nothing and the panel silently falls
+    // back to the video's own — which looks exactly like nothing happening.
+    const body = JSON.stringify(answer);
+    log.warn("related.watch_next_empty", {
+      videoId,
+      bytes: body.length,
+      hasSecondaryResults: body.includes("secondaryResults"),
+      hasLockups: body.includes("lockupViewModel"),
+      hasCompactRenderers: body.includes("compactVideoRenderer"),
+      signedIn: body.includes('"loggedIn":true'),
+    });
+  }
+  return videos;
 }
