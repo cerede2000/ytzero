@@ -3,6 +3,7 @@ import "./FeedPage.css";
 import { emit, subscribe } from "../events";
 import { Link } from "react-router-dom";
 import { ArrowRight, Clock, Eye, Inbox, Plus, RefreshCw, Upload } from "lucide-react";
+import { isShort } from "../shortVideos";
 import { api, type Bucket, type Channel, type Tag, type Video } from "../api";
 import { useI18n } from "../i18n";
 import { useDocumentTitle } from "../useDocumentTitle";
@@ -235,7 +236,7 @@ export default function FeedPage({
     api.watchlist().then((r) => setQueued(r.videos)).catch(console.error), []);
 
   const loadInProgress = useCallback(() =>
-    api.inProgress().then((r) => setInProgress(r.videos.filter((video) => video.is_short === 0))).catch(console.error), []);
+    api.inProgress().then((r) => setInProgress(r.videos.filter((video) => !isShort(video)))).catch(console.error), []);
 
   useEffect(() => {
     loadTags();
@@ -378,7 +379,7 @@ export default function FeedPage({
         ? { ...video, watched: null, watch_position: null, watch_duration: null, status: "inbox" }
         : video));
       setEnteringFeedVideoId(videoId);
-      setInProgress(result.videos.filter((video) => video.is_short === 0));
+      setInProgress(result.videos.filter((video) => !isShort(video)));
       if (enteringFeedTimerRef.current !== null) window.clearTimeout(enteringFeedTimerRef.current);
       enteringFeedTimerRef.current = window.setTimeout(() => setEnteringFeedVideoId(null), 800);
     }).catch(console.error);
