@@ -87,11 +87,26 @@ export function relatedFromLockup(vm: any, language: PanelLanguage = "en"): Rela
  */
 export function selectRelatedForPanel(
   videos: readonly RelatedVideo[],
-  options: { limit: number; currentVideoId: string; inLibrary?: ReadonlySet<string>; hideKnown?: boolean },
+  options: {
+    limit: number;
+    currentVideoId: string;
+    inLibrary?: ReadonlySet<string>;
+    hideKnown?: boolean;
+    /**
+     * Already watched, and therefore not worth offering again.
+     *
+     * Dropped before the list is cut to length rather than after, so the slot
+     * goes to the next suggestion instead of being left empty: twenty are
+     * fetched and fifteen shown, and there is no reason for a panel to arrive
+     * short because five of them had been seen.
+     */
+    watched?: ReadonlySet<string>;
+  },
 ): RelatedVideo[] {
   if (options.limit <= 0) return [];
   return videos
     .filter((video) => video.videoId !== options.currentVideoId)
+    .filter((video) => !options.watched?.has(video.videoId))
     .filter((video) => !(options.hideKnown && options.inLibrary?.has(video.videoId)))
     .slice(0, options.limit);
 }

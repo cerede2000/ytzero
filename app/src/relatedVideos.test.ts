@@ -155,3 +155,22 @@ describe("choosing what the panel carries", () => {
     expect(selectRelatedForPanel(list, { limit: 0, currentVideoId: "zz" })).toEqual([]);
   });
 });
+
+describe("a seen suggestion gives up its place", () => {
+  const list = ["a", "b", "c", "d", "e"].map((id) => ({ videoId: id, title: id }) as never);
+
+  test("the next one takes it, rather than the panel arriving short", () => {
+    // Twenty are fetched and fifteen shown. Cutting to length first and
+    // filtering after left the panel one shorter for every suggestion already
+    // seen — and the ones already seen are the ones from channels somebody
+    // follows, so the best answers were also the ones that shrank it.
+    const chosen = selectRelatedForPanel(list, {
+      limit: 3, currentVideoId: "zzz", watched: new Set(["a", "b"]),
+    });
+    expect(chosen.map((video) => video.videoId)).toEqual(["c", "d", "e"]);
+  });
+
+  test("with nothing seen, nothing changes", () => {
+    expect(selectRelatedForPanel(list, { limit: 3, currentVideoId: "zzz" }).map((v) => v.videoId)).toEqual(["a", "b", "c"]);
+  });
+});
