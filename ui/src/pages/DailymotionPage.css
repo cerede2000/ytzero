@@ -57,5 +57,5 @@
 .dm-player-head p { color: var(--text-2); font-size: 12.5px; margin: 0; }
 .dm-player-status { color: var(--text-2); font-size: 12.5px; margin: 8px 0 0; }
 .dm-player-media { border-radius: 8px; display: block; margin-top: 10px; width: 100%; }
-/* Audio mode keeps the same element playing, with the picture put away. */
-.dm-player--audio .dm-player-media { height: 44px; }
+/* Audio mode is an <audio> element, which sizes itself. */
+.dm-player--audio .dm-player-media { height: 40px; margin-top: 12px; }
