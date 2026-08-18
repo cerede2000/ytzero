@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chosenStreams, cleanTitle, dropDuplicateVideos, isDailymotionMediaUrl, masterPlaylist, plainDescription, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
+import { validDailymotionChannelId, chosenStreams, cleanTitle, dropDuplicateVideos, isDailymotionMediaUrl, masterPlaylist, plainDescription, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
 
 describe("what counts as a Dailymotion video", () => {
   test("their grammar, not YouTube's", () => {
@@ -14,6 +14,27 @@ describe("what counts as a Dailymotion video", () => {
     expect(validDailymotionVideoId("../../etc/passwd")).toBe(false);
     expect(validDailymotionVideoId("x8/../y")).toBe(false);
     expect(validDailymotionVideoId("")).toBe(false);
+  });
+});
+
+describe("what counts as a Dailymotion channel", () => {
+  test("the canonical id, and the username the address bar shows", () => {
+    // The same channel, both ways: their API answers to either, and a reader
+    // pasting its address has the second.
+    expect(validDailymotionChannelId("x5rckqa")).toBe(true);
+    expect(validDailymotionChannelId("dm_6a1dd2673c8d946116a65fa9f6")).toBe(true);
+    expect(validDailymotionChannelId("Cuisine.5.minutes")).toBe(true);
+    expect(validDailymotionChannelId("darbaar-royal-indian-cuisine")).toBe(true);
+  });
+
+  test("and nothing that could climb out of the path it goes into", () => {
+    expect(validDailymotionChannelId("../videos/x1")).toBe(false);
+    expect(validDailymotionChannelId("..")).toBe(false);
+    expect(validDailymotionChannelId("a..b")).toBe(false);
+    expect(validDailymotionChannelId("x5rckqa/videos")).toBe(false);
+    expect(validDailymotionChannelId("")).toBe(false);
+    expect(validDailymotionChannelId(".hidden")).toBe(false);
+    expect(validDailymotionChannelId("x".repeat(65))).toBe(false);
   });
 });
 
