@@ -16,7 +16,9 @@ export function useVideoHlsSource({
   durationSeconds,
   mediaRef,
   onFatalError,
+  onInstance,
   onReady,
+  preferHlsJs = false,
   src,
   startSeconds,
 }: {
@@ -24,12 +26,24 @@ export function useVideoHlsSource({
   durationSeconds?: number;
   mediaRef: RefObject<HTMLVideoElement | null>;
   onFatalError?: () => void;
+  /** The instance, for callers that have to drive it — choosing a subtitle rendition, say. */
+  onInstance?: (hls: import("hls.js").default | null) => void;
   onReady: () => void;
+  /**
+   * Take hls.js even where the browser plays HLS itself.
+   *
+   * The default is the other way round, for the reason written on
+   * `shouldUseNativeVideoHls`. A caller sets this when the stream it is playing
+   * needs re-muxing rather than merely playing — one whose tracks do not start
+   * at the same instant, where a native player is faithful to the file and
+   * hls.js quietly lines them up.
+   */
+  preferHlsJs?: boolean;
   src: string;
   startSeconds: number;
 }): void {
-  const callbacksRef = useRef({ onFatalError, onReady });
-  callbacksRef.current = { onFatalError, onReady };
+  const callbacksRef = useRef({ onFatalError, onInstance, onReady });
+  callbacksRef.current = { onFatalError, onInstance, onReady };
 
   useEffect(() => {
     const media = mediaRef.current;
@@ -91,7 +105,7 @@ export function useVideoHlsSource({
       media.load();
     };
 
-    if (shouldUseNativeVideoHls(media.canPlayType("application/vnd.apple.mpegurl"), navigator.vendor)) {
+    if (!preferHlsJs && shouldUseNativeVideoHls(media.canPlayType("application/vnd.apple.mpegurl"), navigator.vendor)) {
       let nativeRecoveryUsed = false;
       let pendingRecovery: RecoverySnapshot | null = null;
       const onLoadedMetadata = () => {
@@ -157,6 +171,7 @@ export function useVideoHlsSource({
         startPosition,
       });
       hls = instance;
+      callbacksRef.current.onInstance?.(instance);
       const restorePendingRecovery = () => {
         if (masterReloadPending) return;
         const snapshot = pendingRecovery;
@@ -229,6 +244,7 @@ export function useVideoHlsSource({
         detachHlsMediaListeners();
         instance.destroy();
         hls = null;
+        callbacksRef.current.onInstance?.(null);
         fatal();
       });
       instance.attachMedia(media);
@@ -237,9 +253,10 @@ export function useVideoHlsSource({
     return () => {
       cancelled = true;
       hls?.destroy();
+      callbacksRef.current.onInstance?.(null);
       detachHlsMediaListeners();
       removeTransportListeners();
       cleanMediaSource();
     };
-  }, [active, durationSeconds, mediaRef, src, startSeconds]);
+  }, [active, durationSeconds, mediaRef, preferHlsJs, src, startSeconds]);
 }
