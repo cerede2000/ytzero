@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isDailymotionMediaUrl, rewriteHlsPlaylist, searchDailymotion, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
+import { isDailymotionMediaUrl, masterPlaylist, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
 
 describe("what counts as a Dailymotion video", () => {
   test("their grammar, not YouTube's", () => {
@@ -126,5 +126,42 @@ describe("the caption tracks worth offering", () => {
   test("a video with no captions is not an error", () => {
     expect(subtitlesFromMetadata({})).toEqual([]);
     expect(subtitlesFromMetadata({ subtitles: {} })).toEqual([]);
+  });
+});
+
+describe("the manifest iOS reads", () => {
+  const track = { lang: "fr-auto", label: "Français (auto)", url: "/api/dm/subs/fr-auto/index.m3u8" };
+  const rendition = { width: 360, height: 640, codecs: "avc1.42001e,mp4a.40.2", bitrate: 460_560 };
+
+  test("declares the captions as a rendition, not beside the stream", () => {
+    // Sideloaded <track> elements are the page's business, and on iOS the page
+    // does not play the video: the system player does, and it reads this.
+    const master = masterPlaylist("/api/dm/media.m3u8", [track], rendition);
+    expect(master).toContain('#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Français (auto)",LANGUAGE="fr",AUTOSELECT=YES,DEFAULT=YES,URI="/api/dm/subs/fr-auto/index.m3u8"');
+    expect(master).toContain('SUBTITLES="subs"');
+    expect(master.trimEnd().endsWith("/api/dm/media.m3u8")).toBe(true);
+  });
+
+  test("states what the rendition is, for the stricter of the two readers", () => {
+    expect(masterPlaylist("/m.m3u8", [track], rendition))
+      .toContain('#EXT-X-STREAM-INF:BANDWIDTH=460560,RESOLUTION=360x640,CODECS="avc1.42001e,mp4a.40.2",SUBTITLES="subs"');
+  });
+
+  test("and says nothing it does not know", () => {
+    expect(masterPlaylist("/m.m3u8", [])).toContain("#EXT-X-STREAM-INF:BANDWIDTH=800000\n");
+    expect(masterPlaylist("/m.m3u8", [])).not.toContain("SUBTITLES");
+  });
+
+  test("a caption file is presented as a playlist that outlasts the video", () => {
+    // A segment shorter than the video ends the track early; players do not
+    // mind one that runs past the end.
+    const playlist = subtitlePlaylist("/api/dm/subs/fr-auto", 4507.57);
+    expect(playlist).toContain("#EXT-X-TARGETDURATION:4508");
+    expect(playlist).toContain("#EXTINF:4508.000,");
+    expect(playlist).toContain("#EXT-X-ENDLIST");
+  });
+
+  test("with a day's worth of duration when nobody said", () => {
+    expect(subtitlePlaylist("/t.vtt", null)).toContain("#EXT-X-TARGETDURATION:86400");
   });
 });

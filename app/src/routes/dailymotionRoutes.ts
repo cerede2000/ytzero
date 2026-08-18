@@ -2,8 +2,10 @@ import type { Context, Hono } from "hono";
 import { srtToVtt } from "../downloader";
 import {
   isDailymotionMediaUrl,
+  masterPlaylist,
   resolveDailymotion,
   resolveDailymotionStream,
+  subtitlePlaylist,
   rewriteHlsPlaylist,
   searchDailymotion,
   validDailymotionVideoId,
@@ -35,7 +37,36 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     }
   });
 
+  /**
+   * What the player is pointed at: one rendition, plus whatever captions exist.
+   *
+   * Kept separate from the media playlist below so the captions are declared in
+   * the manifest, which is the only place iOS's system player looks.
+   */
   api.get("/dailymotion/videos/:id/hls.m3u8", async (c) => {
+    const videoId = c.req.param("id");
+    if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
+    try {
+      const { subtitles, rendition } = await resolveDailymotion(videoId);
+      const playlist = masterPlaylist(
+        `/api/dailymotion/videos/${videoId}/media.m3u8`,
+        subtitles.map((track) => ({
+          lang: track.lang,
+          label: track.label,
+          url: `/api/dailymotion/videos/${videoId}/subtitles/${encodeURIComponent(track.lang)}/index.m3u8`,
+        })),
+        rendition,
+      );
+      return new Response(playlist, {
+        headers: { "Content-Type": "application/vnd.apple.mpegurl", "Cache-Control": "no-store" },
+      });
+    } catch (error) {
+      log.warn("dailymotion.stream_failed", { videoId, userId: currentUserId(c), error: error instanceof Error ? error.message : String(error) });
+      return c.json({ error: error instanceof Error ? error.message : "stream unavailable" }, 502);
+    }
+  });
+
+  api.get("/dailymotion/videos/:id/media.m3u8", async (c) => {
     const videoId = c.req.param("id");
     if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
     try {
@@ -51,6 +82,19 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
       log.warn("dailymotion.stream_failed", { videoId, userId: currentUserId(c), error: error instanceof Error ? error.message : String(error) });
       return c.json({ error: error instanceof Error ? error.message : "stream unavailable" }, 502);
     }
+  });
+
+  /** The rendition a subtitle group points at: one file, stated as a playlist. */
+  api.get("/dailymotion/videos/:id/subtitles/:lang/index.m3u8", async (c) => {
+    const videoId = c.req.param("id");
+    if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
+    const { subtitles, durationSeconds } = await resolveDailymotion(videoId).catch(() => ({ subtitles: [], durationSeconds: null }));
+    const lang = c.req.param("lang");
+    if (!subtitles.some((track) => track.lang === lang)) return c.json({ error: "unknown subtitle track" }, 404);
+    const playlist = subtitlePlaylist(`/api/dailymotion/videos/${videoId}/subtitles/${encodeURIComponent(lang)}`, durationSeconds);
+    return new Response(playlist, {
+      headers: { "Content-Type": "application/vnd.apple.mpegurl", "Cache-Control": "no-store" },
+    });
   });
 
   /**

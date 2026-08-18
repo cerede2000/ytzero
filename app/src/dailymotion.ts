@@ -103,6 +103,9 @@ export interface DailymotionSubtitle {
 export interface DailymotionSource {
   streamUrl: string;
   subtitles: DailymotionSubtitle[];
+  durationSeconds: number | null;
+  /** What the one rendition is, for a master playlist Apple's player will accept. */
+  rendition: { width: number | null; height: number | null; codecs: string | null; bitrate: number | null };
 }
 
 const sourceCache = new Map<string, { expiresAt: number; source: Promise<DailymotionSource> }>();
@@ -173,8 +176,22 @@ export function resolveDailymotion(videoId: string): Promise<DailymotionSource> 
     const streamUrl = typeof metadata.url === "string" ? metadata.url : "";
     if (!isDailymotionMediaUrl(streamUrl)) throw new Error("yt-dlp returned no usable address");
     const subtitles = subtitlesFromMetadata(metadata);
+    const seconds = Number(metadata.duration);
+    const number = (value: unknown) => Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
+    const codec = (value: unknown) => typeof value === "string" && value && value !== "none" ? value : null;
+    const codecs = [codec(metadata.vcodec), codec(metadata.acodec)].filter(Boolean).join(",");
     log.info("dailymotion.resolved", { videoId, subtitles: subtitles.length });
-    return { streamUrl, subtitles };
+    return {
+      streamUrl,
+      subtitles,
+      durationSeconds: Number.isFinite(seconds) && seconds > 0 ? seconds : null,
+      rendition: {
+        width: number(metadata.width),
+        height: number(metadata.height),
+        codecs: codecs || null,
+        bitrate: number(metadata.tbr) ? Math.round(Number(metadata.tbr) * 1000) : null,
+      },
+    };
   })();
   sourceCache.set(videoId, { expiresAt: now + STREAM_TTL_MS, source });
   source.catch(() => sourceCache.delete(videoId));
@@ -205,4 +222,65 @@ export function rewriteHlsPlaylist(playlist: string, playlistUrl: string, proxy:
     if (!trimmed.startsWith("#")) return proxy(absolute(trimmed));
     return line.replace(/URI="([^"]+)"/g, (_match, reference: string) => `URI="${proxy(absolute(reference))}"`);
   }).join("\n");
+}
+
+/**
+ * A master playlist, so the captions are part of the stream rather than beside it.
+ *
+ * Sideloaded <track> elements are a page's business, and on iOS the page does
+ * not play the video: Safari hands it to the system player, which reads the
+ * manifest and nothing else. A reader there had no subtitle button at all. What
+ * that player will offer is a rendition group, so that is what is written.
+ *
+ * hls.js reads the same thing on every other browser, which means one mechanism
+ * instead of two — the <track> elements can go.
+ */
+export function masterPlaylist(
+  mediaUrl: string,
+  subtitles: readonly { lang: string; label: string; url: string }[],
+  rendition: { width?: number | null; height?: number | null; codecs?: string | null; bitrate?: number | null } = {},
+): string {
+  const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
+  for (const [index, track] of subtitles.entries()) {
+    const language = track.lang.replace(/-auto$/, "");
+    lines.push(
+      `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${track.label.replaceAll('"', "")}",`
+      + `LANGUAGE="${language}",AUTOSELECT=YES,DEFAULT=${index === 0 ? "YES" : "NO"},URI="${track.url}"`,
+    );
+  }
+  /*
+   * Bandwidth is the only required attribute and nothing chooses on it — there
+   * is one rendition. The rest is stated anyway: Apple's player is the one that
+   * has to read this on iOS, and it is the stricter reader of the two.
+   */
+  const attributes = [`BANDWIDTH=${rendition.bitrate ?? 800_000}`];
+  if (rendition.width && rendition.height) attributes.push(`RESOLUTION=${rendition.width}x${rendition.height}`);
+  if (rendition.codecs) attributes.push(`CODECS="${rendition.codecs}"`);
+  if (subtitles.length > 0) attributes.push('SUBTITLES="subs"');
+  lines.push(`#EXT-X-STREAM-INF:${attributes.join(",")}`);
+  lines.push(mediaUrl);
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * One WebVTT file, presented as a playlist.
+ *
+ * A subtitle rendition has to be a playlist even when the captions are a single
+ * file, so it is one segment as long as the video. The duration is stated
+ * generously — a segment shorter than the video would end the track early, and
+ * players do not mind one that outlasts it.
+ */
+export function subtitlePlaylist(trackUrl: string, durationSeconds: number | null): string {
+  const duration = Math.ceil(durationSeconds && durationSeconds > 0 ? durationSeconds : 86_400);
+  return [
+    "#EXTM3U",
+    "#EXT-X-VERSION:3",
+    "#EXT-X-PLAYLIST-TYPE:VOD",
+    `#EXT-X-TARGETDURATION:${duration}`,
+    "#EXT-X-MEDIA-SEQUENCE:0",
+    `#EXTINF:${duration}.000,`,
+    trackUrl,
+    "#EXT-X-ENDLIST",
+    "",
+  ].join("\n");
 }
