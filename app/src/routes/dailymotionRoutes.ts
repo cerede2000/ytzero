@@ -85,20 +85,28 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     const videoId = c.req.param("id");
     if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
     try {
-      const { rendition, audioUrl } = await resolveDailymotion(videoId);
+      const { rendition, audioUrl, subtitles } = await resolveDailymotion(videoId);
       /*
-       * No subtitle rendition here on purpose.
+       * The captions are declared here, as a rendition, because hls.js has to
+       * be the one that owns them.
        *
-       * Declaring one hands the captions to whichever player is running, and
-       * all three of them handle it differently — iOS re-reads DEFAULT on every
-       * seek, hls.js takes ownership of the element's text tracks. The page
-       * fetches the same captions as a plain file and draws them itself, which
-       * is what the watch page does and the only arrangement that behaved the
-       * same twice.
+       * Sideloading a <track> next to the player looks simpler and does not
+       * survive: on attach and on every manifest load, hls.js empties every
+       * text track on the element, cues and all, and the browser will not
+       * re-read a file it has already marked loaded — so the captions appear
+       * or not depending on which finished first, and never come back once
+       * lost. Owned by hls.js they are re-parsed whenever it clears them.
+       *
+       * DEFAULT and AUTOSELECT stay NO: offered, never imposed. iOS re-reads
+       * them on every seek, and off has to mean off.
        */
       const playlist = masterPlaylist(
         `/api/dailymotion/videos/${videoId}/media.m3u8`,
-        [],
+        subtitles.map((track) => ({
+          label: track.label,
+          lang: track.lang,
+          url: `/api/dailymotion/videos/${videoId}/subtitles/${encodeURIComponent(track.lang)}/index.m3u8`,
+        })),
         rendition,
         audioUrl ? `/api/dailymotion/videos/${videoId}/audio.m3u8` : null,
       );
