@@ -6,7 +6,11 @@ interface ProgressWrite {
   duration: number;
 }
 
+/** Where a sample is sent. Injected, because not every player writes to the library. */
+type ProgressWriter = (videoId: string, position: number, duration: number, keepalive: boolean) => Promise<unknown>;
+
 interface ProgressWriteState {
+  write: ProgressWriter;
   latest: ProgressWrite | null;
   lastSentAt: number;
   running: boolean;
@@ -17,10 +21,13 @@ interface ProgressWriteState {
 export const PROGRESS_WRITE_INTERVAL_MS = 10_000;
 const states = new Map<string, ProgressWriteState>();
 
-function stateFor(videoId: string) {
+const toLibrary: ProgressWriter = (videoId, position, duration, keepalive) =>
+  api.saveProgress(videoId, position, duration, keepalive);
+
+function stateFor(videoId: string, write: ProgressWriter = toLibrary) {
   const existing = states.get(videoId);
   if (existing) return existing;
-  const state: ProgressWriteState = { latest: null, lastSentAt: 0, running: false, flushAfterRunning: false, timer: null };
+  const state: ProgressWriteState = { write, latest: null, lastSentAt: 0, running: false, flushAfterRunning: false, timer: null };
   states.set(videoId, state);
   return state;
 }
@@ -51,7 +58,7 @@ async function send(videoId: string, state: ProgressWriteState, keepalive = fals
   state.running = true;
   state.lastSentAt = Date.now();
   try {
-    if (!isIncognitoMode()) await api.saveProgress(videoId, next.position, next.duration, keepalive);
+    if (!isIncognitoMode()) await state.write(videoId, next.position, next.duration, keepalive);
   } catch {
     // A later playback sample retries with fresh state. Retaining this value
     // could overwrite an intentional seek after connectivity returns.
@@ -69,12 +76,12 @@ async function send(videoId: string, state: ProgressWriteState, keepalive = fals
  * Player state is sampled every second, but persistence is a throttled
  * heartbeat. Keep only the newest sample and at most one request in flight.
  */
-export function queueProgressWrite(videoId: string, position: number, duration: number) {
+export function queueProgressWrite(videoId: string, position: number, duration: number, write?: ProgressWriter) {
   if (isIncognitoMode()) {
     discard(videoId);
     return;
   }
-  const state = stateFor(videoId);
+  const state = stateFor(videoId, write);
   state.latest = { position, duration };
   schedule(videoId, state);
 }
