@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./SearchPage.css";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { api, type Channel, type ChannelSearchResult, type SearchResult, type Video } from "../api";
 import { useI18n } from "../i18n";
@@ -10,6 +10,7 @@ import VideoCard from "../components/VideoCard";
 import { VideoGridSkeleton } from "../components/LoadingState";
 import { EmptyState, RevealList } from "../components/ui";
 import { videoFromSearchResult } from "../searchResultVideo";
+import { mergeByRank, providerPath, type SearchProviderDescription } from "../searchProviderTypes";
 
 function normalizeSearchText(value: string) {
   return value
@@ -26,13 +27,37 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   useDocumentTitle(q || t("searchTitle"));
   const [videos, setVideos] = useState<Video[]>([]);
   const [localChannels, setLocalChannels] = useState<Channel[]>([]);
-  const [ytResults, setYtResults] = useState<SearchResult[]>([]);
-  const [ytChannels, setYtChannels] = useState<ChannelSearchResult[]>([]);
+  const [providers, setProviders] = useState<SearchProviderDescription[]>([]);
+  const [external, setExternal] = useState<Record<string, { results: SearchResult[]; channels: ChannelSearchResult[] }>>({});
   const [ytDownloads, setYtDownloads] = useState({ allowed: false, enabled: false });
   const [localLoading, setLocalLoading] = useState(false);
   const [localLoadingMore, setLocalLoadingMore] = useState(false);
   const [localResultsExpanded, setLocalResultsExpanded] = useState(false);
   const [ytLoading, setYtLoading] = useState(false);
+  const navigate = useNavigate();
+
+  /*
+   * Which provider the reader is looking at, kept in the address.
+   *
+   * A filter held in state alone is lost on reload and cannot be sent to
+   * anybody, and this is a page whose whole purpose is to be linked to. An
+   * unknown or absent value means all of them, which is also what a link
+   * written before a provider existed should keep meaning.
+   */
+  const chosen = params.get("source") ?? "";
+  const active = useMemo(
+    () => (providers.some((provider) => provider.id === chosen) ? providers.filter((provider) => provider.id === chosen) : providers),
+    [providers, chosen],
+  );
+
+  useEffect(() => {
+    if (hideExternalSearch) { setProviders([]); return; }
+    let cancelled = false;
+    api.searchProviders()
+      .then((answer) => { if (!cancelled) setProviders(answer.providers); })
+      .catch(() => { if (!cancelled) setProviders([]); });
+    return () => { cancelled = true; };
+  }, [hideExternalSearch]);
 
   const reloadLocalVideos = useCallback(() => {
     if (!q) return;
@@ -78,42 +103,56 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   }, [q]);
 
   useEffect(() => {
-    if (!q || hideExternalSearch) { setYtResults([]); setYtChannels([]); return; }
+    if (!q || hideExternalSearch || !active.length) { setExternal({}); return; }
     let cancelled = false;
     setYtLoading(true);
-    api.youtubeSearch(q)
-      .then((result) => {
+    api.searchExternal(q, active.map((provider) => provider.id))
+      .then((answer) => {
         if (cancelled) return;
-        setYtResults(result.results);
-        setYtChannels(result.channels);
-        setYtDownloads({ allowed: Boolean(result.downloads_allowed), enabled: Boolean(result.downloads_enabled) });
+        setExternal(answer.providers);
+        setYtDownloads({ allowed: Boolean(answer.downloads_allowed), enabled: Boolean(answer.downloads_enabled) });
       })
-      .catch(() => { if (!cancelled) { setYtResults([]); setYtChannels([]); } })
+      .catch(() => { if (!cancelled) setExternal({}); })
       .finally(() => { if (!cancelled) setYtLoading(false); });
     return () => { cancelled = true; };
-  }, [q, hideExternalSearch]);
+  }, [q, hideExternalSearch, active]);
 
   // Results become cards without asking the server anything: everything a card
   // shows is already in the answer, and the import an action needs is that
   // action's own cost, not the price of scrolling past twenty videos.
   const ytVideos = useMemo(() => {
     const now = Date.now();
-    return ytResults.map((result) => ({
+    return mergeByRank(active.map((provider) => (external[provider.id]?.results ?? []).map((result) => ({
+      provider,
       video: videoFromSearchResult(result, {
-        downloadsAllowed: ytDownloads.allowed,
-        downloadsEnabled: ytDownloads.enabled,
+        // A provider the library cannot hold has nothing to download to it.
+        downloadsAllowed: provider.capabilities.library && ytDownloads.allowed,
+        downloadsEnabled: provider.capabilities.library && ytDownloads.enabled,
         now,
       }),
       inLibrary: result.in_library === 1,
-    }));
-  }, [ytResults, ytDownloads]);
+    }))));
+  }, [active, external, ytDownloads]);
+
+  const externalChannels = useMemo(() => {
+    // A channel already followed here is shown by the library's own section
+    // above; offering it again as a stranger is the same row twice. Only a
+    // provider whose channels can be followed has rows to be matched against.
+    const followed = new Set(localChannels.map((channel) => channel.channel_id));
+    return mergeByRank(active.map((provider) => (external[provider.id]?.channels ?? [])
+      .filter((channel) => !(provider.capabilities.library && followed.has(channel.channelId)))
+      .map((channel) => ({ provider, channel }))));
+  }, [active, external, localChannels]);
+
+  const chooseSource = (id: string) => {
+    const next = new URLSearchParams(params);
+    if (id) next.set("source", id); else next.delete("source");
+    navigate({ search: next.toString() }, { replace: true });
+  };
 
   if (!q) {
     return <EmptyState icon={<Search />} title={t("searchPlaceholder")} />;
   }
-
-  const localChannelIds = new Set(localChannels.map((channel) => channel.channel_id));
-  const youtubeChannels = ytChannels.filter((channel) => !localChannelIds.has(channel.channelId));
 
   return (
     <div className="search-page">
@@ -161,41 +200,66 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
         </section>
       )}
 
+      {!hideExternalSearch && providers.length > 1 && (
+        <div className="search-source-filter" role="group" aria-label={t("searchEverySource")}>
+          <button type="button" className={`search-source-chip${chosen ? "" : " is-active"}`}
+            aria-pressed={!chosen} onClick={() => chooseSource("")}>{t("searchEverySource")}</button>
+          {providers.map((provider) => (
+            <button key={provider.id} type="button"
+              className={`search-source-chip${chosen === provider.id ? " is-active" : ""}`}
+              data-source={provider.id}
+              aria-pressed={chosen === provider.id}
+              onClick={() => chooseSource(provider.id)}>{provider.label}</button>
+          ))}
+        </div>
+      )}
+
       {!hideExternalSearch && (
         <section className="search-results-section">
-          {youtubeChannels.length > 0 && (
+          {externalChannels.length > 0 && (
             <>
               <div className="search-results-header">{t("channels")}</div>
               <RevealList
                 key={q}
-                items={youtubeChannels}
+                items={externalChannels}
                 listClassName="yt-results-list yt-channel-results-list"
                 showMore={t("showMore")}
                 showLess={t("showLess")}
-                renderRow={(channel) => (
-                  <Link key={channel.channelId} className="yt-result-row" to={`/channel/${channel.channelId}`}>
+                renderRow={({ provider, channel }) => (
+                  <Link key={`${provider.id}:${channel.channelId}`} className="yt-result-row"
+                    to={providerPath(provider.channelPath ?? "/channel/:id", channel.channelId)}>
                     {channel.thumbnail ? <img className="yt-search-channel-avatar" src={img(channel.thumbnail)} alt="" loading="lazy" /> : <div className="yt-search-channel-avatar" />}
                     <div className="yt-result-info">
                       <div className="yt-result-title">{channel.title}</div>
-                      <div className="yt-result-meta">{[channel.handle, channel.subscriberCount && `${channel.subscriberCount} ${t("subscribers")}`, channel.videoCount].filter(Boolean).join(" · ")}</div>
+                      <div className="yt-result-meta">{[provider.id === "youtube" ? channel.handle : provider.label, channel.subscriberCount && `${channel.subscriberCount} ${t("subscribers")}`, channel.videoCount].filter(Boolean).join(" · ")}</div>
                     </div>
                   </Link>
                 )}
               />
             </>
           )}
-          <div className="search-results-header">{t("youtubeResults")}</div>
+          <div className="search-results-header">
+            {active.length === 1 ? active[0].label : t("searchExternalResults")}
+          </div>
           {ytLoading ? <VideoGridSkeleton count={4} gridSize="sm" /> : ytVideos.length === 0 ? null : (
             <div className="search-local-video-list">
-              {ytVideos.map(({ video, inLibrary }) => (
+              {ytVideos.map(({ provider, video, inLibrary }) => (
                 <VideoCard
-                  key={video.video_id}
+                  key={`${provider.id}:${video.video_id}`}
                   video={video}
-                  onPlay={onPlay}
+                  /*
+                   * A provider with no rows here is played by going to its own
+                   * page: the queue and the player read the library, and this
+                   * video is not in it.
+                   */
+                  onPlay={provider.capabilities.library ? onPlay : () => navigate(providerPath(provider.watchPath, video.video_id))}
                   onChanged={reloadLocalVideos}
                   searchResultLayout
                   processing={false}
                   inLibrary={inLibrary}
+                  provider={provider}
+                  // Nothing here may be downloaded, queued or marked watched.
+                  readOnly={!provider.capabilities.library}
                 />
               ))}
             </div>

@@ -131,6 +131,7 @@ export function VideoCard({
   onChanged,
   showRestore,
   showChannelAvatar = true,
+  provider,
   searchResultLayout = false,
   onRemoveFromPlaylist,
   onRemoveFromHistory,
@@ -185,6 +186,15 @@ export function VideoCard({
    * by the time the queue is played, the entry is a video like any other.
    */
   inLibrary?: boolean;
+  /**
+   * Where this result came from, when it did not come from the library.
+   *
+   * The card wears a badge for it, and stops doing what only holds in
+   * YouTube's id space — asking DeArrow about the id above all, since that
+   * service knows no other. A provider whose videos the library cannot hold is
+   * shown read-only by its page, so no action here needs to know about it.
+   */
+  provider?: { id: string; label: string; watchPath: string };
   /** Settings-only mode: preserve the real card markup while replacing mutations with configurable drag handles. */
   actionPreview?: {
     config: VideoCardActionConfig;
@@ -192,7 +202,7 @@ export function VideoCard({
     renderAction: (id: Exclude<VideoCardActionId, "schedule">) => ReactNode;
   };
 }) {
-  const deArrowBranding = useDeArrowBranding(video.video_id);
+  const deArrowBranding = useDeArrowBranding(provider && provider.id !== "youtube" ? "" : video.video_id);
   const [showOriginalBranding, setShowOriginalBranding] = useState(false);
   const hasDeArrowBranding = Boolean(deArrowBranding?.title || deArrowBranding?.thumbnail);
   const displayTitle = showOriginalBranding ? video.title : deArrowBranding?.title || video.title;
@@ -478,7 +488,16 @@ export function VideoCard({
     return () => document.removeEventListener("pointerdown", closeOnOutsideTap);
   }, [actionsOpen]);
 
-  const videoHref = `/watch/${video.video_id}`;
+  /*
+   * Where the card really points.
+   *
+   * The click is intercepted and handed to `onPlay`, but the anchor is what a
+   * middle click, a long press and "open in new tab" follow — and pointed at
+   * /watch, those would open the local player on an id it has no row for.
+   */
+  const videoHref = provider
+    ? provider.watchPath.replace(":id", encodeURIComponent(video.video_id))
+    : `/watch/${video.video_id}`;
   /**
    * A search result does not always say which channel it belongs to, and a
    * link to nowhere is worse than a name that is simply a name.
@@ -729,6 +748,9 @@ export function VideoCard({
                   loading="lazy"
                   draggable={false}
                 >
+                  {provider && provider.id !== "youtube" && (
+                    <span className="source-badge" data-source={provider.id}>{provider.label}</span>
+                  )}
                   {video.is_private !== 1 && video.duration && video.is_short !== 1 && (
                     <span className="duration-badge">{formatVideoDuration(video.duration)}</span>
                   )}

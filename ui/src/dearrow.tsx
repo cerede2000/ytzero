@@ -20,7 +20,15 @@ export function useDeArrowBranding(videoId: string): DeArrowBranding | null {
 
   useEffect(() => {
     let active = true;
-    if (!titlesEnabled && !thumbnailsEnabled) {
+    /*
+     * An empty id is a card that must not be asked about.
+     *
+     * DeArrow answers for YouTube ids and nothing else, and the id space is
+     * not shared: a Dailymotion id sent here is a question about whichever
+     * YouTube video happens to spell the same, and the answer would be shown
+     * on the wrong card.
+     */
+    if (!videoId || (!titlesEnabled && !thumbnailsEnabled)) {
       setBranding(null);
       return () => { active = false; };
     }

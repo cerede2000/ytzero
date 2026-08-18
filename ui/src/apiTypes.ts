@@ -382,6 +382,8 @@ export interface SearchResult {
   channelAvatar: string | null;
   viewCount: number | null;
   published: PublishedAgo | null;
+  /** The instant, from a provider that knows it rather than only "2 years ago". */
+  publishedAt?: string | null;
   watched: number;
   watch_position: number | null;
   watch_duration: number | null;

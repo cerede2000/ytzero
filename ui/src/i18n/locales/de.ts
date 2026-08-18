@@ -1371,6 +1371,8 @@ export const de: Locale = {
     importSelectAll: "Alle auswählen",
     importSelectNone: "Alle abwählen",
     importHistoryAll: "Alles",
+    searchEverySource: "Alle Quellen",
+    searchExternalResults: "Ergebnisse",
     importHistorySince: "Ab Datum",
     importHistoryEstimate: "≈{count} werden importiert",
     importHistoryUndatedNote: "{count} ohne lesbares Datum — diese werden als angesehen markiert, ohne Verlaufseintrag.",
