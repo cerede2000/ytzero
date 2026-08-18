@@ -1,4 +1,5 @@
 import { decodeHtmlEntities } from "./htmlEntities";
+import { log } from "./logger";
 import { readYouTubeResponse } from "./youtubeRateLimit";
 import { sapisidFrom, sapisidHash } from "./youtubeInnerTube";
 import type { ChannelSearchResult, PublishedAgo, SearchResult } from "./youtube";
