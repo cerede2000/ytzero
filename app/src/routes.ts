@@ -36,6 +36,7 @@ import { registerFeedRoutes } from "./routes/feedRoutes";
 import { registerLibraryRoutes } from "./routes/libraryRoutes";
 import { registerChildRoutes } from "./routes/childRoutes";
 import { registerInsightRoutes } from "./routes/insightRoutes";
+import { registerDailymotionRoutes } from "./routes/dailymotionRoutes";
 import { registerDownloadRoutes } from "./routes/downloadRoutes";
 import { migrateDownloadsFromPlugin, profileDownloadsEnabled } from "./downloadConfig";
 import { registerChannelPlaylistRoutes } from "./routes/channelPlaylistRoutes";
@@ -346,6 +347,7 @@ registerSocialWatchPartyRoutes(api, {
   revalidateCurrentUser: revalidateCurrentRequestUser,
 });
 registerDownloadRoutes(api, { currentUserId, isAdmin });
+registerDailymotionRoutes(api, { currentUserId });
 
 registerVideoRoutes(api, { currentUserId, isAdmin, attachTags });
 registerTranscriptRoutes(api, currentUserId);

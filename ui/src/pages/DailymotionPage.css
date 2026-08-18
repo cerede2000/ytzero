@@ -1,0 +1,61 @@
+/* Its own styles: the experiment borrows nothing it would have to keep working. */
+.dm-search { display: flex; gap: 8px; margin: 0 0 18px; max-width: 640px; }
+.dm-search .ui-input { flex: 1; min-width: 0; }
+.dm-error { color: var(--danger, #f87171); font-size: 13px; margin: 0 0 14px; }
+
+.dm-grid {
+  display: grid;
+  gap: 18px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.dm-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dm-thumb {
+  aspect-ratio: 16 / 9;
+  background: var(--surface-2);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+  width: 100%;
+}
+.dm-thumb img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.dm-duration {
+  background: rgba(0, 0, 0, .82);
+  border-radius: 4px;
+  bottom: 6px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 4px;
+  position: absolute;
+  right: 6px;
+}
+.dm-title {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+  overflow: hidden;
+}
+.dm-channel { color: var(--text-2); font-size: 12px; margin: 0; }
+.dm-actions { display: flex; gap: 6px; margin-top: 2px; }
+
+.dm-player {
+  background: var(--surface);
+  border-radius: 12px;
+  margin: 0 0 20px;
+  overflow: hidden;
+  padding: 12px;
+}
+.dm-player-head { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
+.dm-player-head h2 { font-size: 15px; margin: 0 0 2px; }
+.dm-player-head p { color: var(--text-2); font-size: 12.5px; margin: 0; }
+.dm-player-status { color: var(--text-2); font-size: 12.5px; margin: 8px 0 0; }
+.dm-player-media { border-radius: 8px; display: block; margin-top: 10px; width: 100%; }
+/* Audio mode keeps the same element playing, with the picture put away. */
+.dm-player--audio .dm-player-media { height: 44px; }
