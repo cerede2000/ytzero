@@ -953,6 +953,7 @@ export const {
   collectSearchVideos,
   fetchSearchSuggestions,
   searchChannelFromLockup,
+  searchDeeper,
   searchVideoFromLockup,
   searchYouTube,
 } = createYoutubeSearch({

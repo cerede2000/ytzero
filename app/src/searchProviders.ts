@@ -1,6 +1,6 @@
 import { searchDailymotionAll, type DailymotionChannel, type DailymotionVideo } from "./dailymotion";
 import { SEARCH_PROVIDERS, type SearchProviderDescription } from "./searchProviderCatalog";
-import { searchYouTube, type ChannelSearchResult, type SearchResult } from "./youtube";
+import { searchDeeper, searchYouTube, type ChannelSearchResult, type SearchResult } from "./youtube";
 
 export interface ProviderSearch {
   results: SearchResult[];
@@ -55,15 +55,36 @@ function dailymotionChannelResult(channel: DailymotionChannel): ChannelSearchRes
  * the page ranks within a provider and never across them — their relevance
  * scores are not the same quantity and there is no honest way to compare them.
  */
+/**
+ * How much each provider is asked for, so that a page is balanced and full.
+ *
+ * The first merged page ran thirteen alternating pairs and then forty-seven
+ * straight Dailymotion cards: Dailymotion had been asked for sixty and
+ * YouTube's scraper stops at twenty. Trimming Dailymotion to match would have
+ * balanced it by making the page emptier, so YouTube is asked to go deeper
+ * instead — its results page hangs the rest off a continuation token, the same
+ * way the channel posts scraper already follows one.
+ *
+ * Forty each is what two continuations reliably reach, and eighty mixed cards
+ * is a page worth scrolling. A provider on its own is asked for the same
+ * forty: a filter should narrow what is shown, not change how much there is.
+ */
+const PER_PROVIDER = 40;
+
+export function providerCeiling(): number {
+  return PER_PROVIDER;
+}
+
 export async function searchAcrossProviders(
   query: string,
   providers: readonly SearchProviderDescription[],
 ): Promise<{ found: Record<string, ProviderSearch>; failed: string[] }> {
+  const perProvider = providerCeiling();
   const found: Record<string, ProviderSearch> = {};
   const failed: string[] = [];
   await Promise.all(providers.map(async (provider) => {
     try {
-      found[provider.id] = await runProvider(provider.id, query);
+      found[provider.id] = await runProvider(provider.id, query, perProvider);
     } catch {
       failed.push(provider.id);
     }
@@ -71,13 +92,18 @@ export async function searchAcrossProviders(
   return { found, failed };
 }
 
-async function runProvider(id: string, query: string): Promise<ProviderSearch> {
+async function runProvider(id: string, query: string, limit: number): Promise<ProviderSearch> {
   if (id === "youtube") {
-    const { results, channels } = await searchYouTube(query);
-    return { results, channels };
+    const deep = await searchDeeper(query, limit).catch(() => null);
+    // Its results page drops the channel card for a channel-name query, and
+    // only the shallow search knows to ask again with the channel filter. It
+    // is cached, so this costs a request in that case and nothing in the rest.
+    if (deep?.results.length && deep.channels.length) return deep;
+    const shallow = await searchYouTube(query);
+    return { results: deep?.results.length ? deep.results : shallow.results.slice(0, limit), channels: shallow.channels };
   }
   if (id === "dailymotion") {
-    const { videos, channels } = await searchDailymotionAll(query);
+    const { videos, channels } = await searchDailymotionAll(query, fetch, limit);
     return {
       results: videos.map(dailymotionResult),
       channels: channels.map(dailymotionChannelResult),
