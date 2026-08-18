@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Headphones, Play, Search, X } from "lucide-react";
 import { Button, EmptyState, Input, PageHeader } from "../components/ui";
 import { mediaPlaybackState } from "../mediaSessionState";
-import { shouldUseNativeVideoHls } from "../videoHlsPolicy";
 import { useDocumentTitle } from "../useDocumentTitle";
 import "./DailymotionPage.css";
 
@@ -157,35 +156,45 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
     let hls: import("hls.js").default | null = null;
     setStatus("Résolution du flux…");
     /*
-     * Asked through the same policy the watch page uses, and for the reason
-     * written there: Chromium answers "maybe" to `canPlayType` for HLS while
-     * its native path is incomplete. Trusting that answer here sent every
-     * browser down the native route — the picture played, and the subtitle
-     * rendition the manifest declares was simply ignored, which looked exactly
-     * like a manifest that was wrong.
+     * hls.js first, iPhone included — which is the opposite of what the watch
+     * page does, for a reason measured on this stream.
+     *
+     * Dailymotion's own fMP4 starts its two tracks at different times:
+     *
+     *     video  start_time 0.114031
+     *     audio  start_time 0.000000
+     *
+     * A tenth of a second, audio ahead. hls.js re-muxes and lines the tracks
+     * up, which is why a browser sounds right; iOS's player plays the file as
+     * authored and the offset stands, which is the lip-sync that was reported.
+     * hls.js runs there too on a recent iPhone, through Managed Media Source,
+     * and it renders the captions itself rather than leaving them to a player
+     * that re-enables them on every seek.
+     *
+     * The native path stays for anything that cannot run it.
      */
-    if (shouldUseNativeVideoHls(element.canPlayType("application/vnd.apple.mpegurl"), navigator.vendor)) {
-      element.src = source;
-      setStatus("");
-    } else {
-      void import("hls.js").then(({ default: Hls }) => {
-        if (cancelled || !Hls.isSupported()) { setStatus("HLS non supporté par ce navigateur"); return; }
-        hls = new Hls({ enableWorker: true });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (!data.fatal) return;
-          setStatus(data.details === "manifestLoadError"
-            ? "Cette vidéo n'est plus disponible chez Dailymotion."
-            : `Erreur de lecture : ${data.details}`);
-        });
-        hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus(""));
-        // Nothing is selected here on purpose. Turning the first track on by
-        // default was mine rather than asked for, and it made "off" a state the
-        // reader could not keep: the manifest re-asserted it on iOS, and this
-        // would re-assert it everywhere else. The player's menu turns them on.
-        hls.loadSource(source);
-        hls.attachMedia(element);
+    void import("hls.js").then(({ default: Hls }) => {
+      if (cancelled) return;
+      if (!Hls.isSupported()) {
+        element.src = source;
+        setStatus("");
+        return;
+      }
+      hls = new Hls({ enableWorker: true });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return;
+        setStatus(data.details === "manifestLoadError"
+          ? "Cette vidéo n'est plus disponible chez Dailymotion."
+          : `Erreur de lecture : ${data.details}`);
       });
-    }
+      hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus(""));
+      // Nothing is selected here on purpose: turning the first track on was
+      // mine rather than asked for, and it made "off" a state the reader could
+      // not keep. The player's own menu turns them on.
+      hls.loadSource(source);
+      hls.attachMedia(element);
+    });
+
     return () => { cancelled = true; hls?.destroy(); };
   }, [source, entry.mode]);
 
