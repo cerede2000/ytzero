@@ -29,14 +29,19 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   const [localChannels, setLocalChannels] = useState<Channel[]>([]);
   const [providers, setProviders] = useState<SearchProviderDescription[]>([]);
   /*
-   * One entry per window fetched, rather than one merged list.
+   * Windows, kept per provider rather than per request.
    *
-   * Scrolling appends, and each window is balanced inside itself: merged
-   * across the whole accumulation instead, a provider that ran out at page one
-   * would leave the rest of the page to whoever still had answers, and the
-   * alternation the reader is looking at would break halfway down.
+   * Asked for together in one request, the page waited on the slowest: nothing
+   * at all for three seconds while Dailymotion had answered in one. Asked
+   * separately and at once, each paints as it lands, and a provider that is
+   * slow or down no longer costs the others their results.
+   *
+   * They stay in windows rather than one merged list. A window is balanced
+   * inside itself; merged across the whole accumulation instead, a provider
+   * that ran out early would leave the rest of the page to whoever still had
+   * answers, and the alternation would break halfway down.
    */
-  const [pages, setPages] = useState<ExternalSearch["providers"][]>([]);
+  const [windows, setWindows] = useState<Record<string, ExternalSearch["providers"][string][]>>({});
   const [loadingMore, setLoadingMore] = useState(false);
   const moreBelow = useRef(false);
   const [ytDownloads, setYtDownloads] = useState({ allowed: false, enabled: false });
@@ -113,20 +118,31 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   }, [q]);
 
   useEffect(() => {
-    if (!q || hideExternalSearch || !active.length) { setPages([]); return; }
+    if (!q || hideExternalSearch || !active.length) { setWindows({}); return; }
     let cancelled = false;
     setYtLoading(true);
-    setPages([]);
+    setWindows({});
     moreBelow.current = false;
-    api.searchExternal(q, active.map((provider) => provider.id))
-      .then((answer) => {
-        if (cancelled) return;
-        setPages([answer.providers]);
-        moreBelow.current = Object.values(answer.providers).some((found) => found.more);
-        setYtDownloads({ allowed: Boolean(answer.downloads_allowed), enabled: Boolean(answer.downloads_enabled) });
-      })
-      .catch(() => { if (!cancelled) setPages([]); })
-      .finally(() => { if (!cancelled) setYtLoading(false); });
+    let outstanding = active.length;
+    for (const provider of active) {
+      api.searchExternal(q, [provider.id])
+        .then((answer) => {
+          if (cancelled) return;
+          const found = answer.providers[provider.id];
+          if (found) {
+            setWindows((held) => ({ ...held, [provider.id]: [found] }));
+            if (found.more) moreBelow.current = true;
+            // The skeleton goes on the first answer, not the last: the whole
+            // point is that the page stops waiting on the slowest provider.
+            if (found.results.length) setYtLoading(false);
+          }
+          setYtDownloads({ allowed: Boolean(answer.downloads_allowed), enabled: Boolean(answer.downloads_enabled) });
+        })
+        .catch(() => {})
+        // And goes anyway once everybody has spoken, so a search that finds
+        // nothing shows that rather than a skeleton for ever.
+        .finally(() => { if (!cancelled && --outstanding <= 0) setYtLoading(false); });
+    }
     return () => { cancelled = true; };
   }, [q, hideExternalSearch, active]);
 
@@ -139,20 +155,32 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
    */
   const loadMore = useCallback(async () => {
     if (!moreBelow.current || loadingMore || !q || !active.length) return;
+    // Only the providers that said there was more, and each for its own next
+    // window: they run out at different depths, and one that has finished must
+    // not be asked again on every scroll.
+    const asking = active.filter((provider) => {
+      const held = windows[provider.id];
+      return Boolean(held?.length && held[held.length - 1].more);
+    });
+    if (!asking.length) { moreBelow.current = false; return; }
     moreBelow.current = false;
     setLoadingMore(true);
-    try {
-      const answer = await api.searchExternal(q, active.map((provider) => provider.id), pages.length + 1);
-      const arrived = Object.values(answer.providers).some((found) => found.results.length);
-      if (arrived) setPages((held) => [...held, answer.providers]);
-      moreBelow.current = arrived && Object.values(answer.providers).some((found) => found.more);
-    } catch {
-      // A window that fails is not the end of the list; the next scroll retries.
-      moreBelow.current = true;
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [q, active, pages.length, loadingMore]);
+    const answers = await Promise.all(asking.map((provider) =>
+      api.searchExternal(q, [provider.id], (windows[provider.id]?.length ?? 0) + 1)
+        .then((answer) => ({ provider, found: answer.providers[provider.id] }))
+        // A window that fails is not the end of the list; the next scroll retries.
+        .catch(() => { moreBelow.current = true; return null; })));
+    setWindows((held) => {
+      const next = { ...held };
+      for (const answer of answers) {
+        if (!answer?.found?.results.length) continue;
+        next[answer.provider.id] = [...(held[answer.provider.id] ?? []), answer.found];
+        if (answer.found.more) moreBelow.current = true;
+      }
+      return next;
+    });
+    setLoadingMore(false);
+  }, [q, active, windows, loadingMore]);
 
   /*
    * Held in state, not in a ref.
@@ -197,8 +225,7 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   // action's own cost, not the price of scrolling past twenty videos.
   const ytVideos = useMemo(() => {
     const now = Date.now();
-    const seen = new Set<string>();
-    return pages.flatMap((window) => mergeByRank(active.map((provider) => (window[provider.id]?.results ?? []).map((result) => ({
+    const card = (provider: SearchProviderDescription, result: SearchResult) => ({
       provider,
       video: videoFromSearchResult(result, {
         // A provider the library cannot hold has nothing to download to it.
@@ -207,25 +234,36 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
         now,
       }),
       inLibrary: result.in_library === 1,
-    })))))
-      // Windows overlap when a provider's own paging repeats an entry.
-      .filter(({ provider, video }) => {
-        const key = `${provider.id}:${video.video_id}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-  }, [active, pages, ytDownloads]);
+    });
+
+    // Window by window, so each stays balanced inside itself even when the
+    // providers filling them ran out at different depths.
+    const depth = Math.max(0, ...active.map((provider) => windows[provider.id]?.length ?? 0));
+    const merged: ReturnType<typeof card>[] = [];
+    for (let rank = 0; rank < depth; rank++) {
+      merged.push(...mergeByRank(active.map((provider) =>
+        (windows[provider.id]?.[rank]?.results ?? []).map((result) => card(provider, result)))));
+    }
+
+    // Windows overlap when a provider's own paging repeats an entry.
+    const seen = new Set<string>();
+    return merged.filter(({ provider, video }) => {
+      const key = `${provider.id}:${video.video_id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [active, windows, ytDownloads]);
 
   const externalChannels = useMemo(() => {
     // A channel already followed here is shown by the library's own section
     // above; offering it again as a stranger is the same row twice. Only a
     // provider whose channels can be followed has rows to be matched against.
     const followed = new Set(localChannels.map((channel) => channel.channel_id));
-    return mergeByRank(active.map((provider) => (pages[0]?.[provider.id]?.channels ?? [])
+    return mergeByRank(active.map((provider) => (windows[provider.id]?.[0]?.channels ?? [])
       .filter((channel) => !(provider.capabilities.library && followed.has(channel.channelId)))
       .map((channel) => ({ provider, channel }))));
-  }, [active, pages, localChannels]);
+  }, [active, windows, localChannels]);
 
   const chooseSource = (id: string) => {
     const next = new URLSearchParams(params);
