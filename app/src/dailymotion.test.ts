@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isDailymotionMediaUrl, rewriteHlsPlaylist, validDailymotionVideoId } from "./dailymotion";
+import { isDailymotionMediaUrl, rewriteHlsPlaylist, searchDailymotion, validDailymotionVideoId } from "./dailymotion";
 
 describe("what counts as a Dailymotion video", () => {
   test("their grammar, not YouTube's", () => {
@@ -58,5 +58,35 @@ describe("pointing the playlist at us", () => {
     const out = rewriteHlsPlaylist('#EXT-X-KEY:METHOD=AES-128,URI="../key.bin"\n', playlistUrl, proxy);
     expect(out).toContain('URI="/api/dailymotion/segment?u=');
     expect(decodeURIComponent(out)).toContain("dmcdn.net");
+  });
+});
+
+describe("what the search is allowed to offer", () => {
+  const answering = (list: unknown[]) =>
+    (async () => new Response(JSON.stringify({ list }), { status: 200 })) as unknown as typeof fetch;
+  const live = { id: "x3rddqb", title: "Live one", allow_embed: true, private: false, status: "published" };
+
+  test("a result that forbids embedding is not offered", async () => {
+    // Measured on "film complet": one result in fifteen answered 404 on its own
+    // endpoint, and it was the only one with allow_embed false. A card for it
+    // is a card that cannot be pressed.
+    const dead = { id: "xakotqq", title: "Dead one", allow_embed: false, private: false, status: "published" };
+    const videos = await searchDailymotion("film complet", 15, answering([live, dead]));
+    expect(videos.map((video) => video.videoId)).toEqual(["x3rddqb"]);
+  });
+
+  test("nor a private one, nor one still being processed", async () => {
+    const videos = await searchDailymotion("x", 15, answering([
+      live,
+      { id: "x111111", allow_embed: true, private: true, status: "published" },
+      { id: "x222222", allow_embed: true, private: false, status: "processing" },
+    ]));
+    expect(videos.map((video) => video.videoId)).toEqual(["x3rddqb"]);
+  });
+
+  test("an answer that says nothing about it is taken at face value", async () => {
+    // Older entries carry no status at all; refusing those would empty the page.
+    const videos = await searchDailymotion("x", 15, answering([{ id: "xzlj6y", title: "Old" }]));
+    expect(videos.map((video) => video.videoId)).toEqual(["xzlj6y"]);
   });
 });
