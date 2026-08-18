@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject, type RefObject } from "react";
 import { useParams } from "react-router-dom";
 import { Headphones, Subtitles, Video } from "lucide-react";
 import DailymotionCard from "../components/DailymotionCard";
@@ -29,8 +29,8 @@ export default function DailymotionVideoPage() {
   const [mode, setMode] = useState<Mode>("video");
   const [status, setStatus] = useState("Résolution du flux…");
   const [notFound, setNotFound] = useState(false);
-  const mediaRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
-  const trackRef = useRef<HTMLTrackElement>(null);
+  /** Where the reader was when they switched mode, so the switch is not a restart. */
+  const positionRef = useRef(0);
   useDocumentTitle(video?.title ?? "Dailymotion");
 
   useEffect(() => {
@@ -54,76 +54,30 @@ export default function DailymotionVideoPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  const [hls, setHls] = useState<import("hls.js").default | null>(null);
-  useVideoHlsSource({
-    active: true,
-    mediaRef: mediaRef as RefObject<HTMLVideoElement | null>,
-    onFatalError: () => setStatus("Lecture impossible — Dailymotion a refusé le flux."),
-    onInstance: setHls,
-    onReady: () => setStatus(""),
-    // Their tracks do not start at the same instant; only hls.js lines them up.
-    preferHlsJs: true,
-    src: `/api/dailymotion/videos/${id}/hls.m3u8`,
-    startSeconds: 0,
-  });
-
-  // Managed Media Source pauses loading when Safari says it has enough, and
-  // only Safari would resume it. A seek says so too.
-  useEffect(() => {
-    const element = mediaRef.current;
-    if (!element || !hls) return;
-    const resume = () => hls.resumeBuffering();
-    element.addEventListener("seeking", resume);
-    return () => element.removeEventListener("seeking", resume);
-  }, [hls, mode]);
-
-  useEffect(() => {
-    const element = trackRef.current;
-    if (!element) return;
-    element.track.mode = showSubtitles ? "showing" : "disabled";
-  }, [showSubtitles, subtitles, mode]);
-
-  useEffect(() => {
-    if (!("mediaSession" in navigator) || !video) return;
-    const element = mediaRef.current;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: video.title,
-      artist: video.channelTitle || "Dailymotion",
-      artwork: video.thumbnail ? [{ src: video.thumbnail, sizes: "480x360", type: "image/jpeg" }] : [],
-    });
-    navigator.mediaSession.playbackState = mediaPlaybackState(element);
-    navigator.mediaSession.setActionHandler("play", () => { void element?.play(); });
-    navigator.mediaSession.setActionHandler("pause", () => element?.pause());
-    return () => {
-      navigator.mediaSession.setActionHandler("play", null);
-      navigator.mediaSession.setActionHandler("pause", null);
-    };
-  }, [video, mode, status]);
-
   if (notFound) return <EmptyState title="Vidéo introuvable" description="Cette vidéo n'existe plus chez Dailymotion." />;
-
-  const common = {
-    ref: mediaRef,
-    controls: true,
-    autoPlay: true,
-    className: "dm-player-media",
-    onPlay: () => { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"; },
-    onPause: () => { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"; },
-  } as const;
 
   return (
     <div className="dm-watch">
       <div className="dm-watch-main">
-        {mode === "audio"
-          ? <audio key="audio" {...common} />
-          : (
-            <video key="video" {...common} playsInline crossOrigin="anonymous">
-              {subtitles[0] && (
-                <track key={subtitles[0].lang} ref={trackRef} kind="subtitles" src={subtitles[0].src}
-                  srcLang={subtitles[0].lang.replace(/-auto$/, "")} label={subtitles[0].label} />
-              )}
-            </video>
-          )}
+        {/*
+          * Keyed by mode, which is what makes the switch work.
+          *
+          * The HLS wiring attaches to whatever element it was handed and its
+          * effect does not re-run when a <video> becomes an <audio> — nothing
+          * it depends on changed. Pressing the button swapped the element and
+          * left the stream feeding the one that had just left the page. A key
+          * says plainly that this is a different player.
+          */}
+        <DailymotionMedia
+          key={mode}
+          mode={mode}
+          videoId={id}
+          video={video}
+          subtitle={subtitles[0]}
+          showSubtitles={showSubtitles}
+          positionRef={positionRef}
+          onStatus={setStatus}
+        />
         {status && <p className="dm-player-status">{status}</p>}
 
         <div className="dm-player-actions">
@@ -157,5 +111,122 @@ export default function DailymotionVideoPage() {
         {related.map((suggestion) => <DailymotionCard key={suggestion.videoId} video={suggestion} compact />)}
       </aside>
     </div>
+  );
+}
+
+/**
+ * The element that plays, and everything wired to it.
+ *
+ * Its own component so that a change of mode is a change of player: the parent
+ * keys it, this mounts fresh, and the HLS wiring attaches to the element that
+ * is actually on the page. Audio mode is an <audio> element rather than a
+ * shrunken video, because on a phone an audio mode is one that survives the
+ * browser being put away.
+ */
+function DailymotionMedia({ mode, videoId, video, subtitle, showSubtitles, positionRef, onStatus }: {
+  mode: Mode;
+  videoId: string;
+  video: (DailymotionVideo & { description: string }) | null;
+  subtitle?: SubtitleTrack;
+  showSubtitles: boolean;
+  positionRef: MutableRefObject<number>;
+  onStatus: (status: string) => void;
+}) {
+  const mediaRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
+  const trackRef = useRef<HTMLTrackElement>(null);
+  const [hls, setHls] = useState<import("hls.js").default | null>(null);
+
+  useVideoHlsSource({
+    active: true,
+    mediaRef: mediaRef as RefObject<HTMLVideoElement | null>,
+    onFatalError: () => onStatus("Lecture impossible — Dailymotion a refusé le flux."),
+    onInstance: setHls,
+    onReady: () => onStatus(""),
+    // Their tracks do not start at the same instant; only hls.js lines them up.
+    preferHlsJs: true,
+    src: `/api/dailymotion/videos/${videoId}/hls.m3u8`,
+    startSeconds: positionRef.current,
+  });
+
+  /*
+   * Managed Media Source pauses loading when Safari says it has enough, and
+   * only Safari would resume it — so a seek says so too. Without this, seeking
+   * far into a video fetches nothing at all and the picture simply stops.
+   */
+  useEffect(() => {
+    const element = mediaRef.current;
+    if (!element || !hls) return;
+    const resume = () => hls.resumeBuffering();
+    element.addEventListener("seeking", resume);
+    return () => element.removeEventListener("seeking", resume);
+  }, [hls]);
+
+  /**
+   * Remembered continuously, and put back once — so switching mode resumes
+   * rather than restarts.
+   *
+   * `startPosition` is handed to hls.js as well, and on the first switch it was
+   * not honoured: the sound began at zero. Setting it on the element when the
+   * metadata lands is the answer that does not depend on which layer was
+   * listening. Only at mount, and only forwards, so it cannot fight a reader
+   * who has since seeked backwards.
+   */
+  useEffect(() => {
+    const element = mediaRef.current;
+    if (!element) return;
+    const resumeFrom = positionRef.current;
+    const remember = () => { positionRef.current = element.currentTime; };
+    const restore = () => {
+      if (resumeFrom > 1 && element.currentTime < resumeFrom - 1) element.currentTime = resumeFrom;
+    };
+    element.addEventListener("loadedmetadata", restore);
+    element.addEventListener("timeupdate", remember);
+    if (element.readyState >= 1) restore();
+    return () => {
+      element.removeEventListener("loadedmetadata", restore);
+      element.removeEventListener("timeupdate", remember);
+    };
+  }, [positionRef]);
+
+  useEffect(() => {
+    const element = trackRef.current;
+    if (!element) return;
+    element.track.mode = showSubtitles ? "showing" : "disabled";
+  }, [showSubtitles, subtitle]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !video) return;
+    const element = mediaRef.current;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: video.title,
+      artist: video.channelTitle || "Dailymotion",
+      artwork: video.thumbnail ? [{ src: video.thumbnail, sizes: "480x360", type: "image/jpeg" }] : [],
+    });
+    navigator.mediaSession.playbackState = mediaPlaybackState(element);
+    navigator.mediaSession.setActionHandler("play", () => { void element?.play(); });
+    navigator.mediaSession.setActionHandler("pause", () => element?.pause());
+    return () => {
+      navigator.mediaSession.setActionHandler("play", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+    };
+  }, [video]);
+
+  const common = {
+    ref: mediaRef,
+    controls: true,
+    autoPlay: true,
+    className: "dm-player-media",
+    onPlay: () => { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"; },
+    onPause: () => { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"; },
+  } as const;
+
+  if (mode === "audio") return <audio {...common} />;
+  return (
+    <video {...common} playsInline crossOrigin="anonymous">
+      {subtitle && (
+        <track ref={trackRef} kind="subtitles" src={subtitle.src}
+          srcLang={subtitle.lang.replace(/-auto$/, "")} label={subtitle.label} />
+      )}
+    </video>
   );
 }
