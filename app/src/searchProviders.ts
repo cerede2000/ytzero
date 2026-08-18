@@ -1,5 +1,6 @@
 import { searchDailymotionAll, type DailymotionChannel, type DailymotionVideo } from "./dailymotion";
 import { SEARCH_PROVIDERS, type SearchProviderDescription } from "./searchProviderCatalog";
+import { log } from "./logger";
 import { youtubeCookieHeader } from "./youtubeCookieHeader";
 import { searchDeeper, searchYouTube, type ChannelSearchResult, type SearchResult } from "./youtube";
 
@@ -111,7 +112,10 @@ export async function searchAcrossProviders(
   await Promise.all(providers.map(async (provider) => {
     try {
       found[provider.id] = await runProvider(provider.id, query, from, upTo, reader && jar ? { id: reader, cookieHeader: jar } : null);
-    } catch {
+    } catch (error) {
+      // Named, because a provider that answers nothing and a provider that was
+      // refused look the same on the page and need opposite fixes.
+      log.warn("search.provider_failed", { provider: provider.id, error: error instanceof Error ? error.message : String(error) });
       failed.push(provider.id);
     }
   }));
@@ -126,7 +130,13 @@ async function runProvider(
   reader: { id: number; cookieHeader: string } | null,
 ): Promise<ProviderSearch> {
   if (id === "youtube") {
-    const deep = await searchDeeper(query, upTo, reader).catch(() => null);
+    const deep = await searchDeeper(query, upTo, reader).catch((error: unknown) => {
+      log.warn("search.youtube_deep_failed", {
+        signedIn: Boolean(reader),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
     // Its results page drops the channel card for a channel-name query, and
     // only the shallow search knows to ask again with the channel filter. It
     // is cached, so this costs a request in that case and nothing in the rest.
