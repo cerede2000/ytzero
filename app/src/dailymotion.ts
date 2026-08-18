@@ -1,5 +1,6 @@
 import { YTDLP } from "./downloadConfig";
 import { log } from "./logger";
+import { libraryLanguage } from "./libraryLanguage";
 
 /**
  * Dailymotion, kept at arm's length.
@@ -356,6 +357,8 @@ export async function dailymotionRelated(videoId: string, fetchImpl: typeof fetc
   return dropDuplicateVideos(list.map(toVideo).filter((video): video is DailymotionVideo => video !== null));
 }
 
+const nothing = (): Record<string, unknown>[] => [];
+
 /** Their maximum, and the only size worth asking for: a page costs the same whatever it holds. */
 const SEARCH_PAGE = 100;
 /** How deep to go when the first page does not fill the grid. Their index stops at a thousand. */
@@ -363,9 +366,27 @@ const SEARCH_DEPTH = 5;
 /** As many cards as a results page is worth scrolling. More is a slower page, not a better one. */
 const SEARCH_ENOUGH = 60;
 
-async function searchPage(query: string, page: number, fetchImpl: typeof fetch): Promise<Record<string, unknown>[]> {
+/**
+ * Both ways of asking, because one of them is quietly biased.
+ *
+ * Two videos reported missing — "Luna Réincarnée…", "L\'Alpha est mort Luna…"
+ * — are published, embeddable and in 720p, and neither appears anywhere in the
+ * thousand results their search will return for "alpha luna". Naming the
+ * language finds them at once, and turns thirty-three results into three
+ * hundred and thirty-three. Their index does not hide French videos; it ranks
+ * them below what it takes the caller to want.
+ *
+ * So the plain question is asked as well as the same question in the language
+ * the library is kept in, and the two answers are merged. The plain one comes
+ * first: it is their own ranking, and the point is to add to it.
+ */
+function searchScopes(): string[] {
+  return ["", `&languages=${libraryLanguage()}`];
+}
+
+async function searchPage(query: string, page: number, scope: string, fetchImpl: typeof fetch): Promise<Record<string, unknown>[]> {
   const url = `${SEARCH_API}?search=${encodeURIComponent(query)}&limit=${SEARCH_PAGE}&page=${page}`
-    + `&fields=${encodeURIComponent(SEARCH_FIELDS)}&sort=relevance`;
+    + `&fields=${encodeURIComponent(SEARCH_FIELDS)}&sort=relevance${scope}`;
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`Dailymotion search failed (${response.status})`);
   const payload = await response.json() as { list?: Record<string, unknown>[] };
@@ -404,12 +425,19 @@ export async function searchDailymotion(query: string, limit?: number, fetchImpl
     .map(toVideo)
     .filter((video): video is DailymotionVideo => video !== null);
 
-  const found = keep(await searchPage(query, 1, fetchImpl));
+  const scopes = searchScopes();
+  // The plain first page is the one allowed to fail out loud: a search that
+  // cannot be run should say so rather than answer nothing. The rest is extra.
+  const opening = [
+    await searchPage(query, 1, scopes[0], fetchImpl),
+    ...await Promise.all(scopes.slice(1).map((scope) => searchPage(query, 1, scope, fetchImpl).catch(nothing))),
+  ];
+  const found = opening.flatMap(keep);
   if (dropDuplicateVideos(found).length < wanted) {
-    const deeper = await Promise.all(Array.from(
+    const deeper = await Promise.all(scopes.flatMap((scope) => Array.from(
       { length: SEARCH_DEPTH - 1 },
-      (_, index) => searchPage(query, index + 2, fetchImpl).catch(() => [] as Record<string, unknown>[]),
-    ));
+      (_, index) => searchPage(query, index + 2, scope, fetchImpl).catch(nothing),
+    )));
     for (const page of deeper) found.push(...keep(page));
   }
   return dropDuplicateVideos(found).slice(0, wanted);
