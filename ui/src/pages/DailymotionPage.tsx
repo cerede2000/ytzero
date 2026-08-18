@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Headphones, Play, Search, X } from "lucide-react";
 import { Button, EmptyState, Input, PageHeader } from "../components/ui";
+import { mediaPlaybackState } from "../mediaSessionState";
 import { useDocumentTitle } from "../useDocumentTitle";
 import "./DailymotionPage.css";
 
@@ -107,25 +108,33 @@ export default function DailymotionPage() {
 }
 
 /**
- * One element for both modes.
+ * Two elements, because the mode is not a matter of size.
  *
- * Audio mode is the same stream with the picture put away, which is what it is
- * on the watch page too — Dailymotion offers no audio-only rendition, so there
- * is nothing else to ask for. Hiding it rather than swapping element keeps a
- * single playback and lets the mode change without stopping the sound.
+ * The first attempt shrank the video element and called that audio. It is not:
+ * on a phone, an audio mode is one that survives the browser being put away,
+ * and a <video> element does not — which is the whole reason this application
+ * grew a separate audio path for YouTube in the first place.
+ *
+ * So audio mode is an <audio> element, and hls.js feeds it the same muxed
+ * playlist: it demuxes and appends the audio alone, which was worth checking
+ * rather than assuming — no errors, readyState 4, duration read, playing.
+ * Dailymotion publishes no audio-only rendition, so there is nothing to ask
+ * their CDN for and nothing for us to transcode.
+ *
+ * The media session is what the lock screen reads. Without it a phone shows a
+ * silent notification with the page's title, and the controls do nothing.
  */
 function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVideo; mode: Mode }; onClose: () => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const [status, setStatus] = useState("Résolution du flux…");
   const source = `/api/dailymotion/videos/${entry.video.videoId}/hls.m3u8`;
 
   useEffect(() => {
-    const element = videoRef.current;
+    const element = mediaRef.current;
     if (!element) return;
     let cancelled = false;
     let hls: import("hls.js").default | null = null;
-    // Safari plays HLS itself; everywhere else hls.js does, and it is already
-    // in this bundle for the audio mode.
+    setStatus("Résolution du flux…");
     if (element.canPlayType("application/vnd.apple.mpegurl")) {
       element.src = source;
       setStatus("");
@@ -133,14 +142,50 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
       void import("hls.js").then(({ default: Hls }) => {
         if (cancelled || !Hls.isSupported()) { setStatus("HLS non supporté par ce navigateur"); return; }
         hls = new Hls({ enableWorker: true });
-        hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) setStatus(`Erreur de lecture : ${data.details}`); });
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (!data.fatal) return;
+          setStatus(data.details === "manifestLoadError"
+            ? "Cette vidéo n'est plus disponible chez Dailymotion."
+            : `Erreur de lecture : ${data.details}`);
+        });
         hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus(""));
         hls.loadSource(source);
         hls.attachMedia(element);
       });
     }
     return () => { cancelled = true; hls?.destroy(); };
-  }, [source]);
+  }, [source, entry.mode]);
+
+  /*
+   * Stated from the element rather than left to its events: a session
+   * registered while the element is already playing must say so itself, or the
+   * controls appear dead until the next pause.
+   */
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const element = mediaRef.current;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: entry.video.title,
+      artist: entry.video.channelTitle || "Dailymotion",
+      artwork: entry.video.thumbnail ? [{ src: entry.video.thumbnail, sizes: "480x360", type: "image/jpeg" }] : [],
+    });
+    navigator.mediaSession.playbackState = mediaPlaybackState(element);
+    navigator.mediaSession.setActionHandler("play", () => { void element?.play(); });
+    navigator.mediaSession.setActionHandler("pause", () => element?.pause());
+    return () => {
+      navigator.mediaSession.setActionHandler("play", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+    };
+  }, [entry.video, entry.mode, status]);
+
+  const common = {
+    ref: mediaRef,
+    controls: true,
+    autoPlay: true,
+    className: "dm-player-media",
+    onPlay: () => { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"; },
+    onPause: () => { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"; },
+  } as const;
 
   return (
     <section className={`dm-player${entry.mode === "audio" ? " dm-player--audio" : ""}`}>
@@ -152,7 +197,9 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
         <Button variant="ghost" size="sm" iconOnly aria-label="Fermer" onClick={onClose}><X size={16} /></Button>
       </header>
       {status && <p className="dm-player-status">{status}</p>}
-      <video ref={videoRef} controls autoPlay playsInline className="dm-player-media" />
+      {entry.mode === "audio"
+        ? <audio {...common} />
+        : <video {...common} playsInline />}
     </section>
   );
 }

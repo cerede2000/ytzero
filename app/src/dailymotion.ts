@@ -12,7 +12,7 @@ import { log } from "./logger";
  * would look like.
  */
 const SEARCH_API = "https://api.dailymotion.com/videos";
-const SEARCH_FIELDS = "id,title,duration,thumbnail_360_url,owner.screenname,created_time,views_total";
+const SEARCH_FIELDS = "id,title,duration,thumbnail_360_url,owner.screenname,created_time,views_total,status,private,allow_embed";
 /** Signed and short-lived: worth reusing across a page's segment requests, not worth keeping. */
 const STREAM_TTL_MS = 60_000;
 /** Dailymotion's own id grammar: an x and base-36, nothing that could be a path. */
@@ -45,9 +45,29 @@ export function isDailymotionMediaUrl(value: string): boolean {
   }
 }
 
+/**
+ * Whether this result is one we could actually play.
+ *
+ * The search index keeps entries YouTube's equivalent would have dropped: asked
+ * for "film complet", one result in fifteen answered 404 on its own endpoint —
+ * "This video does not exist or has been deleted" — and yt-dlp said `Not found`
+ * for it. Offering those is offering a card that cannot be pressed, which is
+ * how this was reported.
+ *
+ * The dead one differed from its fourteen neighbours in a single field:
+ * `allow_embed` was false where every live result had it true. That is also
+ * exactly the right question to ask — not "does this exist" but "may we play
+ * it" — so it is the one asked, alongside the two obvious ones.
+ */
+function playable(raw: Record<string, unknown>): boolean {
+  if (raw.allow_embed === false) return false;
+  if (raw.private === true) return false;
+  return raw.status === undefined || raw.status === "published";
+}
+
 function toVideo(raw: Record<string, unknown>): DailymotionVideo | null {
   const videoId = typeof raw.id === "string" ? raw.id : "";
-  if (!validDailymotionVideoId(videoId)) return null;
+  if (!validDailymotionVideoId(videoId) || !playable(raw)) return null;
   const seconds = Number(raw.duration);
   const created = Number(raw.created_time);
   const views = Number(raw.views_total);
