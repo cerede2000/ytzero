@@ -127,7 +127,22 @@ export default function DailymotionPage() {
 function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVideo; mode: Mode }; onClose: () => void }) {
   const mediaRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const [status, setStatus] = useState("Résolution du flux…");
+  const [subtitles, setSubtitles] = useState<{ lang: string; label: string; src: string }[]>([]);
   const source = `/api/dailymotion/videos/${entry.video.videoId}/hls.m3u8`;
+
+  /*
+   * Asked for separately, and allowed to fail quietly: a video without captions
+   * is the common case, and a page that reports it as an error is wrong.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    setSubtitles([]);
+    void fetch(`/api/dailymotion/videos/${entry.video.videoId}/subtitles`)
+      .then((response) => response.json() as Promise<{ subtitles?: { lang: string; label: string; src: string }[] }>)
+      .then((payload) => { if (!cancelled) setSubtitles(payload.subtitles ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [entry.video.videoId]);
 
   useEffect(() => {
     const element = mediaRef.current;
@@ -155,6 +170,22 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
     }
     return () => { cancelled = true; hls?.destroy(); };
   }, [source, entry.mode]);
+
+  /*
+   * Turned on once it is there.
+   *
+   * `default` on a <track> is only read while the document is parsed, and these
+   * arrive afterwards — the request for them is made when the player opens. So
+   * the element ends up holding a track nobody asked it to show, which reads as
+   * "no subtitles" to somebody who turned them on. The native menu still offers
+   * to turn it off again.
+   */
+  useEffect(() => {
+    const element = mediaRef.current;
+    if (!element || entry.mode !== "video" || subtitles.length === 0) return;
+    const tracks = element.textTracks;
+    if (tracks.length > 0 && tracks[0].mode === "disabled") tracks[0].mode = "showing";
+  }, [subtitles, entry.mode]);
 
   /*
    * Stated from the element rather than left to its events: a session
@@ -199,7 +230,23 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
       {status && <p className="dm-player-status">{status}</p>}
       {entry.mode === "audio"
         ? <audio {...common} />
-        : <video {...common} playsInline />}
+        : (
+          <video {...common} playsInline crossOrigin="anonymous">
+            {subtitles.map((track, index) => (
+              <track
+                key={track.lang}
+                kind="subtitles"
+                src={track.src}
+                srcLang={track.lang.replace(/-auto$/, "")}
+                label={track.label}
+                default={index === 0}
+              />
+            ))}
+          </video>
+        )}
+      {entry.mode === "video" && subtitles.length === 0 && (
+        <p className="dm-player-status">Aucun sous-titre pour cette vidéo.</p>
+      )}
     </section>
   );
 }
