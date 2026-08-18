@@ -91,23 +91,76 @@ export async function searchDailymotion(query: string, limit = 24, fetchImpl: ty
   return (payload.list ?? []).map(toVideo).filter((video): video is DailymotionVideo => video !== null);
 }
 
-const streamCache = new Map<string, { expiresAt: number; url: Promise<string> }>();
+export interface DailymotionSubtitle {
+  /** Dailymotion's own tag: "fr", "fr-auto", "und". */
+  lang: string;
+  label: string;
+  /** Where the track really lives; only ever fetched by our own proxy. */
+  url: string;
+  srt: boolean;
+}
+
+export interface DailymotionSource {
+  streamUrl: string;
+  subtitles: DailymotionSubtitle[];
+}
+
+const sourceCache = new Map<string, { expiresAt: number; source: Promise<DailymotionSource> }>();
+
+function subtitleLabel(lang: string): string {
+  const automatic = lang.endsWith("-auto");
+  const base = automatic ? lang.slice(0, -5) : lang;
+  if (base === "und") return automatic ? "Original (auto)" : "Original";
+  const name = new Intl.DisplayNames(["fr"], { type: "language" }).of(base) ?? base;
+  const capitalised = name.charAt(0).toUpperCase() + name.slice(1);
+  return automatic ? `${capitalised} (auto)` : capitalised;
+}
 
 /**
- * The playable address, from yt-dlp.
+ * The tracks worth offering, out of what yt-dlp found.
  *
- * `-g` prints it and nothing else, which is the whole of what this needs: the
- * answer is an HLS playlist on Dailymotion's CDN, signed and short-lived. It is
- * cached for a minute so the segments of one playback share a single lookup —
- * a page that resolved once per segment would spend a subprocess per three
+ * Dailymotion publishes the same captions twice: once as a plain file and once
+ * as an HLS playlist of WebVTT segments. Only the file is taken. Stitching the
+ * segmented one means concatenating fragments that each carry their own header
+ * and timestamp map, and getting that subtly wrong shows as subtitles drifting
+ * rather than as an error — not worth it while the other form is right there.
+ *
+ * Their public API is no help here at all: for the video this was reported on
+ * it answers `"total": 0` while yt-dlp finds two.
+ */
+export function subtitlesFromMetadata(metadata: Record<string, unknown>): DailymotionSubtitle[] {
+  const groups = [metadata.subtitles, metadata.automatic_captions];
+  const found = new Map<string, DailymotionSubtitle>();
+  for (const group of groups) {
+    if (!group || typeof group !== "object") continue;
+    for (const [lang, tracks] of Object.entries(group as Record<string, unknown>)) {
+      if (found.has(lang) || !Array.isArray(tracks)) continue;
+      for (const track of tracks as Record<string, unknown>[]) {
+        const url = typeof track?.url === "string" ? track.url : "";
+        if (!url || !isDailymotionMediaUrl(url) || url.includes(".m3u8")) continue;
+        found.set(lang, { lang, label: subtitleLabel(lang), url, srt: url.includes(".srt") || track.ext === "srt" });
+        break;
+      }
+    }
+  }
+  return [...found.values()];
+}
+
+/**
+ * Everything one playback needs, from one subprocess.
+ *
+ * `-J` answers with the playable address and the caption tracks together, and
+ * costs the same as `-g` did for the address alone — measured at 0.74s against
+ * 0.76s. The answer is cached for a minute so the segments of one playback
+ * share a lookup: resolving per segment would spend a subprocess every three
  * seconds of video.
  */
-export function resolveDailymotionStream(videoId: string): Promise<string> {
-  const cached = streamCache.get(videoId);
+export function resolveDailymotion(videoId: string): Promise<DailymotionSource> {
+  const cached = sourceCache.get(videoId);
   const now = Date.now();
-  if (cached && cached.expiresAt > now) return cached.url;
-  const url = (async () => {
-    const proc = Bun.spawn([YTDLP, "-g", "--no-warnings", `https://www.dailymotion.com/video/${videoId}`], {
+  if (cached && cached.expiresAt > now) return cached.source;
+  const source = (async () => {
+    const proc = Bun.spawn([YTDLP, "-J", "--skip-download", "--no-warnings", `https://www.dailymotion.com/video/${videoId}`], {
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -116,14 +169,20 @@ export function resolveDailymotionStream(videoId: string): Promise<string> {
       new Response(proc.stderr).text(),
     ]);
     if (await proc.exited !== 0) throw new Error(err.trim().split("\n").pop() || "yt-dlp could not resolve the video");
-    const first = out.split("\n").map((line) => line.trim()).find(Boolean);
-    if (!first || !isDailymotionMediaUrl(first)) throw new Error("yt-dlp returned no usable address");
-    log.info("dailymotion.resolved", { videoId });
-    return first;
+    const metadata = JSON.parse(out) as Record<string, unknown>;
+    const streamUrl = typeof metadata.url === "string" ? metadata.url : "";
+    if (!isDailymotionMediaUrl(streamUrl)) throw new Error("yt-dlp returned no usable address");
+    const subtitles = subtitlesFromMetadata(metadata);
+    log.info("dailymotion.resolved", { videoId, subtitles: subtitles.length });
+    return { streamUrl, subtitles };
   })();
-  streamCache.set(videoId, { expiresAt: now + STREAM_TTL_MS, url });
-  url.catch(() => streamCache.delete(videoId));
-  return url;
+  sourceCache.set(videoId, { expiresAt: now + STREAM_TTL_MS, source });
+  source.catch(() => sourceCache.delete(videoId));
+  return source;
+}
+
+export async function resolveDailymotionStream(videoId: string): Promise<string> {
+  return (await resolveDailymotion(videoId)).streamUrl;
 }
 
 /**
