@@ -135,6 +135,7 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
   const [status, setStatus] = useState("Résolution du flux…");
   const [subtitles, setSubtitles] = useState<{ lang: string; label: string; src: string }[]>([]);
   const [showSubtitles, setShowSubtitles] = useState(false);
+  const trackRef = useRef<HTMLTrackElement>(null);
   const source = `/api/dailymotion/videos/${entry.video.videoId}/hls.m3u8`;
 
   /*
@@ -179,17 +180,21 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
   });
 
   /*
-   * One switch, two places to apply it: hls.js owns the rendition when it is
-   * playing, and the element's own text track when the native player is.
+   * One renderer, and it is the browser's.
+   *
+   * Drawing the cues here as well put three copies of the same line on screen:
+   * the one burned into Dailymotion's picture, the player's, and mine. The
+   * player already draws a sideloaded track perfectly well — what it does not
+   * do reliably is choose one, which is what the button below is for.
+   *
+   * Nothing declares these captions in the manifest any more, so hls.js has no
+   * subtitle rendition to take ownership of and this track stays ours to set.
    */
   useEffect(() => {
-    if (hls) {
-      if (hls.subtitleTracks.length > 0) hls.subtitleTrack = showSubtitles ? 0 : -1;
-      return;
-    }
-    const tracks = mediaRef.current?.textTracks;
-    if (tracks && tracks.length > 0) tracks[0].mode = showSubtitles ? "showing" : "disabled";
-  }, [hls, showSubtitles, subtitles]);
+    const element = trackRef.current;
+    if (!element) return;
+    element.track.mode = showSubtitles ? "showing" : "disabled";
+  }, [showSubtitles, subtitles]);
 
   /*
    * Stated from the element rather than left to its events: a session
@@ -243,7 +248,15 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
         */}
       {entry.mode === "audio"
         ? <audio key="audio" {...common} />
-        : <video key="video" {...common} playsInline />}
+        : (
+          <video key="video" {...common} playsInline crossOrigin="anonymous">
+            {subtitles[0] && (
+              <track key={subtitles[0].lang} ref={trackRef} kind="subtitles"
+                src={subtitles[0].src} srcLang={subtitles[0].lang.replace(/-auto$/, "")}
+                label={subtitles[0].label} />
+            )}
+          </video>
+        )}
       {status && <p className="dm-player-status">{status}</p>}
       {entry.mode === "video" && (
         subtitles.length === 0

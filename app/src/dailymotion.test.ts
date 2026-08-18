@@ -133,12 +133,12 @@ describe("the manifest iOS reads", () => {
   const track = { lang: "fr-auto", label: "Français (auto)", url: "/api/dm/subs/fr-auto/index.m3u8" };
   const rendition = { width: 360, height: 640, codecs: "avc1.42001e,mp4a.40.2", bitrate: 460_560 };
 
-  test("declares the captions as a rendition, not beside the stream", () => {
-    // Sideloaded <track> elements are the page's business, and on iOS the page
-    // does not play the video: the system player does, and it reads this.
+  test("can declare a rendition, and the routes no longer ask it to", () => {
+    // Kept because the builder still supports it, and skipped in practice: a
+    // declared rendition is owned by whichever player is running, and the three
+    // of them disagree. The page fetches the same captions as a file instead.
     const master = masterPlaylist("/api/dm/media.m3u8", [track], rendition);
-    expect(master).toContain('#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Français (auto)",LANGUAGE="fr",AUTOSELECT=NO,DEFAULT=NO,URI="/api/dm/subs/fr-auto/index.m3u8"');
-    expect(master).toContain('SUBTITLES="subs"');
+    expect(master).toContain('#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs"');
     expect(master.trimEnd().endsWith("/api/dm/media.m3u8")).toBe(true);
   });
 
