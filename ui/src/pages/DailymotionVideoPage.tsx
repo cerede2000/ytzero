@@ -8,6 +8,8 @@ import { dailymotionCount, type DailymotionVideo } from "../dailymotionTypes";
 import { mediaPlaybackState } from "../mediaSessionState";
 import { useDocumentTitle } from "../useDocumentTitle";
 import "./DailymotionPage.css";
+import { api } from "../api";
+import { flushProgressWrite, queueProgressWrite } from "../progressWriteQueue";
 
 interface SubtitleTrack { lang: string; label: string; src: string }
 type Mode = "video" | "audio";
@@ -31,7 +33,34 @@ export default function DailymotionVideoPage() {
   const [notFound, setNotFound] = useState(false);
   /** Where the reader was when they switched mode, so the switch is not a restart. */
   const positionRef = useRef(0);
+  /*
+   * And where they were when they left, which is a different question.
+   *
+   * The player is held back until this has been asked for: it takes its
+   * starting point when it is built, so a position arriving afterwards would
+   * be a jump the reader watches happen — or, if the metadata had already
+   * landed, nothing at all.
+   */
+  const [resumeKnown, setResumeKnown] = useState(false);
   useDocumentTitle(video?.title ?? "Dailymotion");
+
+  useEffect(() => {
+    let cancelled = false;
+    positionRef.current = 0;
+    setResumeKnown(false);
+    if (!id) return;
+    api.dailymotionProgress([id])
+      .then((answer) => {
+        if (cancelled) return;
+        const held = answer.progress[id];
+        // A video watched to the end resumes at the beginning: offering to
+        // continue from the credits is offering nothing.
+        positionRef.current = held && !held.watched ? held.positionSeconds : 0;
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setResumeKnown(true); });
+    return () => { cancelled = true; };
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,15 +97,17 @@ export default function DailymotionVideoPage() {
           * left the stream feeding the one that had just left the page. A key
           * says plainly that this is a different player.
           */}
-        <DailymotionMedia
-          key={mode}
-          mode={mode}
-          videoId={id}
-          video={video}
-          showSubtitles={showSubtitles}
-          positionRef={positionRef}
-          onStatus={setStatus}
-        />
+        {resumeKnown && (
+          <DailymotionMedia
+            key={mode}
+            mode={mode}
+            videoId={id}
+            video={video}
+            showSubtitles={showSubtitles}
+            positionRef={positionRef}
+            onStatus={setStatus}
+          />
+        )}
         {status && <p className="dm-player-status">{status}</p>}
 
         <div className="dm-player-actions">
@@ -172,18 +203,42 @@ function DailymotionMedia({ mode, videoId, video, showSubtitles, positionRef, on
     const element = mediaRef.current;
     if (!element) return;
     const resumeFrom = positionRef.current;
-    const remember = () => { positionRef.current = element.currentTime; };
+    const remember = () => {
+      positionRef.current = element.currentTime;
+      /*
+       * Through the same throttled queue the watch page uses — newest sample
+       * kept, one request in flight, flushed on the way out — but written to
+       * Dailymotion's own table. Its ids mean nothing to the library's.
+       */
+      if (element.currentTime > 0) {
+        queueProgressWrite(
+          videoId,
+          element.currentTime,
+          Number.isFinite(element.duration) ? element.duration : 0,
+          (id, position, duration) => api.saveDailymotionProgress(id, position, duration || null),
+        );
+      }
+    };
     const restore = () => {
       if (resumeFrom > 1 && element.currentTime < resumeFrom - 1) element.currentTime = resumeFrom;
     };
+    const flush = () => flushProgressWrite(videoId);
     element.addEventListener("loadedmetadata", restore);
     element.addEventListener("timeupdate", remember);
+    element.addEventListener("pause", flush);
+    // Leaving the page is the sample that matters most, and the one a normal
+    // request does not survive.
+    const leaving = () => flushProgressWrite(videoId, true);
+    window.addEventListener("pagehide", leaving);
     if (element.readyState >= 1) restore();
     return () => {
       element.removeEventListener("loadedmetadata", restore);
       element.removeEventListener("timeupdate", remember);
+      element.removeEventListener("pause", flush);
+      window.removeEventListener("pagehide", leaving);
+      flush();
     };
-  }, [positionRef]);
+  }, [positionRef, videoId]);
 
   /*
    * The captions belong to hls.js.
