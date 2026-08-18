@@ -1413,6 +1413,8 @@ export const en = {
     importSelectAll: "Select all",
     importSelectNone: "Deselect all",
     importHistoryAll: "Everything",
+    searchEverySource: "Every source",
+    searchExternalResults: "Results",
     importHistorySince: "From date",
     importHistoryEstimate: "≈{count} to import",
     importHistoryUndatedNote: "{count} without a readable date — those entries will be marked as watched, with no history position.",

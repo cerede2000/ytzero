@@ -111,6 +111,7 @@ import {
   type YtdlpUpdateResult,
 } from "./apiTypes";
 import type { ChannelPost } from "./channelPostTypes";
+import type { ExternalSearch, SearchProviderDescription } from "./searchProviderTypes";
 export * from "./apiTypes";
 export * from "./pluginTypes";
 export { ApiError } from "./apiHttp";
