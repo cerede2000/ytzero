@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Headphones, Play, Search, X } from "lucide-react";
 import { Button, EmptyState, Input, PageHeader } from "../components/ui";
 import { mediaPlaybackState } from "../mediaSessionState";
+import { shouldUseNativeVideoHls } from "../videoHlsPolicy";
 import { useDocumentTitle } from "../useDocumentTitle";
 import "./DailymotionPage.css";
 
@@ -123,6 +124,11 @@ export default function DailymotionPage() {
  *
  * The media session is what the lock screen reads. Without it a phone shows a
  * silent notification with the page's title, and the controls do nothing.
+ *
+ * Captions are declared in the manifest rather than added here as <track>
+ * elements: on iOS the page does not play the video — the system player does,
+ * and it reads the manifest and nothing else. The list fetched below is only
+ * for telling the reader what is on offer.
  */
 function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVideo; mode: Mode }; onClose: () => void }) {
   const mediaRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
@@ -150,7 +156,15 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
     let cancelled = false;
     let hls: import("hls.js").default | null = null;
     setStatus("Résolution du flux…");
-    if (element.canPlayType("application/vnd.apple.mpegurl")) {
+    /*
+     * Asked through the same policy the watch page uses, and for the reason
+     * written there: Chromium answers "maybe" to `canPlayType` for HLS while
+     * its native path is incomplete. Trusting that answer here sent every
+     * browser down the native route — the picture played, and the subtitle
+     * rendition the manifest declares was simply ignored, which looked exactly
+     * like a manifest that was wrong.
+     */
+    if (shouldUseNativeVideoHls(element.canPlayType("application/vnd.apple.mpegurl"), navigator.vendor)) {
       element.src = source;
       setStatus("");
     } else {
@@ -164,28 +178,20 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
             : `Erreur de lecture : ${data.details}`);
         });
         hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus(""));
+        // Declared DEFAULT=YES in the manifest and still not chosen: hls.js
+        // picks a subtitle rendition from the browser's own language settings
+        // and leaves none selected when nothing matches. Waiting for this event
+        // rather than the manifest one, because the renditions are attached
+        // after it — the same check on MANIFEST_PARSED sees an empty list.
+        hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => {
+          if (hls && hls.subtitleTracks.length > 0 && hls.subtitleTrack < 0) hls.subtitleTrack = 0;
+        });
         hls.loadSource(source);
         hls.attachMedia(element);
       });
     }
     return () => { cancelled = true; hls?.destroy(); };
   }, [source, entry.mode]);
-
-  /*
-   * Turned on once it is there.
-   *
-   * `default` on a <track> is only read while the document is parsed, and these
-   * arrive afterwards — the request for them is made when the player opens. So
-   * the element ends up holding a track nobody asked it to show, which reads as
-   * "no subtitles" to somebody who turned them on. The native menu still offers
-   * to turn it off again.
-   */
-  useEffect(() => {
-    const element = mediaRef.current;
-    if (!element || entry.mode !== "video" || subtitles.length === 0) return;
-    const tracks = element.textTracks;
-    if (tracks.length > 0 && tracks[0].mode === "disabled") tracks[0].mode = "showing";
-  }, [subtitles, entry.mode]);
 
   /*
    * Stated from the element rather than left to its events: a session
@@ -227,25 +233,26 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
         </div>
         <Button variant="ghost" size="sm" iconOnly aria-label="Fermer" onClick={onClose}><X size={16} /></Button>
       </header>
-      {status && <p className="dm-player-status">{status}</p>}
+      {/*
+        * Keyed, and with everything conditional kept below.
+        *
+        * The status line used to sit above this: it says "resolving" and then
+        * says nothing, so it left the tree at the very moment playback began —
+        * and the media element, identified by its position among its siblings,
+        * was replaced. hls.js went on feeding the element that had just been
+        * detached, which is why subtitles declared in the manifest never
+        * appeared while the picture played perfectly well.
+        */}
       {entry.mode === "audio"
-        ? <audio {...common} />
-        : (
-          <video {...common} playsInline crossOrigin="anonymous">
-            {subtitles.map((track, index) => (
-              <track
-                key={track.lang}
-                kind="subtitles"
-                src={track.src}
-                srcLang={track.lang.replace(/-auto$/, "")}
-                label={track.label}
-                default={index === 0}
-              />
-            ))}
-          </video>
-        )}
-      {entry.mode === "video" && subtitles.length === 0 && (
-        <p className="dm-player-status">Aucun sous-titre pour cette vidéo.</p>
+        ? <audio key="audio" {...common} />
+        : <video key="video" {...common} playsInline />}
+      {status && <p className="dm-player-status">{status}</p>}
+      {entry.mode === "video" && (
+        <p className="dm-player-status">
+          {subtitles.length === 0
+            ? "Aucun sous-titre pour cette vidéo."
+            : `Sous-titres : ${subtitles.map((track) => track.label).join(", ")}`}
+        </p>
       )}
     </section>
   );
