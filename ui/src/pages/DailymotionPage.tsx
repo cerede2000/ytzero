@@ -135,7 +135,6 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
   const [status, setStatus] = useState("Résolution du flux…");
   const [subtitles, setSubtitles] = useState<{ lang: string; label: string; src: string }[]>([]);
   const [showSubtitles, setShowSubtitles] = useState(false);
-  const [diagnostic, setDiagnostic] = useState("");
   const trackRef = useRef<HTMLTrackElement>(null);
   const source = `/api/dailymotion/videos/${entry.video.videoId}/hls.m3u8`;
 
@@ -208,37 +207,6 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
     const resume = () => hls.resumeBuffering();
     element.addEventListener("seeking", resume);
     return () => element.removeEventListener("seeking", resume);
-  }, [hls, entry.mode]);
-
-  /*
-   * What the player thinks, on screen.
-   *
-   * A far seek does nothing on the iPhone: no request leaves it, and the
-   * console says nothing either — so there is no error to read, which is itself
-   * the clue. What a seek needs is somewhere to seek to, and `seekable` is the
-   * element's own answer to that. If it ends at the edge of what is buffered
-   * rather than at the end of the video, every seek past it is quietly clamped
-   * and nothing happens, which is exactly the report.
-   *
-   * Written for a phone that cannot be inspected from here: read it aloud.
-   */
-  useEffect(() => {
-    const element = mediaRef.current;
-    if (!element) return;
-    const read = () => {
-      const ranges = (list: TimeRanges) => [...Array(list.length)]
-        .map((_, index) => `${Math.round(list.start(index))}–${Math.round(list.end(index))}`).join(" ") || "—";
-      setDiagnostic([
-        `t ${Math.round(element.currentTime)}`,
-        `durée ${Number.isFinite(element.duration) ? Math.round(element.duration) : "?"}`,
-        `seekable ${ranges(element.seekable)}`,
-        `tampon ${ranges(element.buffered)}`,
-        hls ? "hls.js" : "natif",
-      ].join(" · "));
-    };
-    const timer = window.setInterval(read, 1000);
-    read();
-    return () => window.clearInterval(timer);
   }, [hls, entry.mode]);
 
   /*
@@ -320,7 +288,6 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
           </video>
         )}
       {status && <p className="dm-player-status">{status}</p>}
-      {diagnostic && <p className="dm-player-status dm-player-diag">{diagnostic}</p>}
       {entry.mode === "video" && (
         subtitles.length === 0
           ? <p className="dm-player-status">Aucun sous-titre pour cette vidéo.</p>
