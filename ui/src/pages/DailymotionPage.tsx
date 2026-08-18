@@ -178,14 +178,10 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
             : `Erreur de lecture : ${data.details}`);
         });
         hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus(""));
-        // Declared DEFAULT=YES in the manifest and still not chosen: hls.js
-        // picks a subtitle rendition from the browser's own language settings
-        // and leaves none selected when nothing matches. Waiting for this event
-        // rather than the manifest one, because the renditions are attached
-        // after it — the same check on MANIFEST_PARSED sees an empty list.
-        hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => {
-          if (hls && hls.subtitleTracks.length > 0 && hls.subtitleTrack < 0) hls.subtitleTrack = 0;
-        });
+        // Nothing is selected here on purpose. Turning the first track on by
+        // default was mine rather than asked for, and it made "off" a state the
+        // reader could not keep: the manifest re-asserted it on iOS, and this
+        // would re-assert it everywhere else. The player's menu turns them on.
         hls.loadSource(source);
         hls.attachMedia(element);
       });

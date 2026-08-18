@@ -159,17 +159,43 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     const target = c.req.query("u") ?? "";
     if (!isDailymotionMediaUrl(target)) return c.json({ error: "unsupported media origin" }, 400);
     try {
-      const upstream = await fetch(target, { signal: AbortSignal.timeout(20_000) });
-      if (!upstream.ok) return c.json({ error: `Dailymotion answered ${upstream.status}` }, 502);
+      // A range asked for here is a range asked for there: the player decides
+      // what it wants, and this is a pipe rather than a cache.
+      const range = c.req.header("range");
+      const upstream = await fetch(target, {
+        headers: range ? { Range: range } : undefined,
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!upstream.ok && upstream.status !== 206) return c.json({ error: `Dailymotion answered ${upstream.status}` }, 502);
       const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
       if (contentType.includes("mpegurl") || target.includes(".m3u8")) {
         const rewritten = rewriteHlsPlaylist(await upstream.text(), target,
           (absolute) => `/api/dailymotion/segment?u=${encodeURIComponent(absolute)}`);
         return new Response(rewritten, { headers: { "Content-Type": contentType, "Cache-Control": "no-store" } });
       }
-      return new Response(upstream.body, {
-        headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=3600" },
-      });
+      /*
+       * What upstream said about the bytes, said again.
+       *
+       * The first version answered with a body and two headers of its own,
+       * dropping the length and the range support Dailymotion offers. A
+       * browser copes; iOS's player is the one that asks for lengths and
+       * ranges, and this repository already learnt that lesson once — the
+       * audio proxy needed a Content-Length before iOS would touch it. Sound
+       * drifting out of step on the phone and nowhere else is exactly the
+       * shape of a player left to guess.
+       */
+      const headers = new Headers({ "Content-Type": contentType, "Cache-Control": "public, max-age=3600", "Accept-Ranges": "bytes" });
+      const range_ = upstream.headers.get("content-range");
+      if (range_) headers.set("Content-Range", range_);
+      /*
+       * Read whole rather than piped: a streamed body has no length the runtime
+       * will vouch for, so it goes out chunked and the Content-Length is
+       * dropped — which is the header iOS wanted in the first place. A segment
+       * here is three seconds and a few hundred kilobytes, so holding one is
+       * cheaper than the problem it solves.
+       */
+      const bytes = await upstream.arrayBuffer();
+      return new Response(bytes, { status: upstream.status, headers });
     } catch (error) {
       log.warn("dailymotion.segment_failed", { error: error instanceof Error ? error.message : String(error) });
       return c.json({ error: "segment unavailable" }, 502);
