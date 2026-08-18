@@ -101,14 +101,15 @@ describe("what the search is allowed to offer", () => {
       return new Response(JSON.stringify({ list }), { status: 200 });
     }) as unknown as typeof fetch;
 
-    const videos = await searchDailymotion("alpha luna", undefined, paged);
-    // Both ways of asking, and every page of both: their index ranks a French
-    // video below what it takes the caller to want, and naming the language is
-    // the only thing that surfaces it.
+    const videos = await searchDailymotion("alpha luna", 30, paged);
+    // Both ways of asking: their index ranks a French video below what it
+    // takes the caller to want, and naming the language is what surfaces it.
     expect(asked.slice(0, 2).sort()).toEqual(["1", "1/lang"]);
-    expect(asked.filter((call) => call.endsWith("/lang"))).toHaveLength(5);
-    expect(asked).toHaveLength(10);
-    expect(videos.length).toBe(42);
+    expect(asked.some((call) => call.endsWith("/lang"))).toBe(true);
+    // Deeper pages only until there are enough, and never past their tenth.
+    expect(asked.length).toBeGreaterThan(2);
+    expect(asked.every((call) => Number(call.split("/")[0]) <= 10)).toBe(true);
+    expect(videos).toHaveLength(30);
     // Counted once, however many pages named it.
     expect(videos.filter((video) => video.videoId === "xaaaa0")).toHaveLength(1);
   });
@@ -124,6 +125,14 @@ describe("what the search is allowed to offer", () => {
     const videos = await searchDailymotion("france info", undefined, counting);
     expect(asked).toEqual([1, 1]);
     expect(videos).toHaveLength(60);
+    // Asked for more than one page holds, it goes and gets it.
+    const deeper: number[] = [];
+    const watching = (async (url: string) => {
+      deeper.push(Number(new URL(url).searchParams.get("page")));
+      return new Response(JSON.stringify({ list: full }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await searchDailymotion("france info", 120, watching);
+    expect(deeper.some((page) => page > 1)).toBe(true);
   });
 
   test("an answer that says nothing about it is taken at face value", async () => {

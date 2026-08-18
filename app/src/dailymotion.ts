@@ -361,8 +361,10 @@ const nothing = (): Record<string, unknown>[] => [];
 
 /** Their maximum, and the only size worth asking for: a page costs the same whatever it holds. */
 const SEARCH_PAGE = 100;
-/** How deep to go when the first page does not fill the grid. Their index stops at a thousand. */
-const SEARCH_DEPTH = 5;
+/** Pages asked for together when the ones already read fall short. */
+const SEARCH_BATCH = 4;
+/** Their index stops at a thousand, which is ten pages of a hundred. */
+const SEARCH_MAX_PAGE = 10;
 /** As many cards as a results page is worth scrolling. More is a slower page, not a better one. */
 const SEARCH_ENOUGH = 60;
 
@@ -413,7 +415,9 @@ async function searchPage(query: string, page: number, scope: string, fetchImpl:
  * rotted pays for the rest. Their pages overlap, so ids are counted once.
  */
 export async function searchDailymotion(query: string, limit?: number, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo[]> {
-  const wanted = Number.isFinite(limit) ? Math.min(SEARCH_ENOUGH, Math.max(1, Math.trunc(limit as number))) : SEARCH_ENOUGH;
+  // No ceiling of its own beyond what is asked for: scrolling asks for more,
+  // and a cap here would stop the page while their index still had answers.
+  const wanted = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit as number)) : SEARCH_ENOUGH;
   const seen = new Set<string>();
   const keep = (raw: Record<string, unknown>[]): DailymotionVideo[] => raw
     .filter((item) => {
@@ -433,12 +437,17 @@ export async function searchDailymotion(query: string, limit?: number, fetchImpl
     ...await Promise.all(scopes.slice(1).map((scope) => searchPage(query, 1, scope, fetchImpl).catch(nothing))),
   ];
   const found = opening.flatMap(keep);
-  if (dropDuplicateVideos(found).length < wanted) {
+  for (let next = 2; dropDuplicateVideos(found).length < wanted && next <= SEARCH_MAX_PAGE; next += SEARCH_BATCH) {
+    const reach = Math.min(SEARCH_BATCH, SEARCH_MAX_PAGE - next + 1);
     const deeper = await Promise.all(scopes.flatMap((scope) => Array.from(
-      { length: SEARCH_DEPTH - 1 },
-      (_, index) => searchPage(query, index + 2, scope, fetchImpl).catch(nothing),
+      { length: reach },
+      (_, index) => searchPage(query, next + index, scope, fetchImpl).catch(nothing),
     )));
+    const before = found.length;
     for (const page of deeper) found.push(...keep(page));
+    // Their pages overlap, and past a point they repeat entirely. A batch that
+    // brings nothing new is the end of what they have, whatever the page says.
+    if (found.length === before) break;
   }
   return dropDuplicateVideos(found).slice(0, wanted);
 }

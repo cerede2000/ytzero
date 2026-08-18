@@ -157,3 +157,8 @@
 .search-source-chip.is-active[data-source="dailymotion"] {
   background: rgba(0, 102, 220, 0.92);
 }
+
+/* Watched rather than drawn: the next window is asked for before it is reached. */
+.search-more-sentinel {
+  height: 1px;
+}
