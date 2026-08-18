@@ -60,3 +60,4 @@
 /* Audio mode is an <audio> element, which sizes itself. */
 .dm-player--audio .dm-player-media { height: 40px; margin-top: 12px; }
 .dm-player-subs { display: flex; gap: 6px; margin-top: 10px; }
+

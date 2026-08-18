@@ -48,16 +48,18 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     const videoId = c.req.param("id");
     if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
     try {
-      const { subtitles, rendition } = await resolveDailymotion(videoId);
-      const playlist = masterPlaylist(
-        `/api/dailymotion/videos/${videoId}/media.m3u8`,
-        subtitles.map((track) => ({
-          lang: track.lang,
-          label: track.label,
-          url: `/api/dailymotion/videos/${videoId}/subtitles/${encodeURIComponent(track.lang)}/index.m3u8`,
-        })),
-        rendition,
-      );
+      const { rendition } = await resolveDailymotion(videoId);
+      /*
+       * No subtitle rendition here on purpose.
+       *
+       * Declaring one hands the captions to whichever player is running, and
+       * all three of them handle it differently — iOS re-reads DEFAULT on every
+       * seek, hls.js takes ownership of the element's text tracks. The page
+       * fetches the same captions as a plain file and draws them itself, which
+       * is what the watch page does and the only arrangement that behaved the
+       * same twice.
+       */
+      const playlist = masterPlaylist(`/api/dailymotion/videos/${videoId}/media.m3u8`, [], rendition);
       return new Response(playlist, {
         headers: { "Content-Type": "application/vnd.apple.mpegurl", "Cache-Control": "no-store" },
       });
