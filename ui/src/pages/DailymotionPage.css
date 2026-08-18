@@ -102,3 +102,7 @@ audio.dm-player-media { background: transparent; height: 40px; }
 @media (max-width: 900px) {
   .dm-watch { grid-template-columns: 1fr; }
 }
+
+.dm-channel-head { align-items: flex-start; display: flex; gap: 14px; margin: 0 0 22px; }
+.dm-channel-head img { border-radius: 50%; height: 72px; width: 72px; }
+.dm-channel-counts { color: var(--text-2); font-size: 12.5px; margin: 4px 0 6px; }

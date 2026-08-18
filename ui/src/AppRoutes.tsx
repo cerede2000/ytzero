@@ -13,6 +13,7 @@ const CleanupPage = lazy(() => import("./pages/CleanupPage"));
 // An experiment, reachable by address and absent from the navigation.
 const DailymotionPage = lazy(() => import("./pages/DailymotionPage"));
 const DailymotionVideoPage = lazy(() => import("./pages/DailymotionVideoPage"));
+const DailymotionChannelPage = lazy(() => import("./pages/DailymotionChannelPage"));
 const DownloadsPage = lazy(() => import("./pages/DownloadsPage"));
 const FeedPage = lazy(() => import("./pages/FeedPage"));
 const FollowedPlaylistsPage = lazy(() => import("./pages/FollowedPlaylistsPage"));
@@ -84,6 +85,7 @@ export default function AppRoutes({
         <Route path="/downloads" element={<DownloadsPage shortsEnabled={shortsEnabled} />} />
         <Route path="/dailymotion" element={<DailymotionPage />} />
         <Route path="/dailymotion/video/:id" element={<DailymotionVideoPage />} />
+        <Route path="/dailymotion/channel/:id" element={<DailymotionChannelPage />} />
         <Route path="/liked" element={<LikedPage onPlay={onPlay} shortsEnabled={shortsEnabled} />} />
         <Route path="/history" element={<HistoryPage onPlay={onPlay} allowHistoryDeletion={childStatus?.is_child !== true} />} />
         <Route path="/bookmarks" element={<BookmarksPage />} />

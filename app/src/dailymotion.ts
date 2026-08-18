@@ -217,6 +217,60 @@ export async function searchDailymotionAll(query: string, fetchImpl: typeof fetc
   return { videos, channels, live };
 }
 
+export interface DailymotionPlaylist {
+  playlistId: string;
+  name: string;
+  thumbnail: string;
+  videos: number | null;
+}
+
+export interface DailymotionChannelPage {
+  channel: DailymotionChannel & { description: string };
+  videos: DailymotionVideo[];
+  playlists: DailymotionPlaylist[];
+}
+
+/**
+ * A channel: who they are, what they posted, what they grouped.
+ *
+ * Playlists reappear here, which is where they were always going to. Searching
+ * for one needs an account — `/playlists?search=` answers 403 — but a named
+ * channel's own are public, so the way to reach a playlist is through whoever
+ * made it.
+ *
+ * The three are asked for independently: a channel with no playlists still
+ * shows its videos.
+ */
+export async function dailymotionChannelPage(channelId: string, fetchImpl: typeof fetch = fetch): Promise<DailymotionChannelPage | null> {
+  const fields = `${CHANNEL_FIELDS},description`;
+  const response = await fetchImpl(
+    `https://api.dailymotion.com/user/${encodeURIComponent(channelId)}?fields=${encodeURIComponent(fields)}`,
+    { signal: AbortSignal.timeout(10_000) },
+  );
+  if (!response.ok) return null;
+  const raw = await response.json() as Record<string, unknown>;
+  const channel = toChannel(raw);
+  if (!channel) return null;
+  const [videos, playlists] = await Promise.all([
+    askDailymotion(`user/${encodeURIComponent(channelId)}/videos?limit=60&sort=recent&fields=${encodeURIComponent(SEARCH_FIELDS)}`, fetchImpl)
+      .then((list) => dropDuplicateVideos(list.map(toVideo).filter((video): video is DailymotionVideo => video !== null)))
+      .catch(() => []),
+    askDailymotion(`user/${encodeURIComponent(channelId)}/playlists?limit=30&fields=id,name,videos_total,thumbnail_240_url`, fetchImpl)
+      .then((list) => list.map((item) => ({
+        playlistId: typeof item.id === "string" ? item.id : "",
+        name: typeof item.name === "string" ? item.name : "",
+        thumbnail: typeof item.thumbnail_240_url === "string" ? item.thumbnail_240_url : "",
+        videos: Number.isFinite(Number(item.videos_total)) ? Number(item.videos_total) : null,
+      })).filter((playlist) => playlist.playlistId && playlist.name))
+      .catch(() => []),
+  ]);
+  return {
+    channel: { ...channel, description: plainDescription(raw.description) },
+    videos,
+    playlists,
+  };
+}
+
 /** What a player page shows around the picture. */
 export async function dailymotionVideoDetail(videoId: string, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo & { description: string } | null> {
   const fields = `${SEARCH_FIELDS},description,owner.avatar_120_url`;

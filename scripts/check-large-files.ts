@@ -34,12 +34,11 @@ const lineLimits: Record<string, number> = {
   "app/src/videoRoutesSupport.ts": 133,
   "app/src/routeCache.ts": 11,
   "ui/src/App.tsx": 24,
+>>>>>>> 5738e99 (Give the channel link somewhere to go)
   "ui/src/AppRoutes.tsx": 98,
   "ui/src/AppRoutes.tsx": 98,
-=======
-  "ui/src/AppRoutes.tsx": 99,
->>>>>>> 19d0a58 (Split searching from watching, and put their suggestions beside the picture)
 >>>>>>> 831aa36 (Split searching from watching, and put their suggestions beside the picture)
+>>>>>>> 5738e99 (Give the channel link somewhere to go)
   "ui/src/app-shell/AppBootstrap.tsx": 17,
   "ui/src/app-shell/AppShell.tsx": 126,
   "ui/src/app-shell/AppSidebar.tsx": 97,
