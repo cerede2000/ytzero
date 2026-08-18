@@ -1,4 +1,13 @@
-const ALLOWED_IMAGE_HOSTS = ["ytimg.com", "ggpht.com", "googleusercontent.com", "youtube.com", "dearrow-thumb.ajay.app"];
+import { providerThumbnailHosts } from "./searchProviderCatalog";
+
+/*
+ * The list is the providers' own, rather than one kept here beside them.
+ *
+ * A provider whose thumbnails this refuses shows a page of broken images, and
+ * that is how the Dailymotion cards ended up bypassing the proxy entirely with
+ * a plain <img>. Read from the catalogue, adding a provider adds its hosts.
+ */
+const ALLOWED_IMAGE_HOSTS = providerThumbnailHosts();
 
 export function shouldExposeImageCacheMiss(value: string | undefined): boolean {
   return value === "error";

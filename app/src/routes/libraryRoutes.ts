@@ -5,6 +5,8 @@ import { profileDownloadsEnabled } from "../downloadConfig";
 import { cancelAutoDownloadIfUnwanted } from "../downloader";
 import { refreshDiscoveryInBackground, searchQuerySuggestions } from "../plugins";
 import { searchYouTube } from "../youtube";
+import { requestedProviders, SEARCH_PROVIDERS } from "../searchProviderCatalog";
+import { searchAcrossProviders } from "../searchProviders";
 import { feedSortSql, shortsUiVisibilitySql } from "../feedQuery";
 import { buildCleanupWhere, countCleanupMatches, listCleanupVideoIds, snapshotUserVideoState, applyCleanupAction, restoreUserVideoState, saveBulkUndo, loadBulkUndo, clearBulkUndo, type CleanupFilter } from "../cleanup";
 import { attachLibraryState, videoSelect, type VideoRow } from "../videoRoutesSupport";
@@ -127,6 +129,61 @@ api.get("/search/youtube", async (c) => {
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
   }
+});
+
+/**
+ * Who this profile may be offered results from.
+ *
+ * The page builds its filter from this rather than from a list of its own, so
+ * a provider added to the catalogue appears in the interface without the
+ * interface being told about it. A restricted child profile is offered none of
+ * them, and the search below refuses for the same reason — the gate is on the
+ * registry, not on remembering to add a condition per provider.
+ */
+api.get("/search/providers", (c) => {
+  const uid = currentUserId(c);
+  return c.json({ providers: childLocalOnly(uid) ? [] : SEARCH_PROVIDERS });
+});
+
+/**
+ * Every provider asked for, searched at once.
+ *
+ * Answers are kept apart by provider because ranking across them would mean
+ * comparing relevance scores that are not the same quantity. One that fails is
+ * named in `failed` and costs the page only its own results.
+ */
+api.get("/search/external", async (c) => {
+  const uid = currentUserId(c);
+  if (childLocalOnly(uid)) return c.json({ providers: {}, failed: [] });
+  const q = c.req.query("q")?.trim();
+  if (!q) return c.json({ providers: {}, failed: [] });
+
+  const asked = requestedProviders(c.req.query("sources"));
+  const { found, failed } = await searchAcrossProviders(q, asked);
+  const downloadsAllowed = !await isChildUser(uid);
+  const providers: Record<string, unknown> = {};
+  for (const provider of asked) {
+    const search = found[provider.id];
+    if (!search) continue;
+    providers[provider.id] = {
+      /*
+       * Only a provider whose videos the library can hold is asked about the
+       * library. The others' ids are not in that space: looked up there, a
+       * Dailymotion id would answer about whatever row happens to share the
+       * string, and a card would offer to play a copy that is not the video.
+       */
+      results: provider.capabilities.library
+        ? await attachLibraryState(uid, await attachWatchedState(uid, search.results, (result) => result.videoId))
+        : search.results,
+      channels: search.channels,
+    };
+  }
+  return c.json({
+    providers,
+    failed,
+    downloads_allowed: downloadsAllowed,
+    downloads_enabled: downloadsAllowed && await profileDownloadsEnabled(uid),
+  });
 });
 
 // Type-ahead for the search box. The library answers for itself: followed

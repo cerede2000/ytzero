@@ -92,3 +92,29 @@
   border-radius: 3px;
   letter-spacing: 0.2px;
 }
+
+/*
+ * Which provider a card came from.
+ *
+ * Top-left, opposite the duration, because the two are read at different
+ * moments and must not queue up in the same corner. Only ever drawn for a
+ * provider that is not the library's own: a badge on every card would say
+ * nothing, and the page it appears on is mostly YouTube.
+ */
+.source-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.source-badge[data-source="dailymotion"] {
+  background: rgba(0, 102, 220, 0.92);
+}

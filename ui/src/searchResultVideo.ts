@@ -40,9 +40,11 @@ export function videoFromSearchResult(
     title: result.title,
     description: "",
     thumbnail: result.thumbnail,
-    published_at: approximatePublishedAt(result.published, context.now),
+    // An exact date is used as it is. Only a provider that answers in phrases
+    // has its date rebuilt, and only that one is marked approximate.
+    published_at: result.publishedAt ?? approximatePublishedAt(result.published, context.now),
     found_at: "",
-    published_at_approximate: 1,
+    published_at_approximate: result.publishedAt ? 0 : 1,
     members_only: 0,
     is_private: 0,
     live_status: "none",

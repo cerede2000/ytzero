@@ -819,6 +819,16 @@ export interface SearchResult {
   channelAvatar: string | null;
   viewCount: number | null;
   published: PublishedAgo | null;
+  /**
+   * The instant, for a provider that knows it.
+   *
+   * YouTube never says more than "2 years ago", so `published` is a phrase and
+   * a card rebuilds a date from it. Dailymotion answers with the day.
+   * Coarsening that to match would throw away what we were given and walk back
+   * into "il y a 0 an": two calendar years are 1.998 of the average year a
+   * phrase is measured in, and the floor of that is one.
+   */
+  publishedAt?: string | null;
 }
 
 export interface ChannelSearchResult {

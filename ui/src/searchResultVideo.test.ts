@@ -57,3 +57,27 @@ describe("showing a search result as a card", () => {
     expect(video.channel_id).toBe("");
   });
 });
+
+describe("a result from a provider that knows the day", () => {
+  const base = {
+    videoId: "xacfsqi", title: "Un film", thumbnail: "", duration: "44:04",
+    channelId: null, channelTitle: "Une chaine", channelAvatar: null,
+    viewCount: 12, published: null, watched: 0, watch_position: null, watch_duration: null,
+  };
+  const context = { downloadsAllowed: false, downloadsEnabled: false, now: Date.parse("2026-08-18T12:00:00.000Z") };
+
+  test("keeps the instant instead of rebuilding one from a phrase", () => {
+    // Coarsening an exact date to "N years ago" and back is how a video
+    // published two years ago comes out as one: two calendar years are 1.998
+    // average ones. A provider that knows the day is believed.
+    const video = videoFromSearchResult({ ...base, publishedAt: "2024-08-18T12:00:00.000Z" }, context);
+    expect(video.published_at).toBe("2024-08-18T12:00:00.000Z");
+    expect(video.published_at_approximate).toBe(0);
+  });
+
+  test("and a provider that only says how long ago is still marked approximate", () => {
+    const video = videoFromSearchResult({ ...base, published: { value: 2, unit: "year" } }, context);
+    expect(video.published_at_approximate).toBe(1);
+    expect(typeof video.published_at).toBe("string");
+  });
+});

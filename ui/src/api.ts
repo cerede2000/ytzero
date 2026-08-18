@@ -99,6 +99,7 @@ import {
   type YtdlpUpdateResult,
 } from "./apiTypes";
 import type { ChannelPost } from "./channelPostTypes";
+import type { ExternalSearch, SearchProviderDescription } from "./searchProviderTypes";
 export * from "./apiTypes";
 export * from "./pluginTypes";
 export { ApiError } from "./apiHttp";
@@ -167,6 +168,10 @@ export const api = {
   cleanupUndo: () => http<{ restored: number }>("/cleanup/undo", { method: "POST", body: "{}" }),
   inProgress: () => sharedGet<{ videos: Video[] }>("in-progress", "/in-progress"),
   youtubeSearch: (q: string) => http<{ results: SearchResult[]; channels: ChannelSearchResult[]; downloads_allowed?: boolean; downloads_enabled?: boolean }>(`/search/youtube?q=${encodeURIComponent(q)}`),
+  searchProviders: () => http<{ providers: SearchProviderDescription[] }>("/search/providers"),
+  searchExternal: (q: string, sources: string[]) => http<ExternalSearch>(
+    `/search/external?q=${encodeURIComponent(q)}${sources.length ? `&sources=${encodeURIComponent(sources.join(","))}` : ""}`,
+  ),
   searchSuggest: (q: string, language: string, signal?: AbortSignal) =>
     http<{ suggestions: string[]; channels: SearchSuggestChannel[] }>(
       `/search/suggest?q=${encodeURIComponent(q)}&hl=${encodeURIComponent(language)}`,

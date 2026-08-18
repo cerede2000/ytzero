@@ -1357,6 +1357,8 @@ export const pl: Locale = {
     importSelectAll: "Zaznacz wszystkie",
     importSelectNone: "Odznacz wszystkie",
     importHistoryAll: "Wszystko",
+    searchEverySource: "Wszystkie źródła",
+    searchExternalResults: "Wyniki",
     importHistorySince: "Od daty",
     importHistoryEstimate: "≈{count} do importu",
     importHistoryUndatedNote: "{count} bez czytelnej daty — takie wpisy zostaną oznaczone jako obejrzane, bez pozycji w historii.",
