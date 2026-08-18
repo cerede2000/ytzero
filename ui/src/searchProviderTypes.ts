@@ -18,7 +18,7 @@ export interface SearchProviderDescription {
 }
 
 export interface ExternalSearch {
-  providers: Record<string, { results: SearchResult[]; channels: ChannelSearchResult[] }>;
+  providers: Record<string, { results: SearchResult[]; channels: ChannelSearchResult[]; more?: boolean }>;
   /** Providers that answered with nothing because they could not be reached. */
   failed: string[];
   downloads_allowed?: boolean;

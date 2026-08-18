@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./SearchPage.css";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
@@ -10,7 +10,7 @@ import VideoCard from "../components/VideoCard";
 import { VideoGridSkeleton } from "../components/LoadingState";
 import { EmptyState, RevealList } from "../components/ui";
 import { videoFromSearchResult } from "../searchResultVideo";
-import { mergeByRank, providerPath, type SearchProviderDescription } from "../searchProviderTypes";
+import { mergeByRank, providerPath, type ExternalSearch, type SearchProviderDescription } from "../searchProviderTypes";
 
 function normalizeSearchText(value: string) {
   return value
@@ -28,7 +28,17 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   const [videos, setVideos] = useState<Video[]>([]);
   const [localChannels, setLocalChannels] = useState<Channel[]>([]);
   const [providers, setProviders] = useState<SearchProviderDescription[]>([]);
-  const [external, setExternal] = useState<Record<string, { results: SearchResult[]; channels: ChannelSearchResult[] }>>({});
+  /*
+   * One entry per window fetched, rather than one merged list.
+   *
+   * Scrolling appends, and each window is balanced inside itself: merged
+   * across the whole accumulation instead, a provider that ran out at page one
+   * would leave the rest of the page to whoever still had answers, and the
+   * alternation the reader is looking at would break halfway down.
+   */
+  const [pages, setPages] = useState<ExternalSearch["providers"][]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const moreBelow = useRef(false);
   const [ytDownloads, setYtDownloads] = useState({ allowed: false, enabled: false });
   const [localLoading, setLocalLoading] = useState(false);
   const [localLoadingMore, setLocalLoadingMore] = useState(false);
@@ -103,26 +113,92 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
   }, [q]);
 
   useEffect(() => {
-    if (!q || hideExternalSearch || !active.length) { setExternal({}); return; }
+    if (!q || hideExternalSearch || !active.length) { setPages([]); return; }
     let cancelled = false;
     setYtLoading(true);
+    setPages([]);
+    moreBelow.current = false;
     api.searchExternal(q, active.map((provider) => provider.id))
       .then((answer) => {
         if (cancelled) return;
-        setExternal(answer.providers);
+        setPages([answer.providers]);
+        moreBelow.current = Object.values(answer.providers).some((found) => found.more);
         setYtDownloads({ allowed: Boolean(answer.downloads_allowed), enabled: Boolean(answer.downloads_enabled) });
       })
-      .catch(() => { if (!cancelled) setExternal({}); })
+      .catch(() => { if (!cancelled) setPages([]); })
       .finally(() => { if (!cancelled) setYtLoading(false); });
     return () => { cancelled = true; };
   }, [q, hideExternalSearch, active]);
+
+  /*
+   * The next window, asked for when the foot of the list comes into view.
+   *
+   * Guarded on the ref rather than on state so that two intersections in the
+   * same frame cannot both start a request: the flag is down before either
+   * has re-rendered.
+   */
+  const loadMore = useCallback(async () => {
+    if (!moreBelow.current || loadingMore || !q || !active.length) return;
+    moreBelow.current = false;
+    setLoadingMore(true);
+    try {
+      const answer = await api.searchExternal(q, active.map((provider) => provider.id), pages.length + 1);
+      const arrived = Object.values(answer.providers).some((found) => found.results.length);
+      if (arrived) setPages((held) => [...held, answer.providers]);
+      moreBelow.current = arrived && Object.values(answer.providers).some((found) => found.more);
+    } catch {
+      // A window that fails is not the end of the list; the next scroll retries.
+      moreBelow.current = true;
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [q, active, pages.length, loadingMore]);
+
+  /*
+   * Held in state, not in a ref.
+   *
+   * The foot is only drawn once results have arrived, and an effect reading a
+   * ref runs before that: it found nothing, and nothing changed afterwards
+   * that would have made it look again. Kept in state, the node appearing is
+   * itself what re-runs the effect.
+   */
+  const [foot, setFoot] = useState<HTMLDivElement | null>(null);
+
+  /*
+   * Two ways of noticing the foot of the list, for one load.
+   *
+   * The observer is the right instrument and the cheap one. It is also frozen
+   * by a browser in a background or throttled tab, where it simply never
+   * reports — so a scroll of the page checks the distance itself as a floor.
+   * Both go through `loadMore`, which lowers its own flag before fetching, so
+   * the pair cannot ask twice for the same window.
+   */
+  useEffect(() => {
+    const node = foot;
+    if (!node) return;
+    const watcher = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMore();
+    }, { rootMargin: "600px" });
+    watcher.observe(node);
+    const onScroll = () => {
+      // A ref read, and nothing else, once the list has nothing left to fetch.
+      if (!moreBelow.current) return;
+      if (node.getBoundingClientRect().top - window.innerHeight < 600) void loadMore();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      watcher.disconnect();
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [foot, loadMore]);
 
   // Results become cards without asking the server anything: everything a card
   // shows is already in the answer, and the import an action needs is that
   // action's own cost, not the price of scrolling past twenty videos.
   const ytVideos = useMemo(() => {
     const now = Date.now();
-    return mergeByRank(active.map((provider) => (external[provider.id]?.results ?? []).map((result) => ({
+    const seen = new Set<string>();
+    return pages.flatMap((window) => mergeByRank(active.map((provider) => (window[provider.id]?.results ?? []).map((result) => ({
       provider,
       video: videoFromSearchResult(result, {
         // A provider the library cannot hold has nothing to download to it.
@@ -131,18 +207,25 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
         now,
       }),
       inLibrary: result.in_library === 1,
-    }))));
-  }, [active, external, ytDownloads]);
+    })))))
+      // Windows overlap when a provider's own paging repeats an entry.
+      .filter(({ provider, video }) => {
+        const key = `${provider.id}:${video.video_id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }, [active, pages, ytDownloads]);
 
   const externalChannels = useMemo(() => {
     // A channel already followed here is shown by the library's own section
     // above; offering it again as a stranger is the same row twice. Only a
     // provider whose channels can be followed has rows to be matched against.
     const followed = new Set(localChannels.map((channel) => channel.channel_id));
-    return mergeByRank(active.map((provider) => (external[provider.id]?.channels ?? [])
+    return mergeByRank(active.map((provider) => (pages[0]?.[provider.id]?.channels ?? [])
       .filter((channel) => !(provider.capabilities.library && followed.has(channel.channelId)))
       .map((channel) => ({ provider, channel }))));
-  }, [active, external, localChannels]);
+  }, [active, pages, localChannels]);
 
   const chooseSource = (id: string) => {
     const next = new URLSearchParams(params);
@@ -264,6 +347,9 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
               ))}
             </div>
           )}
+          {/* The foot of the list, watched so the next window arrives before it is reached. */}
+          {!ytLoading && ytVideos.length > 0 && <div ref={setFoot} className="search-more-sentinel" aria-hidden="true" />}
+          {loadingMore && <VideoGridSkeleton count={2} gridSize="sm" />}
         </section>
       )}
     </div>

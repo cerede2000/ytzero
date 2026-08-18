@@ -1,4 +1,5 @@
 import { decodeHtmlEntities } from "./htmlEntities";
+import { readYouTubeResponse } from "./youtubeRateLimit";
 import type { ChannelSearchResult, PublishedAgo, SearchResult } from "./youtube";
 import { readYouTubeResponseWithCookies } from "./youtubeCookieJar";
 

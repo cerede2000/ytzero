@@ -159,7 +159,9 @@ api.get("/search/external", async (c) => {
   if (!q) return c.json({ providers: {}, failed: [] });
 
   const asked = requestedProviders(c.req.query("sources"));
-  const { found, failed } = await searchAcrossProviders(q, asked);
+  // Scrolling asks for the next window. A page nobody named is the first one.
+  const page = Math.max(1, Math.trunc(Number(c.req.query("page"))) || 1);
+  const { found, failed } = await searchAcrossProviders(q, asked, page);
   const downloadsAllowed = !await isChildUser(uid);
   const providers: Record<string, unknown> = {};
   for (const provider of asked) {
@@ -176,6 +178,7 @@ api.get("/search/external", async (c) => {
         ? await attachLibraryState(uid, await attachWatchedState(uid, search.results, (result) => result.videoId))
         : search.results,
       channels: search.channels,
+      more: search.more,
     };
   }
   return c.json({
