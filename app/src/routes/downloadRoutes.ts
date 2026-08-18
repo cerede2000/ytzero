@@ -3,6 +3,7 @@ import { existsSync, statSync } from "node:fs";
 import { publishAppEvent } from "../appEvents";
 import { database } from "../database";
 import { getUserSetting } from "../db";
+import { log } from "../logger";
 import { childLocalOnly, isChildUser } from "../childTime";
 import { DOWNLOADS_ADMIN_SETTING_KEYS, dlSettings, downloadCookiesConfigured, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
 import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, ensureMobilePlayback, getDirectVideoResponse, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, hasHlsSession, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
@@ -195,6 +196,11 @@ api.delete("/downloads/cookies", async (c) => {
   invalidateAudioSources(uid);
   invalidateDirectVideoSources(uid);
   return c.json({ configured: false, recognition: "unknown" as const, checked_at: null });
+});
+
+ if (result.ok) log.info("downloads.ytdlp_update_requested", { before: result.before, after: result.after });
+  else log.warn("downloads.ytdlp_update_failed", { before: result.before, detail: result.detail, source: "manual" });
+  return c.json(result);
 });
 
 api.get("/downloads", async (c) => {

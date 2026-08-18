@@ -105,3 +105,16 @@
   .dl-row { flex-wrap: wrap; }
   .dl-library-search { max-width: none; width: 100%; }
 }
+
+/* yt-dlp's version, beside the storage gauge it shares a header row with. */
+.dl-ytdlp {
+  align-items: center;
+  color: var(--text-2);
+  display: flex;
+  font-size: 12.5px;
+  gap: 2px;
+  white-space: nowrap;
+}
+.dl-ytdlp-version { font-variant-numeric: tabular-nums; }
+.dl-ytdlp-spin { animation: dl-ytdlp-spin 1s linear infinite; }
+@keyframes dl-ytdlp-spin { to { transform: rotate(360deg); } }
