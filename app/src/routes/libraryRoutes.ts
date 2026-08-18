@@ -161,7 +161,7 @@ api.get("/search/external", async (c) => {
   const asked = requestedProviders(c.req.query("sources"));
   // Scrolling asks for the next window. A page nobody named is the first one.
   const page = Math.max(1, Math.trunc(Number(c.req.query("page"))) || 1);
-  const { found, failed } = await searchAcrossProviders(q, asked, page);
+  const { found, failed } = await searchAcrossProviders(q, asked, page, uid);
   const downloadsAllowed = !await isChildUser(uid);
   const providers: Record<string, unknown> = {};
   for (const provider of asked) {

@@ -1,5 +1,6 @@
 import { decodeHtmlEntities } from "./htmlEntities";
 import { readYouTubeResponse } from "./youtubeRateLimit";
+import { sapisidFrom, sapisidHash } from "./youtubeInnerTube";
 import type { ChannelSearchResult, PublishedAgo, SearchResult } from "./youtube";
 import { parseCompactCount, type PanelLanguage } from "./relatedVideoText";
 
@@ -48,6 +49,18 @@ export function parseAbbreviatedCount(text: string): number | null {
   // Standard style — strip commas/spaces used as thousands separators.
   const v = parseInt(full.replace(/[, ]/g, ""), 10);
   return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/**
+ * Who a walk belongs to.
+ *
+ * A signed-in search is ranked for that account, so a walk made with one
+ * reader's jar must never answer another's question, nor the anonymous one.
+ * The key is the reader, never the cookie: it is compared, held in memory and
+ * potentially logged, and a credential has no business in any of that.
+ */
+export function walkKey(query: string, reader: number | null): string {
+  return `${reader ?? "personne"}\u0000${query}`;
 }
 
 export function createYoutubeSearch(dependencies: YoutubeSearchDependencies) {
