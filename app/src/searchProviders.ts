@@ -1,5 +1,6 @@
 import { searchDailymotionAll, type DailymotionChannel, type DailymotionVideo } from "./dailymotion";
 import { SEARCH_PROVIDERS, type SearchProviderDescription } from "./searchProviderCatalog";
+import { youtubeCookieHeader } from "./youtubeCookieHeader";
 import { searchDeeper, searchYouTube, type ChannelSearchResult, type SearchResult } from "./youtube";
 
 export interface ProviderSearch {
@@ -91,7 +92,17 @@ export async function searchAcrossProviders(
   query: string,
   providers: readonly SearchProviderDescription[],
   page = 1,
+  /*
+   * Whose search this is.
+   *
+   * Anonymous, the YouTube provider is a scraper and is throttled as one, which
+   * is what ends its depth long before its index. Asked as the reader, it is a
+   * browser. Their own jar only: a ranking made for an account is that
+   * account's, and lending it would hand one person's habits to the next.
+   */
+  reader: number | null = null,
 ): Promise<{ found: Record<string, ProviderSearch>; failed: string[] }> {
+  const jar = reader ? youtubeCookieHeader(reader) : null;
   const per = providerCeiling();
   const upTo = Math.max(1, Math.trunc(page)) * per;
   const from = upTo - per;
@@ -99,7 +110,7 @@ export async function searchAcrossProviders(
   const failed: string[] = [];
   await Promise.all(providers.map(async (provider) => {
     try {
-      found[provider.id] = await runProvider(provider.id, query, from, upTo);
+      found[provider.id] = await runProvider(provider.id, query, from, upTo, reader && jar ? { id: reader, cookieHeader: jar } : null);
     } catch {
       failed.push(provider.id);
     }
@@ -107,9 +118,15 @@ export async function searchAcrossProviders(
   return { found, failed };
 }
 
-async function runProvider(id: string, query: string, from: number, upTo: number): Promise<ProviderSearch> {
+async function runProvider(
+  id: string,
+  query: string,
+  from: number,
+  upTo: number,
+  reader: { id: number; cookieHeader: string } | null,
+): Promise<ProviderSearch> {
   if (id === "youtube") {
-    const deep = await searchDeeper(query, upTo).catch(() => null);
+    const deep = await searchDeeper(query, upTo, reader).catch(() => null);
     // Its results page drops the channel card for a channel-name query, and
     // only the shallow search knows to ask again with the channel filter. It
     // is cached, so this costs a request in that case and nothing in the rest.
