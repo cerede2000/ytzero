@@ -35,6 +35,11 @@ const lineLimits: Record<string, number> = {
   "app/src/routeCache.ts": 11,
   "ui/src/App.tsx": 24,
   "ui/src/AppRoutes.tsx": 98,
+  "ui/src/AppRoutes.tsx": 98,
+=======
+  "ui/src/AppRoutes.tsx": 99,
+>>>>>>> 19d0a58 (Split searching from watching, and put their suggestions beside the picture)
+>>>>>>> 831aa36 (Split searching from watching, and put their suggestions beside the picture)
   "ui/src/app-shell/AppBootstrap.tsx": 17,
   "ui/src/app-shell/AppShell.tsx": 126,
   "ui/src/app-shell/AppSidebar.tsx": 97,
