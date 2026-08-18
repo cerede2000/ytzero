@@ -309,6 +309,7 @@ export const pl: Locale = {
     downloadsDisabled: "Pobieranie filmów jest wyłączone — włącz je w Pobrane → Konfiguracja.",
     downloadsYtdlpMissing: "Nie znaleziono yt-dlp. Zainstaluj yt-dlp oraz ffmpeg, żeby pobieranie działało.",
     downloadsYtdlpVersion: "yt-dlp {version}",
+    downloadsYtdlpHint: "Aktualizowany raz dziennie, dopóki serwer działa. Sprawdź teraz, jeśli pobieranie przestało działać.",
     downloadsYtdlpCheck: "Sprawdź aktualizacje",
     downloadsYtdlpChecking: "Sprawdzanie…",
     downloadsYtdlpUpToDate: "yt-dlp jest już aktualny ({version})",

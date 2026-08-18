@@ -309,6 +309,7 @@ export const de: Locale = {
     downloadsDisabled: "Video-Downloads sind deaktiviert — aktiviere sie unter Downloads → Konfiguration.",
     downloadsYtdlpMissing: "yt-dlp wurde nicht gefunden. Installiere yt-dlp und ffmpeg, damit Downloads funktionieren.",
     downloadsYtdlpVersion: "yt-dlp {version}",
+    downloadsYtdlpHint: "Wird einmal täglich aktualisiert, solange der Server läuft. Jetzt prüfen, wenn ein Download nicht mehr funktioniert.",
     downloadsYtdlpCheck: "Nach Update suchen",
     downloadsYtdlpChecking: "Suche läuft…",
     downloadsYtdlpUpToDate: "yt-dlp ist bereits aktuell ({version})",

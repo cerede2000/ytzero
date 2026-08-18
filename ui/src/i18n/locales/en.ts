@@ -309,6 +309,7 @@ export const en = {
     downloadsDisabled: "Video downloads are disabled — enable them under Downloads → Configuration.",
     downloadsYtdlpMissing: "yt-dlp was not found. Install yt-dlp and ffmpeg for downloads to work.",
     downloadsYtdlpVersion: "yt-dlp {version}",
+    downloadsYtdlpHint: "Updated once a day while the server keeps running. Check now if a download has stopped working.",
     downloadsYtdlpCheck: "Check for an update",
     downloadsYtdlpChecking: "Checking…",
     downloadsYtdlpUpToDate: "yt-dlp is already current ({version})",
