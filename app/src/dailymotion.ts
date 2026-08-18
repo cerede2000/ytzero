@@ -12,7 +12,7 @@ import { log } from "./logger";
  * would look like.
  */
 const SEARCH_API = "https://api.dailymotion.com/videos";
-const SEARCH_FIELDS = "id,title,duration,thumbnail_360_url,owner.screenname,created_time,views_total,status,private,allow_embed";
+const SEARCH_FIELDS = "id,title,duration,thumbnail_360_url,owner.screenname,created_time,views_total,status,private,allow_embed,available_formats";
 /*
  * How long a resolution is reused.
  *
@@ -36,6 +36,8 @@ export interface DailymotionVideo {
   durationSeconds: number | null;
   publishedAt: string | null;
   views: number | null;
+  /** The best format offered, ranked — only ever used to choose between copies of one video. */
+  quality: number | null;
 }
 
 export function validDailymotionVideoId(value: string): boolean {
@@ -104,6 +106,19 @@ export function cleanTitle(value: unknown): string {
   return value.replace(/\s*[-–—]\s*video dailymotion\s*$/i, "").trim();
 }
 
+/** Their ladder, lowest first. Anything unnamed ranks below all of them. */
+const FORMAT_RANK: Record<string, number> = { ld: 1, sd: 2, hq: 3, hd720: 4, hd1080: 5, hd1440: 6, hd2160: 7 };
+
+function bestFormat(raw: unknown): number | null {
+  if (!Array.isArray(raw)) return null;
+  let best = 0;
+  for (const name of raw) {
+    const rank = typeof name === "string" ? FORMAT_RANK[name] ?? 0 : 0;
+    if (rank > best) best = rank;
+  }
+  return best || null;
+}
+
 /**
  * The same video, listed again under a different id.
  *
@@ -120,20 +135,34 @@ export function cleanTitle(value: unknown): string {
  *
  * and duration alone would merge every eight-minute video on the site.
  *
- * The first is kept, which is the order Dailymotion ranked them in.
+ * Which copy is kept matters, because they are not interchangeable. Counted
+ * over five searches, fifty groups had more than one copy and seven of those
+ * offered different formats — and in five of the seven the copy that arrived
+ * first was the poorer one. So the place in the list is Dailymotion's, and
+ * belongs to whichever copy they ranked first, but the copy filling it is the
+ * one that plays best. Only a strictly better format takes the place; a tie
+ * leaves their ranking alone.
+ *
+ * Subtitles would be worth ranking on too and cannot be: no field on the video
+ * carries them, only a sub-resource, and a group of nine copies would cost
+ * nine requests to compare before a page could be drawn.
  */
 const TITLE_KEY_LENGTH = 50;
 
-export function dropDuplicateVideos<T extends { title: string; durationSeconds?: number | null }>(items: readonly T[]): T[] {
-  const seen = new Set<string>();
+export function dropDuplicateVideos<T extends { title: string; durationSeconds?: number | null; quality?: number | null }>(items: readonly T[]): T[] {
+  const place = new Map<string, number>();
   const kept: T[] = [];
   for (const item of items) {
     const title = item.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     if (!title) continue;
     const key = `${title.slice(0, TITLE_KEY_LENGTH)}|${item.durationSeconds ?? "?"}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    kept.push(item);
+    const held = place.get(key);
+    if (held === undefined) {
+      place.set(key, kept.length);
+      kept.push(item);
+      continue;
+    }
+    if ((item.quality ?? 0) > (kept[held].quality ?? 0)) kept[held] = item;
   }
   return kept;
 }
@@ -152,6 +181,7 @@ function toVideo(raw: Record<string, unknown>): DailymotionVideo | null {
     durationSeconds: Number.isFinite(seconds) && seconds > 0 ? seconds : null,
     publishedAt: Number.isFinite(created) ? new Date(created * 1000).toISOString() : null,
     views: Number.isFinite(views) ? views : null,
+    quality: bestFormat(raw.available_formats),
   };
 }
 
@@ -206,7 +236,7 @@ async function askDailymotion(path: string, fetchImpl: typeof fetch): Promise<Re
 export async function searchDailymotionAll(query: string, fetchImpl: typeof fetch = fetch): Promise<DailymotionSearch> {
   const term = encodeURIComponent(query);
   const [videos, channels, live] = await Promise.all([
-    searchDailymotion(query, 24, fetchImpl).catch(() => []),
+    searchDailymotion(query, undefined, fetchImpl).catch(() => []),
     askDailymotion(`users?search=${term}&limit=8&fields=${encodeURIComponent(CHANNEL_FIELDS)}`, fetchImpl)
       .then((list) => list.map(toChannel).filter((channel): channel is DailymotionChannel => channel !== null))
       .catch(() => []),
@@ -326,13 +356,63 @@ export async function dailymotionRelated(videoId: string, fetchImpl: typeof fetc
   return dropDuplicateVideos(list.map(toVideo).filter((video): video is DailymotionVideo => video !== null));
 }
 
-export async function searchDailymotion(query: string, limit = 24, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo[]> {
-  const url = `${SEARCH_API}?search=${encodeURIComponent(query)}&limit=${Math.min(50, Math.max(1, limit))}`
+/** Their maximum, and the only size worth asking for: a page costs the same whatever it holds. */
+const SEARCH_PAGE = 100;
+/** How deep to go when the first page does not fill the grid. Their index stops at a thousand. */
+const SEARCH_DEPTH = 5;
+/** As many cards as a results page is worth scrolling. More is a slower page, not a better one. */
+const SEARCH_ENOUGH = 60;
+
+async function searchPage(query: string, page: number, fetchImpl: typeof fetch): Promise<Record<string, unknown>[]> {
+  const url = `${SEARCH_API}?search=${encodeURIComponent(query)}&limit=${SEARCH_PAGE}&page=${page}`
     + `&fields=${encodeURIComponent(SEARCH_FIELDS)}&sort=relevance`;
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`Dailymotion search failed (${response.status})`);
   const payload = await response.json() as { list?: Record<string, unknown>[] };
-  return dropDuplicateVideos((payload.list ?? []).map(toVideo).filter((video): video is DailymotionVideo => video !== null));
+  return payload.list ?? [];
+}
+
+/**
+ * What they have, rather than the first handful of it.
+ *
+ * Searching "alpha luna" here returned a few cards against a full page on
+ * dailymotion.com. Neither of the two filters was at fault: every sampled
+ * result rejected for `allow_embed` answered 404 on its own endpoint, and one
+ * of the titles dropped as a duplicate had been posted by nine different
+ * channels at the same duration. What was wrong is how little was asked for.
+ *
+ *     asked        returned   still play   after reuploads
+ *     24 (before)     24          5              4
+ *     100            100         15              9
+ *     500, 5 pages   394         62             25
+ *
+ * Depth is close to free: asked for together, five pages came back in 708ms
+ * against 756ms for one. So a first page that fills the grid is the whole
+ * cost — "france info" fills on its own — and only a query whose results have
+ * rotted pays for the rest. Their pages overlap, so ids are counted once.
+ */
+export async function searchDailymotion(query: string, limit?: number, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo[]> {
+  const wanted = Number.isFinite(limit) ? Math.min(SEARCH_ENOUGH, Math.max(1, Math.trunc(limit as number))) : SEARCH_ENOUGH;
+  const seen = new Set<string>();
+  const keep = (raw: Record<string, unknown>[]): DailymotionVideo[] => raw
+    .filter((item) => {
+      const id = typeof item.id === "string" ? item.id : "";
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .map(toVideo)
+    .filter((video): video is DailymotionVideo => video !== null);
+
+  const found = keep(await searchPage(query, 1, fetchImpl));
+  if (dropDuplicateVideos(found).length < wanted) {
+    const deeper = await Promise.all(Array.from(
+      { length: SEARCH_DEPTH - 1 },
+      (_, index) => searchPage(query, index + 2, fetchImpl).catch(() => [] as Record<string, unknown>[]),
+    ));
+    for (const page of deeper) found.push(...keep(page));
+  }
+  return dropDuplicateVideos(found).slice(0, wanted);
 }
 
 export interface DailymotionSubtitle {

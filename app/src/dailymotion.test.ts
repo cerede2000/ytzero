@@ -84,6 +84,42 @@ describe("what the search is allowed to offer", () => {
     expect(videos.map((video) => video.videoId)).toEqual(["x3rddqb"]);
   });
 
+  test("goes deeper when the first page has rotted", async () => {
+    // "alpha luna": the first hundred results held fifteen that still played,
+    // and the reader counted a handful of cards against a full page on
+    // dailymotion.com. One page is not the question, it is the answer to a
+    // question nobody asked.
+    const pages = (count: number, prefix: string) =>
+      Array.from({ length: count }, (_, index) => ({ id: `${prefix}${index}`, title: `${prefix} ${index}`, duration: index + 1, allow_embed: true }));
+    const asked: number[] = [];
+    const paged = (async (url: string) => {
+      const page = Number(new URL(url).searchParams.get("page"));
+      asked.push(page);
+      // Their pages overlap: page two repeats one of page one's entries.
+      const list = page === 1 ? pages(2, "xaaaa") : [{ id: "xaaaa0", title: "xaaaa 0", duration: 1, allow_embed: true }, ...pages(10, `xb${page}dddd`)];
+      return new Response(JSON.stringify({ list }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const videos = await searchDailymotion("alpha luna", undefined, paged);
+    expect(asked).toEqual([1, 2, 3, 4, 5]);
+    expect(videos.length).toBe(42);
+    // Counted once, however many pages named it.
+    expect(videos.filter((video) => video.videoId === "xaaaa0")).toHaveLength(1);
+  });
+
+  test("and stops at the first page when that page is enough", async () => {
+    const full = Array.from({ length: 70 }, (_, index) => ({ id: `xfull${index}`, title: `Full ${index}`, duration: index + 1, allow_embed: true }));
+    const asked: number[] = [];
+    const counting = (async (url: string) => {
+      asked.push(Number(new URL(url).searchParams.get("page")));
+      return new Response(JSON.stringify({ list: full }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const videos = await searchDailymotion("france info", undefined, counting);
+    expect(asked).toEqual([1]);
+    expect(videos).toHaveLength(60);
+  });
+
   test("an answer that says nothing about it is taken at face value", async () => {
     // Older entries carry no status at all; refusing those would empty the page.
     const videos = await searchDailymotion("x", 15, answering([{ id: "xzlj6y", title: "Old" }]));
@@ -234,6 +270,27 @@ describe("the same video, listed several times", () => {
       { title: "Une autre histoire", durationSeconds: 120, id: "c" },
     ]);
     expect(kept.map((item) => item.id)).toEqual(["a", "c"]);
+  });
+
+  test("the copy kept is the one that plays best, in the place their ranking gave it", () => {
+    // Counted over five searches: of fifty groups with more than one copy,
+    // seven offered different formats, and in five of those the first copy was
+    // the poorer one. The list keeps their order; the card behind it improves.
+    const kept = dropDuplicateVideos([
+      { title: "Le meme film", durationSeconds: 3399, id: "sd", quality: 2 },
+      { title: "Un autre", durationSeconds: 120, id: "autre", quality: 2 },
+      { title: "Le meme film", durationSeconds: 3399, id: "hd", quality: 4 },
+      { title: "Le meme film", durationSeconds: 3399, id: "hq", quality: 3 },
+    ]);
+    expect(kept.map((item) => item.id)).toEqual(["hd", "autre"]);
+  });
+
+  test("a copy that is merely as good does not displace the one they ranked first", () => {
+    const kept = dropDuplicateVideos([
+      { title: "Le meme film", durationSeconds: 3399, id: "premier", quality: 3 },
+      { title: "Le meme film", durationSeconds: 3399, id: "second", quality: 3 },
+    ]);
+    expect(kept.map((item) => item.id)).toEqual(["premier"]);
   });
 
   test("two clips that merely share an opening are both kept", () => {

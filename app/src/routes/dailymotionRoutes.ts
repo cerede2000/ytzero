@@ -34,7 +34,8 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     const query = c.req.query("q")?.trim();
     if (!query) return c.json({ videos: [] });
     try {
-      const videos = await searchDailymotion(query, Number(c.req.query("limit") ?? 24));
+      const asked = c.req.query("limit");
+      const videos = await searchDailymotion(query, asked ? Number(asked) : undefined);
       return c.json({ videos });
     } catch (error) {
       log.warn("dailymotion.search_failed", { error: error instanceof Error ? error.message : String(error) });
