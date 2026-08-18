@@ -81,30 +81,6 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
     return subscribeServerEvent("downloads", load);
   }, [load]);
 
-  /**
-   * Update yt-dlp now rather than waiting for the daily attempt.
-   *
-   * That attempt is a timer that first fires after a day of uptime, so a
-   * container restarted every night never reaches it. And an extractor breaks
-   * when YouTube decides, not when the timer comes round — this is the first
-   * thing to try when a download stops working, and the version beside it is
-   * how anyone knows whether it did anything.
-   */
-  const checkYtdlp = useCallback(async () => {
-    if (checkingYtdlp) return;
-    setCheckingYtdlp(true);
-    try {
-      const result = await api.updateYtdlp();
-      if (!result.ok) emitToast(result.detail ?? t("downloadsYtdlpUpdateFailed"), "danger");
-      else if (result.before === result.after) emitToast(t("downloadsYtdlpUpToDate", { version: result.after ?? "" }), "success");
-      else emitToast(t("downloadsYtdlpUpdated", { before: result.before ?? "", after: result.after ?? "" }), "success");
-      load();
-    } catch (error) {
-      emitToast(error instanceof Error ? error.message : t("downloadsYtdlpUpdateFailed"), "danger");
-    } finally {
-      setCheckingYtdlp(false);
-    }
-  }, [checkingYtdlp, load, t]);
 
   const retry = (item: DownloadItem) => {
     api.requestDownload(item.video_id).then(load).catch(() => {});
@@ -247,25 +223,6 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
           checked={showAllProfiles}
           onCheckedChange={setShowAllProfiles}
         />}
-        {data.ytdlp_version && (
-          <div className="dl-ytdlp">
-            <span className="dl-ytdlp-version">{t("downloadsYtdlpVersion", { version: data.ytdlp_version })}</span>
-            {data.can_view_all && (
-              <Tooltip text={t("downloadsYtdlpCheck")} portal>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  iconOnly
-                  aria-label={t(checkingYtdlp ? "downloadsYtdlpChecking" : "downloadsYtdlpCheck")}
-                  disabled={checkingYtdlp}
-                  onClick={() => void checkYtdlp()}
-                >
-                  <RotateCw className={checkingYtdlp ? "dl-ytdlp-spin" : undefined} size={15} />
-                </Button>
-              </Tooltip>
-            )}
-          </div>
-        )}
         <div className="dl-storage">
           <HardDrive size={15} />
           <div className="dl-storage-info">
