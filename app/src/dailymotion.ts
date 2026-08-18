@@ -45,6 +45,25 @@ export function validDailymotionVideoId(value: string): boolean {
   return VIDEO_ID.test(value);
 }
 
+/**
+ * A channel, named either way.
+ *
+ * Their API answers to both: the canonical id — `x5rckqa` — and the username
+ * the address bar shows, which is `dm_6a1dd2673c8d946116a65fa9f6` for that same
+ * channel and `Cuisine.5.minutes` or `darbaar-royal-indian-cuisine` for others.
+ * Search hands us the first, so links from here always worked; a reader pasting
+ * a channel address has the second, and got told their channel was invalid.
+ *
+ * The grammar is wide, so what it refuses matters more than what it allows.
+ * This value goes into a path we then fetch: a dot sequence in it would climb
+ * out of that path, and a slash would leave the endpoint altogether.
+ */
+const CHANNEL_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+export function validDailymotionChannelId(value: string): boolean {
+  return CHANNEL_ID.test(value) && !value.includes("..");
+}
+
 /** Only the hosts Dailymotion serves media from, so the proxy cannot be aimed elsewhere. */
 export function isDailymotionMediaUrl(value: string): boolean {
   try {

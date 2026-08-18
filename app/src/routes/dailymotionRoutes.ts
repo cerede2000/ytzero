@@ -13,6 +13,7 @@ import {
   rewriteHlsPlaylist,
   searchDailymotion,
   searchDailymotionAll,
+  validDailymotionChannelId,
   validDailymotionVideoId,
 } from "../dailymotion";
 import { log } from "../logger";
@@ -64,7 +65,7 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
   /** A channel: who they are, what they posted, and the playlists search cannot reach. */
   api.get("/dailymotion/channels/:id", async (c) => {
     const channelId = c.req.param("id");
-    if (!validDailymotionVideoId(channelId)) return c.json({ error: "invalid channel id" }, 400);
+    if (!validDailymotionChannelId(channelId)) return c.json({ error: "invalid channel id" }, 400);
     const page = await dailymotionChannelPage(channelId).catch(() => null);
     if (!page) return c.json({ error: "channel not found" }, 404);
     return c.json(page);
