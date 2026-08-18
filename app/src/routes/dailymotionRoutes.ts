@@ -1,6 +1,8 @@
 import type { Context, Hono } from "hono";
+import { srtToVtt } from "../downloader";
 import {
   isDailymotionMediaUrl,
+  resolveDailymotion,
   resolveDailymotionStream,
   rewriteHlsPlaylist,
   searchDailymotion,
@@ -48,6 +50,57 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     } catch (error) {
       log.warn("dailymotion.stream_failed", { videoId, userId: currentUserId(c), error: error instanceof Error ? error.message : String(error) });
       return c.json({ error: error instanceof Error ? error.message : "stream unavailable" }, 502);
+    }
+  });
+
+  /**
+   * The caption tracks, named for a <track> element.
+   *
+   * Their own address never reaches the page: it is signed, and a track fetched
+   * cross-origin is refused anyway. The page is given ours, per language.
+   */
+  api.get("/dailymotion/videos/:id/subtitles", async (c) => {
+    const videoId = c.req.param("id");
+    if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
+    try {
+      const { subtitles } = await resolveDailymotion(videoId);
+      return c.json({
+        subtitles: subtitles.map((track) => ({
+          lang: track.lang,
+          label: track.label,
+          src: `/api/dailymotion/videos/${videoId}/subtitles/${encodeURIComponent(track.lang)}`,
+        })),
+      });
+    } catch (error) {
+      log.warn("dailymotion.subtitles_failed", { videoId, error: error instanceof Error ? error.message : String(error) });
+      return c.json({ subtitles: [] });
+    }
+  });
+
+  /**
+   * One track, as WebVTT.
+   *
+   * The language is looked up in what was resolved rather than trusted, so the
+   * only addresses this can fetch are ones Dailymotion itself named. SubRip is
+   * converted on the way through by the same function the downloader uses for
+   * sidecar subtitles — a <track> plays WebVTT and nothing else.
+   */
+  api.get("/dailymotion/videos/:id/subtitles/:lang", async (c) => {
+    const videoId = c.req.param("id");
+    if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
+    try {
+      const { subtitles } = await resolveDailymotion(videoId);
+      const track = subtitles.find((candidate) => candidate.lang === c.req.param("lang"));
+      if (!track) return c.json({ error: "unknown subtitle track" }, 404);
+      const upstream = await fetch(track.url, { signal: AbortSignal.timeout(15_000) });
+      if (!upstream.ok) return c.json({ error: `Dailymotion answered ${upstream.status}` }, 502);
+      const body = await upstream.text();
+      return new Response(track.srt ? srtToVtt(body) : body, {
+        headers: { "Content-Type": "text/vtt; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+      });
+    } catch (error) {
+      log.warn("dailymotion.subtitle_failed", { videoId, error: error instanceof Error ? error.message : String(error) });
+      return c.json({ error: "subtitle unavailable" }, 502);
     }
   });
 

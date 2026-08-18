@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isDailymotionMediaUrl, rewriteHlsPlaylist, searchDailymotion, validDailymotionVideoId } from "./dailymotion";
+import { isDailymotionMediaUrl, rewriteHlsPlaylist, searchDailymotion, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
 
 describe("what counts as a Dailymotion video", () => {
   test("their grammar, not YouTube's", () => {
@@ -88,5 +88,43 @@ describe("what the search is allowed to offer", () => {
     // Older entries carry no status at all; refusing those would empty the page.
     const videos = await searchDailymotion("x", 15, answering([{ id: "xzlj6y", title: "Old" }]));
     expect(videos.map((video) => video.videoId)).toEqual(["xzlj6y"]);
+  });
+});
+
+describe("the caption tracks worth offering", () => {
+  const srt = "https://static2.dmcdn.net/sec2(x)/subtitle/fr-auto.srt";
+  const segmented = "https://www.dailymotion.com/cdn/subtitle/video/xacfsqi/fr-auto.m3u8?sec=x";
+
+  test("a plain file is taken and named for a menu", () => {
+    expect(subtitlesFromMetadata({ subtitles: { "fr-auto": [{ ext: "srt", url: srt }] } }))
+      .toEqual([{ lang: "fr-auto", label: "Français (auto)", url: srt, srt: true }]);
+  });
+
+  test("the segmented form of the same captions is left alone", () => {
+    // Dailymotion publishes both. Stitching WebVTT fragments that each carry a
+    // header and a timestamp map goes wrong as drift rather than as an error,
+    // and the plain file says the same thing.
+    expect(subtitlesFromMetadata({ subtitles: { und: [{ ext: "vtt", url: segmented }] } })).toEqual([]);
+  });
+
+  test("one track per language, the first that can be used", () => {
+    const tracks = subtitlesFromMetadata({
+      subtitles: { "fr-auto": [{ ext: "vtt", url: segmented }, { ext: "srt", url: srt }] },
+    });
+    expect(tracks.map((track) => track.url)).toEqual([srt]);
+  });
+
+  test("automatic captions are offered when there is nothing else", () => {
+    expect(subtitlesFromMetadata({ automatic_captions: { en: [{ ext: "vtt", url: "https://static2.dmcdn.net/s/en.vtt" }] } })
+      .map((track) => track.label)).toEqual(["Anglais"]);
+  });
+
+  test("and nothing is fetched from somewhere that is not Dailymotion", () => {
+    expect(subtitlesFromMetadata({ subtitles: { fr: [{ ext: "srt", url: "https://evil.example/track.srt" }] } })).toEqual([]);
+  });
+
+  test("a video with no captions is not an error", () => {
+    expect(subtitlesFromMetadata({})).toEqual([]);
+    expect(subtitlesFromMetadata({ subtitles: {} })).toEqual([]);
   });
 });
