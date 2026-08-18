@@ -169,8 +169,8 @@ export const api = {
   inProgress: () => sharedGet<{ videos: Video[] }>("in-progress", "/in-progress"),
   youtubeSearch: (q: string) => http<{ results: SearchResult[]; channels: ChannelSearchResult[]; downloads_allowed?: boolean; downloads_enabled?: boolean }>(`/search/youtube?q=${encodeURIComponent(q)}`),
   searchProviders: () => http<{ providers: SearchProviderDescription[] }>("/search/providers"),
-  searchExternal: (q: string, sources: string[]) => http<ExternalSearch>(
-    `/search/external?q=${encodeURIComponent(q)}${sources.length ? `&sources=${encodeURIComponent(sources.join(","))}` : ""}`,
+  searchExternal: (q: string, sources: string[], page = 1) => http<ExternalSearch>(
+    `/search/external?q=${encodeURIComponent(q)}&page=${page}${sources.length ? `&sources=${encodeURIComponent(sources.join(","))}` : ""}`,
   ),
   searchSuggest: (q: string, language: string, signal?: AbortSignal) =>
     http<{ suggestions: string[]; channels: SearchSuggestChannel[] }>(
