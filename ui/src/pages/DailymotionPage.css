@@ -77,7 +77,27 @@ audio.dm-player-media { background: transparent; height: 40px; }
 .dm-watch-meta h1 { font-size: 17px; line-height: 1.3; margin: 14px 0 4px; }
 .dm-watch-by { color: var(--text-2); font-size: 12.5px; margin: 0 0 8px; }
 .dm-watch-desc { color: var(--text-2); font-size: 12.5px; line-height: 1.5; margin: 0; white-space: pre-wrap; }
+/*
+ * The suggestions scroll on their own, the way the watch page's do — and for
+ * the reason its comment gives: a hundred cards below a player mean the reader
+ * loses the picture the moment they look for the next video. Sticky beside it,
+ * scrolling within itself, only where there is width for a column.
+ */
 .dm-watch-side { min-width: 0; }
+@media (min-width: 901px) {
+  .dm-watch-side {
+    align-self: start;
+    max-height: calc(100vh - 88px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room for the scrollbar without the cards shifting when it appears. */
+    padding-right: 6px;
+    position: sticky;
+    scrollbar-width: thin;
+    top: 72px;
+  }
+  .dm-watch-side .dm-section-title { background: var(--bg, var(--surface)); position: sticky; top: 0; z-index: 1; }
+}
 
 @media (max-width: 900px) {
   .dm-watch { grid-template-columns: 1fr; }
