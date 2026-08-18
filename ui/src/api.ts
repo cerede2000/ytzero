@@ -169,6 +169,13 @@ export const api = {
   inProgress: () => sharedGet<{ videos: Video[] }>("in-progress", "/in-progress"),
   youtubeSearch: (q: string) => http<{ results: SearchResult[]; channels: ChannelSearchResult[]; downloads_allowed?: boolean; downloads_enabled?: boolean }>(`/search/youtube?q=${encodeURIComponent(q)}`),
   searchProviders: () => http<{ providers: SearchProviderDescription[] }>("/search/providers"),
+  dailymotionContinue: () => http<{
+    videos: { videoId: string; title: string; channelTitle: string; thumbnail: string; durationSeconds: number | null; publishedAt: string | null; views: number | null }[];
+    progress: Record<string, { positionSeconds: number; durationSeconds: number }>;
+  }>("/dailymotion/continue"),
+  forgetDailymotionProgress: (id: string) => http<{ ok: true }>(
+    `/dailymotion/videos/${encodeURIComponent(id)}/progress`, { method: "DELETE" },
+  ),
   dailymotionProgress: (ids: string[]) => http<{ progress: Record<string, { positionSeconds: number; durationSeconds: number | null; watched: boolean }> }>(
     `/dailymotion/progress?ids=${encodeURIComponent(ids.join(","))}`,
   ),

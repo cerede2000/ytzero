@@ -111,6 +111,45 @@ export async function progressFor(userId: number, videoIds: readonly string[]): 
   return found;
 }
 
+export interface DailymotionResume {
+  videoId: string;
+  positionSeconds: number;
+  durationSeconds: number;
+}
+
+/**
+ * What there is to carry on with, by the library's own rules.
+ *
+ * The thresholds are the ones the shelf already applies to YouTube — longer
+ * than thirty seconds, more than three seconds in, less than ninety-two
+ * percent through — because the shelf is one shelf and a card arriving under a
+ * different rule would be the odd one out for reasons nobody could see.
+ */
+export async function videosInProgress(userId: number, limit = 20): Promise<DailymotionResume[]> {
+  const rows = await database.prepare(
+    `SELECT video_id, position_seconds, duration_seconds
+       FROM dailymotion_progress
+      WHERE user_id = ?
+        AND watched = 0
+        AND duration_seconds IS NOT NULL
+        AND duration_seconds > 30
+        AND position_seconds >= 3
+        AND position_seconds / duration_seconds < 0.92
+      ORDER BY updated_at DESC
+      LIMIT ?`,
+  ).all<{ video_id: string; position_seconds: number; duration_seconds: number }>(userId, Math.max(1, Math.min(50, limit)));
+  return rows.map((row) => ({
+    videoId: row.video_id,
+    positionSeconds: Number(row.position_seconds) || 0,
+    durationSeconds: Number(row.duration_seconds) || 0,
+  }));
+}
+
+/** Not coming back to this one. Only the position is forgotten. */
+export async function forgetProgress(userId: number, videoId: string): Promise<void> {
+  await database.prepare("DELETE FROM dailymotion_progress WHERE user_id = ? AND video_id = ?").run(userId, videoId);
+}
+
 /** Watched enough that offering to resume would be offering the credits. */
 const WATCHED_FRACTION = 0.95;
 
