@@ -75,7 +75,7 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     const videoId = c.req.param("id");
     if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
     try {
-      const { rendition } = await resolveDailymotion(videoId);
+      const { rendition, audioUrl } = await resolveDailymotion(videoId);
       /*
        * No subtitle rendition here on purpose.
        *
@@ -86,7 +86,12 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
        * is what the watch page does and the only arrangement that behaved the
        * same twice.
        */
-      const playlist = masterPlaylist(`/api/dailymotion/videos/${videoId}/media.m3u8`, [], rendition);
+      const playlist = masterPlaylist(
+        `/api/dailymotion/videos/${videoId}/media.m3u8`,
+        [],
+        rendition,
+        audioUrl ? `/api/dailymotion/videos/${videoId}/audio.m3u8` : null,
+      );
       return new Response(playlist, {
         headers: { "Content-Type": "application/vnd.apple.mpegurl", "Cache-Control": "no-store" },
       });
@@ -96,11 +101,19 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     }
   });
 
-  api.get("/dailymotion/videos/:id/media.m3u8", async (c) => {
-    const videoId = c.req.param("id");
+  /**
+   * The picture, and the sound when it travels separately.
+   *
+   * One handler for both because the work is identical — fetch their playlist,
+   * point every line back at us — and only which address is asked for differs.
+   */
+  const mediaPlaylist = async (c: ApiContext, track: "video" | "audio") => {
+    const videoId = c.req.param("id") ?? "";
     if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
     try {
-      const source = await resolveDailymotionStream(videoId);
+      const resolved = await resolveDailymotion(videoId);
+      const source = track === "audio" ? resolved.audioUrl : resolved.streamUrl;
+      if (!source) return c.json({ error: "no such track" }, 404);
       const response = await fetch(source, { signal: AbortSignal.timeout(15_000) });
       if (!response.ok) return c.json({ error: `Dailymotion answered ${response.status}` }, 502);
       const rewritten = rewriteHlsPlaylist(await response.text(), source,
@@ -109,10 +122,13 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
         headers: { "Content-Type": "application/vnd.apple.mpegurl", "Cache-Control": "no-store" },
       });
     } catch (error) {
-      log.warn("dailymotion.stream_failed", { videoId, userId: currentUserId(c), error: error instanceof Error ? error.message : String(error) });
+      log.warn("dailymotion.stream_failed", { videoId, track, userId: currentUserId(c), error: error instanceof Error ? error.message : String(error) });
       return c.json({ error: error instanceof Error ? error.message : "stream unavailable" }, 502);
     }
-  });
+  };
+
+  api.get("/dailymotion/videos/:id/media.m3u8", (c) => mediaPlaylist(c, "video"));
+  api.get("/dailymotion/videos/:id/audio.m3u8", (c) => mediaPlaylist(c, "audio"));
 
   /** The rendition a subtitle group points at: one file, stated as a playlist. */
   api.get("/dailymotion/videos/:id/subtitles/:lang/index.m3u8", async (c) => {

@@ -75,6 +75,24 @@ function playable(raw: Record<string, unknown>): boolean {
 }
 
 /**
+ * The addresses to play, whether yt-dlp answered with one or two.
+ *
+ * A muxed video has its address at the root. A video whose audio is a separate
+ * rendition has none there at all — which read as "no usable address" and
+ * answered 502 on every attempt — and yt-dlp's chosen pair sits in
+ * `requested_formats` instead, told apart by which codec each says it lacks.
+ */
+export function chosenStreams(metadata: Record<string, unknown>): { streamUrl: string; audioUrl: string | null } {
+  const root = typeof metadata.url === "string" ? metadata.url : "";
+  if (root) return { streamUrl: root, audioUrl: null };
+  const chosen = Array.isArray(metadata.requested_formats) ? metadata.requested_formats as Record<string, unknown>[] : [];
+  const address = (format: Record<string, unknown> | undefined) => typeof format?.url === "string" ? format.url : "";
+  const video = chosen.find((format) => format.vcodec && format.vcodec !== "none");
+  const audio = chosen.find((format) => format.acodec !== "none" && (!format.vcodec || format.vcodec === "none"));
+  return { streamUrl: address(video), audioUrl: address(audio) || null };
+}
+
+/**
  * The title without the site's own name stuck on the end.
  *
  * Their related list hands back titles ending in " - Video Dailymotion", which
@@ -274,6 +292,16 @@ export interface DailymotionSubtitle {
 
 export interface DailymotionSource {
   streamUrl: string;
+  /**
+   * The audio, when it is not in the video stream.
+   *
+   * Most of their catalogue is muxed and yt-dlp answers with one address. Some
+   * videos are not: the picture comes in `hls-380/480/720`, each `acodec: none`,
+   * and the sound in `hls-0_aac_q2-English` beside it. There is no muxed
+   * rendition to fall back on, so the two are carried separately and the master
+   * playlist puts them back together.
+   */
+  audioUrl: string | null;
   subtitles: DailymotionSubtitle[];
   durationSeconds: number | null;
   /** What the one rendition is, for a master playlist Apple's player will accept. */
@@ -345,7 +373,7 @@ export function resolveDailymotion(videoId: string, { fresh = false }: { fresh?:
     ]);
     if (await proc.exited !== 0) throw new Error(err.trim().split("\n").pop() || "yt-dlp could not resolve the video");
     const metadata = JSON.parse(out) as Record<string, unknown>;
-    const streamUrl = typeof metadata.url === "string" ? metadata.url : "";
+    const { streamUrl, audioUrl } = chosenStreams(metadata);
     if (!isDailymotionMediaUrl(streamUrl)) throw new Error("yt-dlp returned no usable address");
     const subtitles = subtitlesFromMetadata(metadata);
     const seconds = Number(metadata.duration);
@@ -355,6 +383,7 @@ export function resolveDailymotion(videoId: string, { fresh = false }: { fresh?:
     log.info("dailymotion.resolved", { videoId, subtitles: subtitles.length });
     return {
       streamUrl,
+      audioUrl,
       subtitles,
       durationSeconds: Number.isFinite(seconds) && seconds > 0 ? seconds : null,
       rendition: {
@@ -411,8 +440,16 @@ export function masterPlaylist(
   mediaUrl: string,
   subtitles: readonly { lang: string; label: string; url: string }[],
   rendition: { width?: number | null; height?: number | null; codecs?: string | null; bitrate?: number | null } = {},
+  audioUrl: string | null = null,
 ): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
+  /*
+   * A separate audio rendition, declared as a group. Without it the player is
+   * handed a picture with no sound and no idea one exists.
+   */
+  if (audioUrl) {
+    lines.push(`#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Audio",DEFAULT=YES,AUTOSELECT=YES,URI="${audioUrl}"`);
+  }
   /*
    * Offered, never imposed.
    *
@@ -437,6 +474,7 @@ export function masterPlaylist(
   const attributes = [`BANDWIDTH=${rendition.bitrate ?? 800_000}`];
   if (rendition.width && rendition.height) attributes.push(`RESOLUTION=${rendition.width}x${rendition.height}`);
   if (rendition.codecs) attributes.push(`CODECS="${rendition.codecs}"`);
+  if (audioUrl) attributes.push('AUDIO="aud"');
   if (subtitles.length > 0) attributes.push('SUBTITLES="subs"');
   lines.push(`#EXT-X-STREAM-INF:${attributes.join(",")}`);
   lines.push(mediaUrl);
