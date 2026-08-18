@@ -137,7 +137,7 @@ describe("the manifest iOS reads", () => {
     // Sideloaded <track> elements are the page's business, and on iOS the page
     // does not play the video: the system player does, and it reads this.
     const master = masterPlaylist("/api/dm/media.m3u8", [track], rendition);
-    expect(master).toContain('#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Français (auto)",LANGUAGE="fr",AUTOSELECT=YES,DEFAULT=YES,URI="/api/dm/subs/fr-auto/index.m3u8"');
+    expect(master).toContain('#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Français (auto)",LANGUAGE="fr",AUTOSELECT=NO,DEFAULT=NO,URI="/api/dm/subs/fr-auto/index.m3u8"');
     expect(master).toContain('SUBTITLES="subs"');
     expect(master.trimEnd().endsWith("/api/dm/media.m3u8")).toBe(true);
   });
@@ -145,6 +145,15 @@ describe("the manifest iOS reads", () => {
   test("states what the rendition is, for the stricter of the two readers", () => {
     expect(masterPlaylist("/m.m3u8", [track], rendition))
       .toContain('#EXT-X-STREAM-INF:BANDWIDTH=460560,RESOLUTION=360x640,CODECS="avc1.42001e,mp4a.40.2",SUBTITLES="subs"');
+  });
+
+  test("offers the captions without imposing them", () => {
+    // Reported from an iPhone: switched off, then a ten-second skip brought
+    // them back. DEFAULT is re-read on the way, and AUTOSELECT would do the
+    // same from the phone's accessibility settings. Off has to mean off.
+    const master = masterPlaylist("/m.m3u8", [track], rendition);
+    expect(master).toContain("AUTOSELECT=NO,DEFAULT=NO");
+    expect(master).not.toContain("DEFAULT=YES");
   });
 
   test("and says nothing it does not know", () => {

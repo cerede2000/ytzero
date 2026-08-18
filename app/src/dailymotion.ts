@@ -241,11 +241,20 @@ export function masterPlaylist(
   rendition: { width?: number | null; height?: number | null; codecs?: string | null; bitrate?: number | null } = {},
 ): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:3"];
-  for (const [index, track] of subtitles.entries()) {
+  /*
+   * Offered, never imposed.
+   *
+   * `DEFAULT=YES` says "play this unless the reader has said otherwise", and
+   * iOS re-reads it: switching the subtitles off and then skipping forward ten
+   * seconds brought them straight back. AUTOSELECT would do the same from the
+   * phone's own accessibility settings. Off means off, and the player's own
+   * menu is where they get turned on.
+   */
+  for (const track of subtitles) {
     const language = track.lang.replace(/-auto$/, "");
     lines.push(
       `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${track.label.replaceAll('"', "")}",`
-      + `LANGUAGE="${language}",AUTOSELECT=YES,DEFAULT=${index === 0 ? "YES" : "NO"},URI="${track.url}"`,
+      + `LANGUAGE="${language}",AUTOSELECT=NO,DEFAULT=NO,URI="${track.url}"`,
     );
   }
   /*
