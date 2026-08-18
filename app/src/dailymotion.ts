@@ -13,8 +13,17 @@ import { log } from "./logger";
  */
 const SEARCH_API = "https://api.dailymotion.com/videos";
 const SEARCH_FIELDS = "id,title,duration,thumbnail_360_url,owner.screenname,created_time,views_total,status,private,allow_embed";
-/** Signed and short-lived: worth reusing across a page's segment requests, not worth keeping. */
-const STREAM_TTL_MS = 60_000;
+/*
+ * How long a resolution is reused.
+ *
+ * It was a minute, on the assumption that a signed URL is short-lived. Measured
+ * since: one was still serving segment 1400 ten minutes after it was minted.
+ * A minute meant paying 2.2 seconds of yt-dlp again on every request past it —
+ * which the reporting instance's log shows plainly — for nothing. Ten minutes,
+ * and an expired signature is repaired by re-signing rather than by guessing
+ * short.
+ */
+const STREAM_TTL_MS = 10 * 60_000;
 /** Dailymotion's own id grammar: an x and base-36, nothing that could be a path. */
 const VIDEO_ID = /^x[a-z0-9]{5,9}$/i;
 const MEDIA_HOSTS = ["dmcdn.net", "dailymotion.com"];
