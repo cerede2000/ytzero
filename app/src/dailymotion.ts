@@ -182,10 +182,27 @@ export function plainDescription(value: unknown): string {
     .trim();
 }
 
-/** Their own suggestions for a video — the column beside the player on dailymotion.com. */
+/**
+ * Their own suggestions — and most of them are dead.
+ *
+ * Asked for twenty on the video this was noticed on, eighteen came back
+ * unplayable: `allow_embed: false`, which their own detail endpoint confirms as
+ * "This video does not exist or has been deleted", and yt-dlp as `Not found`.
+ * Keeping only what plays left two, which is what the column showed.
+ *
+ * The filter is right; the sample was too small. Asked wider, the survivors
+ * arrive:
+ *
+ *     limit 20  →  20 returned,   2 playable
+ *     limit 50  →  50 returned,   9 playable
+ *     limit 100 →  97 returned,  24 playable
+ *
+ * So a hundred are asked for and the playable ones kept. It is one request
+ * either way, and the alternative is a column of cards that cannot be pressed.
+ */
 export async function dailymotionRelated(videoId: string, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo[]> {
   const list = await askDailymotion(
-    `video/${encodeURIComponent(videoId)}/related?limit=20&fields=${encodeURIComponent(SEARCH_FIELDS)}`,
+    `video/${encodeURIComponent(videoId)}/related?limit=100&fields=${encodeURIComponent(SEARCH_FIELDS)}`,
     fetchImpl,
   );
   return list.map(toVideo).filter((video): video is DailymotionVideo => video !== null);
