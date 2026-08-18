@@ -158,10 +158,10 @@ export function subtitlesFromMetadata(metadata: Record<string, unknown>): Dailym
  * share a lookup: resolving per segment would spend a subprocess every three
  * seconds of video.
  */
-export function resolveDailymotion(videoId: string): Promise<DailymotionSource> {
+export function resolveDailymotion(videoId: string, { fresh = false }: { fresh?: boolean } = {}): Promise<DailymotionSource> {
   const cached = sourceCache.get(videoId);
   const now = Date.now();
-  if (cached && cached.expiresAt > now) return cached.source;
+  if (!fresh && cached && cached.expiresAt > now) return cached.source;
   const source = (async () => {
     const proc = Bun.spawn([YTDLP, "-J", "--skip-download", "--no-warnings", `https://www.dailymotion.com/video/${videoId}`], {
       stdout: "pipe",
@@ -292,4 +292,25 @@ export function subtitlePlaylist(trackUrl: string, durationSeconds: number | nul
     "#EXT-X-ENDLIST",
     "",
   ].join("\n");
+}
+
+/**
+ * The same segment, asked for with a fresh signature.
+ *
+ * Dailymotion signs a whole path — `…/sec2(TOKEN)/video/244/911/…` — and the
+ * playlist we hand the player embeds that signature in every segment address.
+ * The player holds that playlist for as long as it is watching, so a signature
+ * that expires takes the rest of the video with it: what is already buffered
+ * plays, and anything not yet fetched answers 403. Seeking an hour ahead is the
+ * fastest way to find out.
+ *
+ * Both addresses come from the same CDN and differ in that one component, so a
+ * newly resolved stream is enough to rebuild any segment of it.
+ */
+export function reSignSegmentUrl(segmentUrl: string, freshStreamUrl: string): string | null {
+  const signature = /\/sec\d*\([^)]*\)\//;
+  const fresh = freshStreamUrl.match(signature)?.[0];
+  if (!fresh || !signature.test(segmentUrl)) return null;
+  const rebuilt = segmentUrl.replace(signature, fresh);
+  return rebuilt === segmentUrl ? null : rebuilt;
 }

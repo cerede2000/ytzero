@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isDailymotionMediaUrl, masterPlaylist, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
+import { isDailymotionMediaUrl, masterPlaylist, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
 
 describe("what counts as a Dailymotion video", () => {
   test("their grammar, not YouTube's", () => {
@@ -172,5 +172,35 @@ describe("the manifest iOS reads", () => {
 
   test("with a day's worth of duration when nobody said", () => {
     expect(subtitlePlaylist("/t.vtt", null)).toContain("#EXT-X-TARGETDURATION:86400");
+  });
+});
+
+describe("a segment whose signature has aged out", () => {
+  const stale = "https://vod3.cf.dmcdn.net/sec2(OLD)/video/244/911/498119442_mp4_h264_aac_hq/1400.m4s";
+  const freshStream = "https://vod3.cf.dmcdn.net/sec2(NEW)/video/244/911/498119442_mp4_h264_aac_hq.m3u8";
+
+  test("is asked for again under the new one", () => {
+    // The playlist the player is holding has the old signature in every line,
+    // and it does not reload a VOD playlist. Seeking past what is buffered is
+    // where that shows: everything not yet fetched answers 403.
+    expect(reSignSegmentUrl(stale, freshStream))
+      .toBe("https://vod3.cf.dmcdn.net/sec2(NEW)/video/244/911/498119442_mp4_h264_aac_hq/1400.m4s");
+  });
+
+  test("only the signature changes", () => {
+    const rebuilt = reSignSegmentUrl(stale, freshStream) ?? "";
+    expect(rebuilt.endsWith("/1400.m4s")).toBe(true);
+    expect(rebuilt.includes("OLD")).toBe(false);
+  });
+
+  test("and nothing is rebuilt from an address that carries none", () => {
+    expect(reSignSegmentUrl(stale, "https://vod3.cf.dmcdn.net/plain/index.m3u8")).toBe(null);
+    expect(reSignSegmentUrl("https://vod3.cf.dmcdn.net/plain/0.m4s", freshStream)).toBe(null);
+  });
+
+  test("nor when the signature has not moved", () => {
+    // Retrying the identical address is a second refusal, not a repair.
+    const same = "https://vod3.cf.dmcdn.net/sec2(NEW)/video/244/911/x/1.m4s";
+    expect(reSignSegmentUrl(same, freshStream)).toBe(null);
   });
 });
