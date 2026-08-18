@@ -1,6 +1,8 @@
 import type { Context, Hono } from "hono";
 import { srtToVtt } from "../downloader";
 import {
+  dailymotionRelated,
+  dailymotionVideoDetail,
   isDailymotionMediaUrl,
   masterPlaylist,
   reSignSegmentUrl,
@@ -9,6 +11,7 @@ import {
   subtitlePlaylist,
   rewriteHlsPlaylist,
   searchDailymotion,
+  searchDailymotionAll,
   validDailymotionVideoId,
 } from "../dailymotion";
 import { log } from "../logger";
@@ -44,6 +47,30 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
    * Kept separate from the media playlist below so the captions are declared in
    * the manifest, which is the only place iOS's system player looks.
    */
+  /** Everything one search finds, on the shelves their own results page uses. */
+  api.get("/dailymotion/search/all", async (c) => {
+    const query = c.req.query("q")?.trim();
+    if (!query) return c.json({ videos: [], channels: [], live: [] });
+    try {
+      return c.json(await searchDailymotionAll(query));
+    } catch (error) {
+      log.warn("dailymotion.search_failed", { error: error instanceof Error ? error.message : String(error) });
+      return c.json({ error: "Dailymotion search failed" }, 502);
+    }
+  });
+
+  /** What a player page shows around the picture, and beside it. */
+  api.get("/dailymotion/videos/:id", async (c) => {
+    const videoId = c.req.param("id");
+    if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
+    const [video, related] = await Promise.all([
+      dailymotionVideoDetail(videoId).catch(() => null),
+      dailymotionRelated(videoId).catch(() => []),
+    ]);
+    if (!video) return c.json({ error: "video not found" }, 404);
+    return c.json({ video, related });
+  });
+
   api.get("/dailymotion/videos/:id/hls.m3u8", async (c) => {
     const videoId = c.req.param("id");
     if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);

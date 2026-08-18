@@ -91,6 +91,106 @@ function toVideo(raw: Record<string, unknown>): DailymotionVideo | null {
   };
 }
 
+export interface DailymotionChannel {
+  channelId: string;
+  name: string;
+  avatar: string;
+  videos: number | null;
+  followers: number | null;
+}
+
+export interface DailymotionSearch {
+  videos: DailymotionVideo[];
+  channels: DailymotionChannel[];
+  live: DailymotionVideo[];
+}
+
+const CHANNEL_FIELDS = "id,screenname,avatar_120_url,videos_total,followers_total";
+
+function toChannel(raw: Record<string, unknown>): DailymotionChannel | null {
+  const channelId = typeof raw.id === "string" ? raw.id : "";
+  if (!validDailymotionVideoId(channelId)) return null;
+  const videos = Number(raw.videos_total);
+  const followers = Number(raw.followers_total);
+  return {
+    channelId,
+    name: typeof raw.screenname === "string" ? raw.screenname : channelId,
+    avatar: typeof raw.avatar_120_url === "string" ? raw.avatar_120_url : "",
+    videos: Number.isFinite(videos) ? videos : null,
+    followers: Number.isFinite(followers) ? followers : null,
+  };
+}
+
+async function askDailymotion(path: string, fetchImpl: typeof fetch): Promise<Record<string, unknown>[]> {
+  const response = await fetchImpl(`https://api.dailymotion.com/${path}`, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) throw new Error(`Dailymotion answered ${response.status}`);
+  const payload = await response.json() as { list?: Record<string, unknown>[] };
+  return payload.list ?? [];
+}
+
+/**
+ * One search, several shelves — the shape their own results page has.
+ *
+ * Playlists are missing on purpose rather than by oversight: `/playlists?search=`
+ * answers 403, "Only authenticated users can use this filter". A playlist of a
+ * known channel is public and fetchable; searching for one is not, and this
+ * experiment holds no API key.
+ *
+ * Each shelf is asked for separately and independently: a search that finds no
+ * channels should still show its videos, so one failure does not empty the page.
+ */
+export async function searchDailymotionAll(query: string, fetchImpl: typeof fetch = fetch): Promise<DailymotionSearch> {
+  const term = encodeURIComponent(query);
+  const [videos, channels, live] = await Promise.all([
+    searchDailymotion(query, 24, fetchImpl).catch(() => []),
+    askDailymotion(`users?search=${term}&limit=8&fields=${encodeURIComponent(CHANNEL_FIELDS)}`, fetchImpl)
+      .then((list) => list.map(toChannel).filter((channel): channel is DailymotionChannel => channel !== null))
+      .catch(() => []),
+    askDailymotion(`videos?search=${term}&live_onair=true&limit=8&fields=${encodeURIComponent(SEARCH_FIELDS)}`, fetchImpl)
+      .then((list) => list.map(toVideo).filter((video): video is DailymotionVideo => video !== null))
+      .catch(() => []),
+  ]);
+  return { videos, channels, live };
+}
+
+/** What a player page shows around the picture. */
+export async function dailymotionVideoDetail(videoId: string, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo & { description: string } | null> {
+  const fields = `${SEARCH_FIELDS},description,owner.avatar_120_url`;
+  const response = await fetchImpl(
+    `https://api.dailymotion.com/video/${encodeURIComponent(videoId)}?fields=${encodeURIComponent(fields)}`,
+    { signal: AbortSignal.timeout(10_000) },
+  );
+  if (!response.ok) return null;
+  const raw = await response.json() as Record<string, unknown>;
+  const video = toVideo(raw);
+  return video ? { ...video, description: plainDescription(raw.description) } : null;
+}
+
+/**
+ * Their description, as text.
+ *
+ * The API answers with markup — `<br />` between paragraphs — which a page that
+ * prints it verbatim shows as `<br />`. Line breaks become line breaks and the
+ * rest of the tags go; nothing here renders HTML from a third party.
+ */
+export function plainDescription(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Their own suggestions for a video — the column beside the player on dailymotion.com. */
+export async function dailymotionRelated(videoId: string, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo[]> {
+  const list = await askDailymotion(
+    `video/${encodeURIComponent(videoId)}/related?limit=20&fields=${encodeURIComponent(SEARCH_FIELDS)}`,
+    fetchImpl,
+  );
+  return list.map(toVideo).filter((video): video is DailymotionVideo => video !== null);
+}
+
 export async function searchDailymotion(query: string, limit = 24, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo[]> {
   const url = `${SEARCH_API}?search=${encodeURIComponent(query)}&limit=${Math.min(50, Math.max(1, limit))}`
     + `&fields=${encodeURIComponent(SEARCH_FIELDS)}&sort=relevance`;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isDailymotionMediaUrl, masterPlaylist, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
+import { isDailymotionMediaUrl, masterPlaylist, plainDescription, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
 
 describe("what counts as a Dailymotion video", () => {
   test("their grammar, not YouTube's", () => {
@@ -202,5 +202,23 @@ describe("a segment whose signature has aged out", () => {
     // Retrying the identical address is a second refusal, not a repair.
     const same = "https://vod3.cf.dmcdn.net/sec2(NEW)/video/244/911/x/1.m4s";
     expect(reSignSegmentUrl(same, freshStream)).toBe(null);
+  });
+});
+
+describe("a description written in markup", () => {
+  test("keeps its paragraphs and loses its tags", () => {
+    // Printed verbatim, "<br />" is what the reader sees — which is what the
+    // page did before this.
+    expect(plainDescription("Un drame.<br /><br />Suite <b>ici</b>."))
+      .toBe("Un drame.\n\nSuite ici.");
+  });
+
+  test("renders no markup of theirs, ever", () => {
+    expect(plainDescription('<img src=x onerror="alert(1)">texte')).toBe("texte");
+  });
+
+  test("and an absent one is empty rather than undefined", () => {
+    expect(plainDescription(undefined)).toBe("");
+    expect(plainDescription(42)).toBe("");
   });
 });
