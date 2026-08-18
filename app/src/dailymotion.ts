@@ -74,6 +74,52 @@ function playable(raw: Record<string, unknown>): boolean {
   return raw.status === undefined || raw.status === "published";
 }
 
+/**
+ * The title without the site's own name stuck on the end.
+ *
+ * Their related list hands back titles ending in " - Video Dailymotion", which
+ * is a page title rather than a video's. It is noise in a card and it defeats
+ * any comparison between two of them.
+ */
+export function cleanTitle(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.replace(/\s*[-–—]\s*video dailymotion\s*$/i, "").trim();
+}
+
+/**
+ * The same video, listed again under a different id.
+ *
+ * Reuploads are how this catalogue works. On one video's suggestions, five
+ * results were the same film under five ids, and comparing whole titles caught
+ * only some of them: the copies differ past the fiftieth character, where a
+ * card's ellipsis is anyway.
+ *
+ * So the key is the start of the title and the exact duration together. Both
+ * are needed. Titles alone would merge these, which are two different clips:
+ *
+ *     xnqymu  30s  Underworld : Nouvelle Ère … - Spot TV: Ne…
+ *     xnqymf  17s  Underworld : Nouvelle Ère … - Spot TV: Ne…
+ *
+ * and duration alone would merge every eight-minute video on the site.
+ *
+ * The first is kept, which is the order Dailymotion ranked them in.
+ */
+const TITLE_KEY_LENGTH = 50;
+
+export function dropDuplicateVideos<T extends { title: string; durationSeconds?: number | null }>(items: readonly T[]): T[] {
+  const seen = new Set<string>();
+  const kept: T[] = [];
+  for (const item of items) {
+    const title = item.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (!title) continue;
+    const key = `${title.slice(0, TITLE_KEY_LENGTH)}|${item.durationSeconds ?? "?"}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(item);
+  }
+  return kept;
+}
+
 function toVideo(raw: Record<string, unknown>): DailymotionVideo | null {
   const videoId = typeof raw.id === "string" ? raw.id : "";
   if (!validDailymotionVideoId(videoId) || !playable(raw)) return null;
@@ -82,7 +128,7 @@ function toVideo(raw: Record<string, unknown>): DailymotionVideo | null {
   const views = Number(raw.views_total);
   return {
     videoId,
-    title: typeof raw.title === "string" ? raw.title : videoId,
+    title: cleanTitle(raw.title) || videoId,
     channelTitle: typeof raw["owner.screenname"] === "string" ? raw["owner.screenname"] : "",
     thumbnail: typeof raw.thumbnail_360_url === "string" ? raw.thumbnail_360_url : "",
     durationSeconds: Number.isFinite(seconds) && seconds > 0 ? seconds : null,
@@ -205,7 +251,7 @@ export async function dailymotionRelated(videoId: string, fetchImpl: typeof fetc
     `video/${encodeURIComponent(videoId)}/related?limit=100&fields=${encodeURIComponent(SEARCH_FIELDS)}`,
     fetchImpl,
   );
-  return list.map(toVideo).filter((video): video is DailymotionVideo => video !== null);
+  return dropDuplicateVideos(list.map(toVideo).filter((video): video is DailymotionVideo => video !== null));
 }
 
 export async function searchDailymotion(query: string, limit = 24, fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo[]> {
@@ -214,7 +260,7 @@ export async function searchDailymotion(query: string, limit = 24, fetchImpl: ty
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`Dailymotion search failed (${response.status})`);
   const payload = await response.json() as { list?: Record<string, unknown>[] };
-  return (payload.list ?? []).map(toVideo).filter((video): video is DailymotionVideo => video !== null);
+  return dropDuplicateVideos((payload.list ?? []).map(toVideo).filter((video): video is DailymotionVideo => video !== null));
 }
 
 export interface DailymotionSubtitle {
