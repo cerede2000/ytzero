@@ -198,11 +198,6 @@ api.delete("/downloads/cookies", async (c) => {
   return c.json({ configured: false, recognition: "unknown" as const, checked_at: null });
 });
 
- if (result.ok) log.info("downloads.ytdlp_update_requested", { before: result.before, after: result.after });
-  else log.warn("downloads.ytdlp_update_failed", { before: result.before, detail: result.detail, source: "manual" });
-  return c.json(result);
-});
-
 api.get("/downloads", async (c) => {
   const uid = currentUserId(c);
   const includeAllProfiles = c.req.query("scope") === "all" && isAdmin(c);

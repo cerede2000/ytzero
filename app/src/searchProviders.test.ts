@@ -3,6 +3,7 @@ import { isAllowedRemoteImageUrl } from "./imageCachePolicy";
 import { providerThumbnailHosts, requestedProviders, searchProvider, SEARCH_PROVIDERS } from "./searchProviderCatalog";
 import { searchDailymotionAll } from "./dailymotion";
 import { durationClock, providerCeiling } from "./searchProviders";
+import { walkKey } from "./youtubeSearch";
 
 describe("the providers a search can reach", () => {
   test("each one says where its cards lead and what may be done with them", () => {
@@ -39,6 +40,22 @@ describe("the images the proxy will fetch", () => {
   test("and nothing that merely looks like one", () => {
     expect(isAllowedRemoteImageUrl("https://dmcdn.net.evil.example/x.jpg")).toBe(false);
     expect(isAllowedRemoteImageUrl("http://s2.dmcdn.net/x.jpg")).toBe(false);
+  });
+});
+
+describe("whose search a walk belongs to", () => {
+  test("two readers never share one, and neither shares the anonymous one", () => {
+    // A signed-in search is ranked for that account. Answering another reader
+    // from it would hand one person's viewing habits to the next.
+    expect(walkKey("chats", 1)).not.toBe(walkKey("chats", 2));
+    expect(walkKey("chats", 1)).not.toBe(walkKey("chats", null));
+    expect(walkKey("chats", 3)).toBe(walkKey("chats", 3));
+  });
+
+  test("and the key holds the reader, never the credential", () => {
+    // It is compared, held in memory and may be logged. A cookie in it would
+    // be a cookie in all three.
+    expect(walkKey("chats", 7)).toBe("7\u0000chats");
   });
 });
 
