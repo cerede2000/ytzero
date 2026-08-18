@@ -290,6 +290,24 @@ export async function newVideosSince(
   return dropDuplicateVideos(list.map(toVideo).filter((video): video is DailymotionVideo => video !== null));
 }
 
+/**
+ * Several videos in one question.
+ *
+ * Their API takes a comma-separated list, so a shelf of half a dozen costs one
+ * request rather than six. What comes back is filtered like everything else:
+ * one that has been deleted since it was started simply does not return, and a
+ * card for it would be a card that cannot be pressed.
+ */
+export async function videosByIds(ids: readonly string[], fetchImpl: typeof fetch = fetch): Promise<DailymotionVideo[]> {
+  const wanted = [...new Set(ids)].filter(validDailymotionVideoId).slice(0, 50);
+  if (!wanted.length) return [];
+  const list = await askDailymotion(
+    `videos?ids=${wanted.join(",")}&fields=${encodeURIComponent(SEARCH_FIELDS)}`,
+    fetchImpl,
+  );
+  return list.map(toVideo).filter((video): video is DailymotionVideo => video !== null);
+}
+
 export interface DailymotionPlaylist {
   playlistId: string;
   name: string;

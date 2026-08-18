@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./FeedPage.css";
 import { emit, subscribe } from "../events";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Clock, Eye, Inbox, Plus, RefreshCw, Upload } from "lucide-react";
 import { isShort } from "../shortVideos";
 import { api, type Bucket, type Channel, type Tag, type Video } from "../api";
@@ -18,6 +18,8 @@ import { Button, ButtonLink, Divider, EmptyState, IconButton, RevealRegion } fro
 import { parseAppTimestamp } from "../dateTime";
 import type { PlaybackQueueContext, PlayVideo } from "../playbackQueue";
 import { filterChannelsByTags } from "./feedChannelFilter";
+import { videoFromDailymotion } from "../dailymotionCards";
+import { mergeByRank, providerPath, type SearchProviderDescription } from "../searchProviderTypes";
 
 type AvatarChannel = Channel & { watch_count?: number; is_live?: number };
 type FeedSort = "published" | "arrival";
@@ -140,7 +142,19 @@ export default function FeedPage({
   useDocumentTitle();
   const [videos, setVideos] = useState<Video[]>([]);
   const [queued, setQueued] = useState<Video[]>([]);
+  const navigate = useNavigate();
   const [inProgress, setInProgress] = useState<Video[]>([]);
+  /*
+   * Dailymotion's own, kept beside rather than inside.
+   *
+   * They have no row in the library, so they cannot come from the query that
+   * builds the shelf; what they do have is a position under this reader's
+   * name, which is the whole of what a shelf of things to carry on with
+   * needs. Held apart here, removing the experiment is removing this state
+   * and the merge below.
+   */
+  const [dailymotionInProgress, setDailymotionInProgress] = useState<Video[]>([]);
+  const [dailymotionProvider, setDailymotionProvider] = useState<SearchProviderDescription | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<number[]>(() => {
     try { return JSON.parse(sessionStorage.getItem("feedTags") ?? "[]"); } catch { return []; }
@@ -238,11 +252,28 @@ export default function FeedPage({
   const loadInProgress = useCallback(() =>
     api.inProgress().then((r) => setInProgress(r.videos.filter((video) => !isShort(video)))).catch(console.error), []);
 
+  const loadDailymotionInProgress = useCallback(async () => {
+    try {
+      const [{ providers }, held] = await Promise.all([api.searchProviders(), api.dailymotionContinue()]);
+      const provider = providers.find((candidate) => candidate.id === "dailymotion") ?? null;
+      setDailymotionProvider(provider);
+      // A profile that may not be offered the provider is not offered its
+      // shelf either: the gate is the registry's, not this page's to repeat.
+      const now = Date.now();
+      setDailymotionInProgress(provider
+        ? held.videos.map((video) => videoFromDailymotion(video, held.progress[video.videoId] ?? null, now))
+        : []);
+    } catch {
+      setDailymotionInProgress([]);
+    }
+  }, []);
+
   useEffect(() => {
     loadTags();
     loadQueued();
     loadInProgress();
-  }, [loadTags, loadQueued, loadInProgress]);
+    void loadDailymotionInProgress();
+  }, [loadTags, loadQueued, loadInProgress, loadDailymotionInProgress]);
 
   const loadSubscriptionState = useCallback(() => {
     setSubscriptionStateLoading(true);
@@ -394,10 +425,22 @@ export default function FeedPage({
       if (bucketDiff !== 0) return bucketDiff;
       return parseAppTimestamp(a.show_from ?? 0).getTime() - parseAppTimestamp(b.show_from ?? 0).getTime();
     });
+  /*
+   * One shelf, two origins, merged by rank.
+   *
+   * Each list arrives in its own order of last watched, and there is no shared
+   * instant to sort them against — the library's shelf does not carry one out
+   * to the page. Alternating keeps both orders intact and gives neither the
+   * head of the shelf for being somebody's.
+   */
+  const resumable = mergeByRank([
+    inProgress.map((video) => ({ video, provider: null as SearchProviderDescription | null })),
+    dailymotionInProgress.map((video) => ({ video, provider: dailymotionProvider })),
+  ]);
   const inProgressIds = new Set(inProgress.map((video) => video.video_id));
   const feedVideos = videos.filter((video) => !inProgressIds.has(video.video_id));
   const showQueuedSection = dueQueuedVideos.length > 0 && selectedTags.length === 0;
-  const showFeedPreludeDivider = inProgress.length > 0 || showQueuedSection;
+  const showFeedPreludeDivider = resumable.length > 0 || showQueuedSection;
   const inProgressQueue: PlaybackQueueContext = { version: 1, kind: "in-progress" };
   const dueQueuedQueue: PlaybackQueueContext = { version: 1, kind: "watchlist", sort: "schedule", dueOnly: true };
 
@@ -437,7 +480,7 @@ export default function FeedPage({
 
       {showTopChannels && <ChannelAvatarRow selectedTags={selectedTags} />}
 
-      <RevealRegion open={inProgress.length > 0}>
+      <RevealRegion open={resumable.length > 0}>
         <div className="continue-watching-section">
           <div className="time-section-header">
             <Clock size={16} />
@@ -449,8 +492,8 @@ export default function FeedPage({
               className={`h-scroll-row h-scroll-row--${gridSize} mobile-preview-row${inProgressExpanded ? " is-expanded" : ""}`}
               ref={inProgressScroll.ref}
             >
-              {inProgress.map((v) => (
-                <div key={v.video_id} className="h-scroll-card" style={{ width: hCardWidth }}>
+              {resumable.map(({ video: v, provider }) => (
+                <div key={`${provider?.id ?? "library"}:${v.video_id}`} className="h-scroll-card" style={{ width: hCardWidth }}>
                   {/*
                     Leaving this shelf is not rejecting the video or claiming to
                     have finished it — the two the card already offers. It is "I
@@ -461,9 +504,18 @@ export default function FeedPage({
                   */}
                   <VideoCard
                     video={v}
-                    onPlay={(video) => onPlay(video, video.playback_context ?? inProgressQueue)}
+                    provider={provider ?? undefined}
+                    readOnly={Boolean(provider)}
+                    onPlay={(video) => (provider
+                      ? navigate(providerPath(provider.watchPath, video.video_id))
+                      : onPlay(video, video.playback_context ?? inProgressQueue))}
                     onChanged={handleInProgressChanged}
                     onRemoveFromContinue={(videoId) => {
+                      if (provider) {
+                        setDailymotionInProgress((current) => current.filter((video) => video.video_id !== videoId));
+                        api.forgetDailymotionProgress(videoId).catch(() => { void loadDailymotionInProgress(); });
+                        return;
+                      }
                       setInProgress((current) => current.filter((video) => video.video_id !== videoId));
                       api.clearProgress(videoId).catch(() => loadInProgress());
                     }}
@@ -472,7 +524,7 @@ export default function FeedPage({
               ))}
             </div>
           </div>
-          {inProgress.length > 3 && (
+          {resumable.length > 3 && (
             <div className="mobile-preview-toggle">
               <Button
                 size="sm"

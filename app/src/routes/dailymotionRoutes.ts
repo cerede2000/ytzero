@@ -3,6 +3,7 @@ import { srtToVtt } from "../downloader";
 import {
   dailymotionChannelPage,
   newVideosSince,
+  videosByIds,
   dailymotionRelated,
   dailymotionVideoDetail,
   isDailymotionMediaUrl,
@@ -18,7 +19,7 @@ import {
   validDailymotionVideoId,
 } from "../dailymotion";
 import { log } from "../logger";
-import { follow, isFollowing, listFollows, markSeen, progressFor, saveProgress, unfollow } from "../dailymotionFollows";
+import { follow, forgetProgress, isFollowing, listFollows, markSeen, progressFor, saveProgress, unfollow, videosInProgress } from "../dailymotionFollows";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
@@ -121,6 +122,47 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
     const channelId = typeof body.channelId === "string" ? body.channelId : undefined;
     if (channelId && !validDailymotionChannelId(channelId)) return c.json({ error: "invalid channel id" }, 400);
     await markSeen(access.currentUserId(c), through, channelId);
+    return c.json({ ok: true });
+  });
+
+  /**
+   * What there is to carry on with here, for the shelf that already asks the
+   * library the same question.
+   *
+   * The positions are ours; everything a card shows is Dailymotion's and is
+   * asked for in one request. A video deleted since it was started does not
+   * come back from it, and so leaves the shelf on its own rather than heading
+   * it for ever as the most recent thing on it.
+   */
+  api.get("/dailymotion/continue", async (c) => {
+    const userId = access.currentUserId(c);
+    const held = await videosInProgress(userId);
+    if (!held.length) return c.json({ videos: [], progress: {} });
+    const videos = await videosByIds(held.map((entry) => entry.videoId)).catch((error: unknown) => {
+      log.warn("dailymotion.continue_failed", { error: error instanceof Error ? error.message : String(error) });
+      return [];
+    });
+    const order = new Map(held.map((entry, index) => [entry.videoId, index] as const));
+    const progress: Record<string, { positionSeconds: number; durationSeconds: number }> = {};
+    for (const entry of held) progress[entry.videoId] = { positionSeconds: entry.positionSeconds, durationSeconds: entry.durationSeconds };
+    return c.json({
+      videos: videos
+        .filter((video) => order.has(video.videoId))
+        .sort((left, right) => (order.get(left.videoId) ?? 0) - (order.get(right.videoId) ?? 0)),
+      progress,
+    });
+  });
+
+  /**
+   * Not coming back to this one.
+   *
+   * The same meaning the shelf's own action has: not "watched", not
+   * "rejected", only the remembered position let go of.
+   */
+  api.delete("/dailymotion/videos/:id/progress", async (c) => {
+    const videoId = c.req.param("id");
+    if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
+    await forgetProgress(access.currentUserId(c), videoId);
     return c.json({ ok: true });
   });
 
