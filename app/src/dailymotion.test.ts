@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isDailymotionMediaUrl, masterPlaylist, plainDescription, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
+import { cleanTitle, dropDuplicateVideos, isDailymotionMediaUrl, masterPlaylist, plainDescription, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
 
 describe("what counts as a Dailymotion video", () => {
   test("their grammar, not YouTube's", () => {
@@ -220,5 +220,54 @@ describe("a description written in markup", () => {
   test("and an absent one is empty rather than undefined", () => {
     expect(plainDescription(undefined)).toBe("");
     expect(plainDescription(42)).toBe("");
+  });
+});
+
+describe("the same video, listed several times", () => {
+  test("copies are caught on the start of the title and the duration", () => {
+    // Measured on one video's suggestions: five results were the same film
+    // under five ids, differing past the fiftieth character — which is where a
+    // card's ellipsis falls anyway.
+    const kept = dropDuplicateVideos([
+      { title: "Changing My Fate Starts With a Marriage Certificate-💔 | Emotional Drama | A", durationSeconds: 8093, id: "a" },
+      { title: "Changing my fate starts with a marriage certificate 💔 | Emotional drama | B", durationSeconds: 8093, id: "b" },
+      { title: "Une autre histoire", durationSeconds: 120, id: "c" },
+    ]);
+    expect(kept.map((item) => item.id)).toEqual(["a", "c"]);
+  });
+
+  test("two clips that merely share an opening are both kept", () => {
+    // Real, from the same list: two TV spots for one film, thirty seconds and
+    // seventeen. A title-only rule loses one of them.
+    const kept = dropDuplicateVideos([
+      { title: "Underworld : Nouvelle Ère (Underworld : Awakening) - Spot TV: Ne…", durationSeconds: 30, id: "long" },
+      { title: "Underworld : Nouvelle Ère (Underworld : Awakening) - Spot TV: Ne…", durationSeconds: 17, id: "court" },
+    ]);
+    expect(kept.map((item) => item.id)).toEqual(["long", "court"]);
+  });
+
+  test("the first is the one kept, which is the order they ranked them in", () => {
+    const kept = dropDuplicateVideos([
+      { title: "X", durationSeconds: 10, id: "premier" },
+      { title: "x!", durationSeconds: 10, id: "second" },
+    ]);
+    expect(kept.map((item) => item.id)).toEqual(["premier"]);
+  });
+
+  test("and a title of nothing but punctuation is dropped rather than kept as a key", () => {
+    expect(dropDuplicateVideos([{ title: "—", durationSeconds: 1 }, { title: "…", durationSeconds: 2 }])).toEqual([]);
+  });
+});
+
+describe("their page title on the end of a video title", () => {
+  test("is taken off", () => {
+    expect(cleanTitle("Homeless to Billionaire's Wife - Video Dailymotion"))
+      .toBe("Homeless to Billionaire's Wife");
+    // Any dash they use, not only the ASCII one.
+    expect(cleanTitle("Un titre — Video dailymotion  ")).toBe("Un titre");
+  });
+
+  test("and a title that merely mentions them is left alone", () => {
+    expect(cleanTitle("Dailymotion, l'histoire d'un site")).toBe("Dailymotion, l'histoire d'un site");
   });
 });
