@@ -73,7 +73,6 @@ export default function DailymotionVideoPage() {
           mode={mode}
           videoId={id}
           video={video}
-          subtitle={subtitles[0]}
           showSubtitles={showSubtitles}
           positionRef={positionRef}
           onStatus={setStatus}
@@ -123,17 +122,15 @@ export default function DailymotionVideoPage() {
  * shrunken video, because on a phone an audio mode is one that survives the
  * browser being put away.
  */
-function DailymotionMedia({ mode, videoId, video, subtitle, showSubtitles, positionRef, onStatus }: {
+function DailymotionMedia({ mode, videoId, video, showSubtitles, positionRef, onStatus }: {
   mode: Mode;
   videoId: string;
   video: (DailymotionVideo & { description: string }) | null;
-  subtitle?: SubtitleTrack;
   showSubtitles: boolean;
   positionRef: MutableRefObject<number>;
   onStatus: (status: string) => void;
 }) {
   const mediaRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
-  const trackRef = useRef<HTMLTrackElement>(null);
   const [hls, setHls] = useState<import("hls.js").default | null>(null);
 
   useVideoHlsSource({
@@ -188,11 +185,37 @@ function DailymotionMedia({ mode, videoId, video, subtitle, showSubtitles, posit
     };
   }, [positionRef]);
 
+  /*
+   * The captions belong to hls.js.
+   *
+   * A <track> sideloaded next to the player does not survive it: on attach and
+   * on every manifest load hls.js empties every text track on the element,
+   * cues and all, and the browser never re-reads a file it has already marked
+   * loaded — so the captions showed or not depending on which of the two
+   * finished first, and were gone for good once cleared. Declared in the
+   * manifest they are hls.js's own, re-parsed whenever it clears them, and
+   * rendered into the element, which is what puts them in the iOS full-screen
+   * player as well. `subtitleTrack` is the switch; -1 is off.
+   */
   useEffect(() => {
-    const element = trackRef.current;
-    if (!element) return;
-    element.track.mode = showSubtitles ? "showing" : "disabled";
-  }, [showSubtitles, subtitle]);
+    if (!hls) return;
+    let live = true;
+    let stopListening = () => {};
+    void import("hls.js").then(({ default: Hls }) => {
+      if (!live) return;
+      const apply = () => {
+        hls.subtitleDisplay = showSubtitles;
+        hls.subtitleTrack = showSubtitles && hls.subtitleTracks.length > 0 ? 0 : -1;
+      };
+      apply();
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, apply);
+      stopListening = () => hls.off(Hls.Events.SUBTITLE_TRACKS_UPDATED, apply);
+    });
+    return () => {
+      live = false;
+      stopListening();
+    };
+  }, [hls, showSubtitles]);
 
   useEffect(() => {
     if (!("mediaSession" in navigator) || !video) return;
@@ -221,12 +244,5 @@ function DailymotionMedia({ mode, videoId, video, subtitle, showSubtitles, posit
   } as const;
 
   if (mode === "audio") return <audio {...common} />;
-  return (
-    <video {...common} playsInline crossOrigin="anonymous">
-      {subtitle && (
-        <track ref={trackRef} kind="subtitles" src={subtitle.src}
-          srcLang={subtitle.lang.replace(/-auto$/, "")} label={subtitle.label} />
-      )}
-    </video>
-  );
+  return <video {...common} playsInline crossOrigin="anonymous" />;
 }
