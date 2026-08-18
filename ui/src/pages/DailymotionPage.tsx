@@ -181,6 +181,36 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
   });
 
   /*
+   * Ask it to start again after a seek.
+   *
+   * Managed Media Source is how hls.js plays on an iPhone, and Safari drives it
+   * from both ends: when it has enough buffered it fires `endstreaming`, and
+   * hls.js answers with `pauseBuffering()` — its own source says so:
+   *
+   *     this._onEndStreaming = () => { … this.hls.pauseBuffering(); };
+   *     this._onStartStreaming = () => { this.hls.resumeBuffering(); };
+   *
+   * Which explains a seek that does nothing at all: no request, no error, and
+   * the buffer still sitting where it was — reported from the phone as
+   *
+   *     t 3299 · durée 4507 · seekable 0–4507 · tampon 0–78 · hls.js
+   *
+   * The position moved and nothing was fetched for it, because loading was
+   * paused and only Safari would have resumed it, in its own time. That is the
+   * "it freezes, and eventually it gets there".
+   *
+   * So the seek says it too. Buffering is resumed whether or not it was paused,
+   * which costs nothing when it was not.
+   */
+  useEffect(() => {
+    const element = mediaRef.current;
+    if (!element || !hls) return;
+    const resume = () => hls.resumeBuffering();
+    element.addEventListener("seeking", resume);
+    return () => element.removeEventListener("seeking", resume);
+  }, [hls, entry.mode]);
+
+  /*
    * What the player thinks, on screen.
    *
    * A far seek does nothing on the iPhone: no request leaves it, and the
