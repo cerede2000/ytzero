@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cleanTitle, dropDuplicateVideos, isDailymotionMediaUrl, masterPlaylist, plainDescription, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
+import { chosenStreams, cleanTitle, dropDuplicateVideos, isDailymotionMediaUrl, masterPlaylist, plainDescription, reSignSegmentUrl, rewriteHlsPlaylist, searchDailymotion, subtitlePlaylist, subtitlesFromMetadata, validDailymotionVideoId } from "./dailymotion";
 
 describe("what counts as a Dailymotion video", () => {
   test("their grammar, not YouTube's", () => {
@@ -269,5 +269,45 @@ describe("their page title on the end of a video title", () => {
 
   test("and a title that merely mentions them is left alone", () => {
     expect(cleanTitle("Dailymotion, l'histoire d'un site")).toBe("Dailymotion, l'histoire d'un site");
+  });
+});
+
+describe("a video whose sound travels separately", () => {
+  test("the muxed case is the address at the root", () => {
+    expect(chosenStreams({ url: "https://vod3.cf.dmcdn.net/sec2(a)/x.m3u8" }))
+      .toEqual({ streamUrl: "https://vod3.cf.dmcdn.net/sec2(a)/x.m3u8", audioUrl: null });
+  });
+
+  test("and the split case is the pair yt-dlp chose", () => {
+    // xajlzj2: every video rendition says acodec none, the sound is its own
+    // rendition, and there is no root url at all — which read as "no usable
+    // address" and answered 502 on every attempt.
+    expect(chosenStreams({
+      requested_formats: [
+        { format_id: "hls-720", vcodec: "avc1.64001f", acodec: "none", url: "https://vod3.cf.dmcdn.net/sec2(v)/video.m3u8" },
+        { format_id: "hls-0_aac_q2-English", vcodec: "none", acodec: "mp4a.40.2", url: "https://vod3.cf.dmcdn.net/sec2(a)/audio.m3u8" },
+      ],
+    })).toEqual({
+      streamUrl: "https://vod3.cf.dmcdn.net/sec2(v)/video.m3u8",
+      audioUrl: "https://vod3.cf.dmcdn.net/sec2(a)/audio.m3u8",
+    });
+  });
+
+  test("an answer with neither is empty rather than wrong", () => {
+    expect(chosenStreams({})).toEqual({ streamUrl: "", audioUrl: null });
+  });
+});
+
+describe("putting the two back together", () => {
+  test("the master declares the audio as a group and points the video at it", () => {
+    const master = masterPlaylist("/api/dm/media.m3u8", [], { codecs: "avc1.64001f" }, "/api/dm/audio.m3u8");
+    expect(master).toContain('#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Audio",DEFAULT=YES,AUTOSELECT=YES,URI="/api/dm/audio.m3u8"');
+    expect(master).toContain('AUDIO="aud"');
+  });
+
+  test("and says nothing about audio when it is already in the picture", () => {
+    const master = masterPlaylist("/api/dm/media.m3u8", [], {});
+    expect(master).not.toContain("TYPE=AUDIO");
+    expect(master).not.toContain('AUDIO="aud"');
   });
 });
