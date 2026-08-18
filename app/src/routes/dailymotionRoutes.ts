@@ -3,6 +3,7 @@ import { srtToVtt } from "../downloader";
 import {
   isDailymotionMediaUrl,
   masterPlaylist,
+  reSignSegmentUrl,
   resolveDailymotion,
   resolveDailymotionStream,
   subtitlePlaylist,
@@ -74,7 +75,7 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
       const response = await fetch(source, { signal: AbortSignal.timeout(15_000) });
       if (!response.ok) return c.json({ error: `Dailymotion answered ${response.status}` }, 502);
       const rewritten = rewriteHlsPlaylist(await response.text(), source,
-        (absolute) => `/api/dailymotion/segment?u=${encodeURIComponent(absolute)}`);
+        (absolute) => `/api/dailymotion/videos/${videoId}/segment?u=${encodeURIComponent(absolute)}`);
       return new Response(rewritten, {
         headers: { "Content-Type": "application/vnd.apple.mpegurl", "Cache-Control": "no-store" },
       });
@@ -155,22 +156,39 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
    * that check this route is an open proxy for anything on the internet. A
    * nested playlist is rewritten in turn, which is what makes depth irrelevant.
    */
-  api.get("/dailymotion/segment", async (c) => {
+  api.get("/dailymotion/videos/:id/segment", async (c) => {
+    const videoId = c.req.param("id");
+    if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
     const target = c.req.query("u") ?? "";
     if (!isDailymotionMediaUrl(target)) return c.json({ error: "unsupported media origin" }, 400);
     try {
       // A range asked for here is a range asked for there: the player decides
       // what it wants, and this is a pipe rather than a cache.
       const range = c.req.header("range");
-      const upstream = await fetch(target, {
+      const ask = (url: string) => fetch(url, {
         headers: range ? { Range: range } : undefined,
         signal: AbortSignal.timeout(20_000),
       });
+      let upstream = await ask(target);
+      /*
+       * A refusal here usually means the signature in the playlist has aged
+       * out, not that the segment is gone. Resolving again mints a fresh one,
+       * and every segment of this video can be rebuilt from it — so the player
+       * never learns that anything happened.
+       */
+      if (upstream.status === 403 || upstream.status === 410 || upstream.status === 404) {
+        const fresh = await resolveDailymotion(videoId, { fresh: true }).then((source) => source.streamUrl).catch(() => null);
+        const retry = fresh ? reSignSegmentUrl(target, fresh) : null;
+        if (retry) {
+          log.info("dailymotion.segment_resigned", { videoId, was: upstream.status });
+          upstream = await ask(retry);
+        }
+      }
       if (!upstream.ok && upstream.status !== 206) return c.json({ error: `Dailymotion answered ${upstream.status}` }, 502);
       const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
       if (contentType.includes("mpegurl") || target.includes(".m3u8")) {
         const rewritten = rewriteHlsPlaylist(await upstream.text(), target,
-          (absolute) => `/api/dailymotion/segment?u=${encodeURIComponent(absolute)}`);
+          (absolute) => `/api/dailymotion/videos/${videoId}/segment?u=${encodeURIComponent(absolute)}`);
         return new Response(rewritten, { headers: { "Content-Type": contentType, "Cache-Control": "no-store" } });
       }
       /*
