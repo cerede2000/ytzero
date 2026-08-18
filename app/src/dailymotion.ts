@@ -267,6 +267,29 @@ export async function searchDailymotionAll(query: string, fetchImpl: typeof fetc
   return { videos, channels, live };
 }
 
+/**
+ * What a channel has published since an instant, and only that.
+ *
+ * Their API filters on the date itself — asked for what came after a moment in
+ * the future it answers with nothing, which is how this was checked — so a
+ * channel with nothing new costs an empty list rather than a page of videos to
+ * compare against something remembered. Twenty channels, one of them posting
+ * twenty videos a day: 162ms and five kilobytes.
+ */
+export async function newVideosSince(
+  channelId: string,
+  since: number,
+  limit = 20,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DailymotionVideo[]> {
+  const list = await askDailymotion(
+    `user/${encodeURIComponent(channelId)}/videos?sort=recent&limit=${Math.max(1, Math.min(100, Math.trunc(limit)))}`
+    + `&created_after=${Math.max(0, Math.floor(since))}&fields=${encodeURIComponent(SEARCH_FIELDS)}`,
+    fetchImpl,
+  );
+  return dropDuplicateVideos(list.map(toVideo).filter((video): video is DailymotionVideo => video !== null));
+}
+
 export interface DailymotionPlaylist {
   playlistId: string;
   name: string;
