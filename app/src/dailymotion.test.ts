@@ -91,17 +91,23 @@ describe("what the search is allowed to offer", () => {
     // question nobody asked.
     const pages = (count: number, prefix: string) =>
       Array.from({ length: count }, (_, index) => ({ id: `${prefix}${index}`, title: `${prefix} ${index}`, duration: index + 1, allow_embed: true }));
-    const asked: number[] = [];
+    const asked: string[] = [];
     const paged = (async (url: string) => {
-      const page = Number(new URL(url).searchParams.get("page"));
-      asked.push(page);
+      const parameters = new URL(url).searchParams;
+      const page = Number(parameters.get("page"));
+      asked.push(`${page}${parameters.get("languages") ? "/lang" : ""}`);
       // Their pages overlap: page two repeats one of page one's entries.
       const list = page === 1 ? pages(2, "xaaaa") : [{ id: "xaaaa0", title: "xaaaa 0", duration: 1, allow_embed: true }, ...pages(10, `xb${page}dddd`)];
       return new Response(JSON.stringify({ list }), { status: 200 });
     }) as unknown as typeof fetch;
 
     const videos = await searchDailymotion("alpha luna", undefined, paged);
-    expect(asked).toEqual([1, 2, 3, 4, 5]);
+    // Both ways of asking, and every page of both: their index ranks a French
+    // video below what it takes the caller to want, and naming the language is
+    // the only thing that surfaces it.
+    expect(asked.slice(0, 2).sort()).toEqual(["1", "1/lang"]);
+    expect(asked.filter((call) => call.endsWith("/lang"))).toHaveLength(5);
+    expect(asked).toHaveLength(10);
     expect(videos.length).toBe(42);
     // Counted once, however many pages named it.
     expect(videos.filter((video) => video.videoId === "xaaaa0")).toHaveLength(1);
@@ -116,7 +122,7 @@ describe("what the search is allowed to offer", () => {
     }) as unknown as typeof fetch;
 
     const videos = await searchDailymotion("france info", undefined, counting);
-    expect(asked).toEqual([1]);
+    expect(asked).toEqual([1, 1]);
     expect(videos).toHaveLength(60);
   });
 
