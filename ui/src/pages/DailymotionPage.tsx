@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Headphones, Play, Search, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { Headphones, Play, Search, Subtitles, X } from "lucide-react";
+import { useVideoHlsSource } from "../components/useVideoHlsSource";
 import { Button, EmptyState, Input, PageHeader } from "../components/ui";
 import { mediaPlaybackState } from "../mediaSessionState";
 import { useDocumentTitle } from "../useDocumentTitle";
@@ -133,6 +134,7 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
   const mediaRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const [status, setStatus] = useState("Résolution du flux…");
   const [subtitles, setSubtitles] = useState<{ lang: string; label: string; src: string }[]>([]);
+  const [showSubtitles, setShowSubtitles] = useState(false);
   const source = `/api/dailymotion/videos/${entry.video.videoId}/hls.m3u8`;
 
   /*
@@ -149,54 +151,45 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
     return () => { cancelled = true; };
   }, [entry.video.videoId]);
 
-  useEffect(() => {
-    const element = mediaRef.current;
-    if (!element) return;
-    let cancelled = false;
-    let hls: import("hls.js").default | null = null;
-    setStatus("Résolution du flux…");
-    /*
-     * hls.js first, iPhone included — which is the opposite of what the watch
-     * page does, for a reason measured on this stream.
-     *
-     * Dailymotion's own fMP4 starts its two tracks at different times:
-     *
-     *     video  start_time 0.114031
-     *     audio  start_time 0.000000
-     *
-     * A tenth of a second, audio ahead. hls.js re-muxes and lines the tracks
-     * up, which is why a browser sounds right; iOS's player plays the file as
-     * authored and the offset stands, which is the lip-sync that was reported.
-     * hls.js runs there too on a recent iPhone, through Managed Media Source,
-     * and it renders the captions itself rather than leaving them to a player
-     * that re-enables them on every seek.
-     *
-     * The native path stays for anything that cannot run it.
-     */
-    void import("hls.js").then(({ default: Hls }) => {
-      if (cancelled) return;
-      if (!Hls.isSupported()) {
-        element.src = source;
-        setStatus("");
-        return;
-      }
-      hls = new Hls({ enableWorker: true });
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) return;
-        setStatus(data.details === "manifestLoadError"
-          ? "Cette vidéo n'est plus disponible chez Dailymotion."
-          : `Erreur de lecture : ${data.details}`);
-      });
-      hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus(""));
-      // Nothing is selected here on purpose: turning the first track on was
-      // mine rather than asked for, and it made "off" a state the reader could
-      // not keep. The player's own menu turns them on.
-      hls.loadSource(source);
-      hls.attachMedia(element);
-    });
+  /*
+   * The watch page's own HLS wiring, rather than a second one written here.
+   *
+   * Mine had no buffer bounds at all — six hundred seconds read ahead, which a
+   * laptop shrugs off and a phone does not: seeking far into a video stopped
+   * playback outright on the iPhone and nowhere else. This one holds thirty
+   * seconds and thirty-two megabytes, keeps a minute behind, restores the
+   * position after a recovery, and reloads the master playlist when the CDN
+   * answers 410. All of it already written, and all of it needed here for the
+   * same reasons it was needed there.
+   *
+   * `preferHlsJs` is the one thing asked of it that the watch page does not
+   * want: Dailymotion's tracks do not start at the same instant, so a faithful
+   * native player plays them a tenth of a second apart.
+   */
+  const [hls, setHls] = useState<import("hls.js").default | null>(null);
+  useVideoHlsSource({
+    active: true,
+    mediaRef: mediaRef as RefObject<HTMLVideoElement | null>,
+    onFatalError: () => setStatus("Lecture impossible — Dailymotion a refusé le flux."),
+    onInstance: setHls,
+    onReady: () => setStatus(""),
+    preferHlsJs: true,
+    src: source,
+    startSeconds: 0,
+  });
 
-    return () => { cancelled = true; hls?.destroy(); };
-  }, [source, entry.mode]);
+  /*
+   * One switch, two places to apply it: hls.js owns the rendition when it is
+   * playing, and the element's own text track when the native player is.
+   */
+  useEffect(() => {
+    if (hls) {
+      if (hls.subtitleTracks.length > 0) hls.subtitleTrack = showSubtitles ? 0 : -1;
+      return;
+    }
+    const tracks = mediaRef.current?.textTracks;
+    if (tracks && tracks.length > 0) tracks[0].mode = showSubtitles ? "showing" : "disabled";
+  }, [hls, showSubtitles, subtitles]);
 
   /*
    * Stated from the element rather than left to its events: a session
@@ -253,11 +246,30 @@ function DailymotionPlayer({ entry, onClose }: { entry: { video: DailymotionVide
         : <video key="video" {...common} playsInline />}
       {status && <p className="dm-player-status">{status}</p>}
       {entry.mode === "video" && (
-        <p className="dm-player-status">
-          {subtitles.length === 0
-            ? "Aucun sous-titre pour cette vidéo."
-            : `Sous-titres : ${subtitles.map((track) => track.label).join(", ")}`}
-        </p>
+        subtitles.length === 0
+          ? <p className="dm-player-status">Aucun sous-titre pour cette vidéo.</p>
+          : (
+            <div className="dm-player-subs">
+              {/*
+                * Our own switch rather than the player's menu.
+                *
+                * Reported: turning them on did nothing, and it took picking the
+                * language again — of which there was one — then off, on, off,
+                * before they appeared. That menu sets a mode on a text track
+                * and hopes hls.js notices; this sets the rendition on hls.js,
+                * which is the thing that decides. One press, one answer.
+                */}
+              <Button
+                size="sm"
+                variant={showSubtitles ? "primary" : "ghost"}
+                leadingIcon={<Subtitles size={14} />}
+                aria-pressed={showSubtitles}
+                onClick={() => setShowSubtitles((shown) => !shown)}
+              >
+                {subtitles[0].label}
+              </Button>
+            </div>
+          )
       )}
     </section>
   );
