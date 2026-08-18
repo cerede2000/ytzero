@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { isAllowedRemoteImageUrl } from "./imageCachePolicy";
 import { providerThumbnailHosts, requestedProviders, searchProvider, SEARCH_PROVIDERS } from "./searchProviderCatalog";
-import { durationClock } from "./searchProviders";
+import { searchDailymotionAll } from "./dailymotion";
+import { durationClock, providerCeiling } from "./searchProviders";
 
 describe("the providers a search can reach", () => {
   test("each one says where its cards lead and what may be done with them", () => {
@@ -38,6 +39,31 @@ describe("the images the proxy will fetch", () => {
   test("and nothing that merely looks like one", () => {
     expect(isAllowedRemoteImageUrl("https://dmcdn.net.evil.example/x.jpg")).toBe(false);
     expect(isAllowedRemoteImageUrl("http://s2.dmcdn.net/x.jpg")).toBe(false);
+  });
+});
+
+describe("what one provider may contribute", () => {
+  const answering = (count: number) => (async () => new Response(JSON.stringify({
+    list: Array.from({ length: count }, (_, index) => ({
+      id: `xaaaa${String(index).padStart(2, "0")}`, title: `Un titre ${index}`, duration: index + 1, allow_embed: true,
+    })),
+  }), { status: 200 })) as unknown as typeof fetch;
+
+  test("every provider is asked for the same amount", () => {
+    // Sixty Dailymotion cards after thirteen YouTube ones read as a broken
+    // YouTube search rather than a fuller Dailymotion one, and a filter should
+    // narrow what is shown rather than change how much there is.
+    expect(providerCeiling()).toBe(40);
+  });
+
+  test("and answers with no more than that", async () => {
+    const { videos } = await searchDailymotionAll("alpha luna", answering(60), providerCeiling());
+    expect(videos).toHaveLength(40);
+  });
+
+  test("asked for nothing in particular, it still has its own ceiling", async () => {
+    const { videos } = await searchDailymotionAll("alpha luna", answering(80));
+    expect(videos).toHaveLength(60);
   });
 });
 

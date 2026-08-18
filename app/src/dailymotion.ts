@@ -234,10 +234,10 @@ async function askDailymotion(path: string, fetchImpl: typeof fetch): Promise<Re
  * Each shelf is asked for separately and independently: a search that finds no
  * channels should still show its videos, so one failure does not empty the page.
  */
-export async function searchDailymotionAll(query: string, fetchImpl: typeof fetch = fetch): Promise<DailymotionSearch> {
+export async function searchDailymotionAll(query: string, fetchImpl: typeof fetch = fetch, limit?: number): Promise<DailymotionSearch> {
   const term = encodeURIComponent(query);
   const [videos, channels, live] = await Promise.all([
-    searchDailymotion(query, undefined, fetchImpl).catch(() => []),
+    searchDailymotion(query, limit, fetchImpl).catch(() => []),
     askDailymotion(`users?search=${term}&limit=8&fields=${encodeURIComponent(CHANNEL_FIELDS)}`, fetchImpl)
       .then((list) => list.map(toChannel).filter((channel): channel is DailymotionChannel => channel !== null))
       .catch(() => []),
