@@ -194,7 +194,7 @@ export function VideoCard({
    * service knows no other. A provider whose videos the library cannot hold is
    * shown read-only by its page, so no action here needs to know about it.
    */
-  provider?: { id: string; label: string; watchPath: string };
+  provider?: { id: string; label: string; watchPath: string; capabilities: { library: boolean } };
   /** Settings-only mode: preserve the real card markup while replacing mutations with configurable drag handles. */
   actionPreview?: {
     config: VideoCardActionConfig;
@@ -203,6 +203,16 @@ export function VideoCard({
   };
 }) {
   const deArrowBranding = useDeArrowBranding(provider && provider.id !== "youtube" ? "" : video.video_id);
+  /*
+   * A card whose video the library cannot hold.
+   *
+   * Not the same as read-only: some of what this card offers is about the
+   * reader rather than the library, and those still work. What does not is
+   * anything needing a row — downloading, archiving, scheduling — and anything
+   * built for YouTube's player, the hover preview above all, which would open
+   * an embed for an id that is not YouTube's.
+   */
+  const withoutLibraryRow = Boolean(provider && !provider.capabilities.library);
   const [showOriginalBranding, setShowOriginalBranding] = useState(false);
   const hasDeArrowBranding = Boolean(deArrowBranding?.title || deArrowBranding?.thumbnail);
   const displayTitle = showOriginalBranding ? video.title : deArrowBranding?.title || video.title;
@@ -269,7 +279,7 @@ export function VideoCard({
     if (event.pointerType !== "mouse" || previewTimerRef.current != null || previewActive) return;
     const mode = readVideoCardPreviewMode();
     const downloaded = downloadStatus === "done";
-    if (mode === "off" || (mode === "downloaded" && !downloaded) || selectable || readOnly || actionPreview
+    if (mode === "off" || (mode === "downloaded" && !downloaded) || selectable || readOnly || withoutLibraryRow || actionPreview
       || processing || video.is_private === 1 || video.live_status === "live" || video.live_status === "upcoming") return;
     previewTimerRef.current = window.setTimeout(() => {
       previewTimerRef.current = null;
@@ -378,7 +388,7 @@ export function VideoCard({
       filterTaps: true,
       from: [0, 0],
       pointer: { capture: true },
-      enabled: swipeEnabledForDevice && appliedActionsMode !== "off" && !selectable && !readOnly && (allowReject || allowMarkWatched),
+      enabled: swipeEnabledForDevice && appliedActionsMode !== "off" && !selectable && !readOnly && !withoutLibraryRow && (allowReject || allowMarkWatched),
     }
   );
 
@@ -706,9 +716,9 @@ export function VideoCard({
         <div
           className={`thumb-wrap${actionsOpen ? " controls-near" : ""}${processing ? " thumb-wrap--processing" : ""}`}
           style={{ "--actions-proximity": actionProximity } as CSSProperties}
-          onPointerEnter={selectable || readOnly ? undefined : schedulePreview}
-          onPointerMove={selectable || readOnly ? undefined : updateActionProximity}
-          onPointerLeave={selectable || readOnly ? undefined : (event) => { resetActionProximity(event); stopPreview(); }}
+          onPointerEnter={selectable || readOnly || withoutLibraryRow ? undefined : schedulePreview}
+          onPointerMove={selectable || readOnly || withoutLibraryRow ? undefined : updateActionProximity}
+          onPointerLeave={selectable || readOnly || withoutLibraryRow ? undefined : (event) => { resetActionProximity(event); stopPreview(); }}
         >
           {selectable && (
             <button

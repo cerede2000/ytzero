@@ -378,9 +378,9 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
                   searchResultLayout
                   processing={false}
                   inLibrary={inLibrary}
+                  // What may be done with it is the provider's business, and
+                  // the card reads it from there rather than being told twice.
                   provider={provider}
-                  // Nothing here may be downloaded, queued or marked watched.
-                  readOnly={!provider.capabilities.library}
                 />
               ))}
             </div>
