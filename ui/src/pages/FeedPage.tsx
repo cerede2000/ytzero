@@ -505,7 +505,6 @@ export default function FeedPage({
                   <VideoCard
                     video={v}
                     provider={provider ?? undefined}
-                    readOnly={Boolean(provider)}
                     onPlay={(video) => (provider
                       ? navigate(providerPath(provider.watchPath, video.video_id))
                       : onPlay(video, video.playback_context ?? inProgressQueue))}
