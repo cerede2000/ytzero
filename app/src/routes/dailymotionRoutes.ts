@@ -2,6 +2,7 @@ import type { Context, Hono } from "hono";
 import { srtToVtt } from "../downloader";
 import {
   dailymotionChannelPage,
+  newVideosSince,
   dailymotionRelated,
   dailymotionVideoDetail,
   isDailymotionMediaUrl,
@@ -17,6 +18,7 @@ import {
   validDailymotionVideoId,
 } from "../dailymotion";
 import { log } from "../logger";
+import { follow, isFollowing, listFollows, markSeen, progressFor, saveProgress, unfollow } from "../dailymotionFollows";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
@@ -60,6 +62,91 @@ export function registerDailymotionRoutes(api: Api, access: { currentUserId: (co
       log.warn("dailymotion.search_failed", { error: error instanceof Error ? error.message : String(error) });
       return c.json({ error: "Dailymotion search failed" }, 502);
     }
+  });
+
+  /**
+   * The channels this reader follows, and what each has published since.
+   *
+   * Every channel is asked at once and each is allowed to fail alone: one that
+   * cannot be reached costs its own novelties and nobody else's. What comes
+   * back is what is new — their API filters on the date, so nothing has to be
+   * remembered about a video to know it has already been offered.
+   */
+  api.get("/dailymotion/follows", async (c) => {
+    const userId = access.currentUserId(c);
+    const follows = await listFollows(userId);
+    const withNews = await Promise.all(follows.map(async (followed) => ({
+      ...followed,
+      videos: await newVideosSince(followed.channelId, followed.seenThrough).catch((error: unknown) => {
+        log.warn("dailymotion.follow_check_failed", {
+          channelId: followed.channelId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return [];
+      }),
+    })));
+    return c.json({ follows: withNews });
+  });
+
+  api.get("/dailymotion/follows/:id", async (c) => {
+    const channelId = c.req.param("id");
+    if (!validDailymotionChannelId(channelId)) return c.json({ error: "invalid channel id" }, 400);
+    return c.json({ following: await isFollowing(access.currentUserId(c), channelId) });
+  });
+
+  api.put("/dailymotion/follows/:id", async (c) => {
+    const channelId = c.req.param("id");
+    if (!validDailymotionChannelId(channelId)) return c.json({ error: "invalid channel id" }, 400);
+    const body = await c.req.json().catch(() => ({})) as { screenname?: unknown; avatar?: unknown };
+    const added = await follow(access.currentUserId(c), {
+      channelId,
+      screenname: typeof body.screenname === "string" ? body.screenname.slice(0, 200) : "",
+      avatar: typeof body.avatar === "string" ? body.avatar.slice(0, 500) : "",
+    });
+    return added ? c.json({ following: true }) : c.json({ error: "invalid channel id" }, 400);
+  });
+
+  api.delete("/dailymotion/follows/:id", async (c) => {
+    const channelId = c.req.param("id");
+    if (!validDailymotionChannelId(channelId)) return c.json({ error: "invalid channel id" }, 400);
+    await unfollow(access.currentUserId(c), channelId);
+    return c.json({ following: false });
+  });
+
+  /** Offered, therefore no longer new. A channel may be settled on its own. */
+  api.post("/dailymotion/follows/seen", async (c) => {
+    const body = await c.req.json().catch(() => ({})) as { through?: unknown; channelId?: unknown };
+    const through = Number(body.through);
+    if (!Number.isFinite(through) || through <= 0) return c.json({ error: "invalid instant" }, 400);
+    const channelId = typeof body.channelId === "string" ? body.channelId : undefined;
+    if (channelId && !validDailymotionChannelId(channelId)) return c.json({ error: "invalid channel id" }, 400);
+    await markSeen(access.currentUserId(c), through, channelId);
+    return c.json({ ok: true });
+  });
+
+  /**
+   * How far into these videos the reader got.
+   *
+   * Asked for by the page that is about to draw them, rather than carried on
+   * every card from every list: the ids are Dailymotion's and mean nothing to
+   * the tables that hold YouTube's.
+   */
+  api.get("/dailymotion/progress", async (c) => {
+    const ids = (c.req.query("ids") ?? "").split(",").map((id) => id.trim()).filter(Boolean).slice(0, 200);
+    return c.json({ progress: await progressFor(access.currentUserId(c), ids) });
+  });
+
+  api.put("/dailymotion/videos/:id/progress", async (c) => {
+    const videoId = c.req.param("id");
+    if (!validDailymotionVideoId(videoId)) return c.json({ error: "invalid video id" }, 400);
+    const body = await c.req.json().catch(() => ({})) as { position?: unknown; duration?: unknown };
+    const saved = await saveProgress(
+      access.currentUserId(c),
+      videoId,
+      Number(body.position),
+      body.duration == null ? null : Number(body.duration),
+    );
+    return saved ? c.json({ ok: true }) : c.json({ error: "invalid video id" }, 400);
   });
 
   /** A channel: who they are, what they posted, and the playlists search cannot reach. */
