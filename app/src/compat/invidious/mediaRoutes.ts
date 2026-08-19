@@ -1,151 +1,13 @@
 import type { Context, Hono } from "hono";
 import { existsSync } from "node:fs";
-import { getDownload, getVideoResponse, listSubtitleFiles, srtToVtt } from "../../downloader";
+import { getDownload, listSubtitleFiles, srtToVtt } from "../../downloader";
 import { notePlayback } from "../../playbackActivity";
-import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { compatUserId } from "./context";
 import { cachedMedia, growingFileResponse, mimeFor, offeredHeight, offeredKind, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
 import { localFileResponse, mediaSecret } from "./media";
 import { mediaTokenValid } from "./mediaToken";
-
-/**
- * How long the direct path stays written off for a video that refused it.
- *
- * A native player opens several connections and reopens them as each fails,
- * and every one of them was paying the full retry ladder and a re-resolution
- * before giving up — a minute and a half of asking YouTube about a video it
- * has just refused, on an address already being challenged for robots. Once
- * one connection has learned the answer, the others go straight to the way
- * that works.
- *
- * Short on purpose. This is not a verdict on the video: the refusal is an
- * experiment YouTube runs, and the next press of play is entitled to find out
- * for itself.
- */
-const REFUSAL_MEMORY_MS = 30_000;
-const refusedAt = new Map<string, number>();
-
-export function noteRefusal(videoId: string, now = Date.now()): void {
-  refusedAt.set(videoId, now);
-}
-
-export function recentlyRefused(videoId: string, now = Date.now()): boolean {
-  const at = refusedAt.get(videoId);
-  if (at === undefined) return false;
-  if (now - at < REFUSAL_MEMORY_MS) return true;
-  refusedAt.delete(videoId);
-  return false;
-}
-
-/**
- * One connection finds out whether the direct path works; the rest are told.
- *
- * A native player opens several at once, and each was starting its own
- * extraction and its own retry ladder against the same address — twenty
- * seconds of 403 in parallel before any of them had a verdict to share. Now
- * the first one asks and the others wait for the answer: if it serves, they
- * ask too and find the source already resolved; if it is refused, they go
- * straight to the way that works.
- *
- * An abandoned request settles nothing. A player that hung up says nothing
- * about whether YouTube would have answered.
- */
-const directVerdicts = new Map<string, Promise<boolean>>();
-
-/**
- * How long the direct path runs alone before the other way starts beside it.
- *
- * Long enough that an address which works answers first and costs nothing;
- * short enough that a refused one is not what the viewer waits for. And none
- * at all while YouTube is refusing this address outright: the extraction the
- * grace is waiting for has already been reported as failing, so waiting for it
- * again is four seconds spent on an answer we have.
- */
-const DIRECT_GRACE_MS = 2_500;
-
-/**
- * What the last few videos said about the direct path.
- *
- * The grace is a bet that the address will serve. On an instance where it
- * never does, that bet is paid on every video — and paid twice over, because
- * the fetch behind it then starts its own five-second extraction while the
- * player is already waiting. Two refusals in a row is enough to stop betting;
- * one success is enough to start again, so an experiment that ends is noticed
- * without anything to reset by hand.
- */
-const REFUSALS_BEFORE_GIVING_UP = 2;
-let consecutiveRefusals = 0;
-
-export function noteDirectOutcome(worked: boolean): void {
-  consecutiveRefusals = worked ? 0 : consecutiveRefusals + 1;
-}
-
-export function directLooksDead(): boolean {
-  return consecutiveRefusals >= REFUSALS_BEFORE_GIVING_UP;
-}
-
-export function directGrace(): number {
-  return videoInfoRefusalQuiet.quiet() || directLooksDead() ? 0 : DIRECT_GRACE_MS;
-}
-
-export async function directResponse(
-  userId: number,
-  videoId: string,
-  range: string,
-  signal: AbortSignal,
-  ask: (userId: number, videoId: string, range: string, signal: AbortSignal) => Promise<Response | null> =
-    (id, video, wanted, aborts) => getVideoResponse(id, video, wanted, aborts),
-): Promise<Response | null> {
-  const waiting = directVerdicts.get(videoId);
-  if (waiting) {
-    return await waiting ? ask(userId, videoId, range, signal) : null;
-  }
-  let settle: (worked: boolean) => void = () => {};
-  directVerdicts.set(videoId, new Promise<boolean>((resolve) => { settle = resolve; }));
-  try {
-    const response = await ask(userId, videoId, range, signal);
-    // An abandoned request settles nothing: the player hanging up says nothing
-    // about whether YouTube would have answered.
-    if (!signal.aborted) noteDirectOutcome(Boolean(response));
-    settle(Boolean(response) || signal.aborted);
-    return response;
-  } catch (error) {
-    settle(signal.aborted);
-    throw error;
-  } finally {
-    directVerdicts.delete(videoId);
-  }
-}
-
-/**
- * Whichever way answers first, and nothing kept from the one that lost.
- *
- * When a fetch is already under way it is because the direct path was still
- * undecided seconds ago, so there is no sense in waiting out its verdict
- * before starting to serve: the file that is arriving may well be ahead of it.
- * A late answer from the loser is drained rather than dropped, so the
- * connection behind it is not left open.
- */
-export async function firstServed(candidates: Promise<Response | null>[]): Promise<Response | null> {
-  return new Promise((resolve) => {
-    let outstanding = candidates.length;
-    let settled = false;
-    for (const candidate of candidates) {
-      candidate.then((response) => {
-        if (settled) return void response?.body?.cancel().catch(() => {});
-        if (response) {
-          settled = true;
-          return resolve(response);
-        }
-        if (--outstanding === 0) resolve(null);
-      }, () => {
-        if (!settled && --outstanding === 0) resolve(null);
-      });
-    }
-  });
-}
 
 async function tokenHolds(c: Context, resource: string, videoId: string): Promise<boolean> {
   return mediaTokenValid(
@@ -198,77 +60,44 @@ export function registerMediaRoutes(app: Hono): void {
       if (response) return answered("downloaded", response);
     }
 
-    // Already fetched once because the direct path was refused for it.
+    // Fetched for an earlier play, or by the warm when the video was opened.
     const kept = cachedMedia(videoId, kind, height);
     if (kept) {
-      const response = localFileResponse(kept, c.req.header("range"));
+      const response = localFileResponse(kept, c.req.header("range"), mimeFor(kind, kept));
       if (response) return answered("cached", response);
     }
 
     const range = c.req.header("range");
 
     /*
-     * No range at all means the whole file, and that is a downloader.
+     * One source for the whole of a video, and it is this server's own file.
      *
-     * A player asks in ranges and comes back for more, so it is served as the
-     * file arrives. A downloader issues one plain GET and expects one complete
-     * body — answered with a partial one it saves a truncated file or calls
-     * the download failed, which is what a client reported: the muxed quality
-     * worked, because its file was already whole in the cache, and the
-     * separate tracks failed, because theirs were still arriving.
-     */
-    if (!range) {
-      const whole = cachedMedia(videoId, kind, height);
-      if (whole) {
-        const response = localFileResponse(whole, undefined, mimeFor(kind, whole));
-        if (response) return answered("whole-file", response);
-      }
-      const arriving = pendingFetch(videoId, kind, height) ?? startFetch(userId, videoId, kind, height);
-      if (arriving) return answered("streamed-file", await growingFileResponse(arriving, kind));
-      if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
-      log.warn("invidious.media_unavailable", { videoId, kind, height, range: null, downloaded: false });
-      return c.json({ error: "video unavailable" }, 502);
-    }
-
-    /*
-     * The direct path first: it costs no disk and starts at once.
+     * There used to be a second: the address YouTube would have served, raced
+     * against the fetch so that a working one answered first. It served the
+     * profile's progressive stream — one stream, whatever the link asked for —
+     * so a client playing the 1080p track got a few megabytes of the muxed
+     * file before the fetch took over, and a client playing the separate audio
+     * track got video. Two files under one address. It plays for a while and
+     * stops in the middle, nothing is logged at either end, and the second
+     * attempt is perfect because by then the file is cached and every byte
+     * comes from it.
      *
-     * If a fetch is already under way, the two race. Waiting out the direct
-     * verdict costs seventeen seconds of extractions and retry ladders, and
-     * the file arriving beside it is often ready long before that.
+     * A shortcut that has to be right about which file it is serving, and is
+     * not, is not a shortcut. The fetch answers in about a second, and it
+     * answers with the track that was asked for.
      */
-    if (!recentlyRefused(videoId)) {
+    const arriving = pendingFetch(videoId, kind, height) ?? startFetch(userId, videoId, kind, height);
+    if (arriving) {
       /*
-       * Both ways run, and the first to produce bytes wins.
+       * No range at all means the whole file, and that is a downloader.
        *
-       * The fallback starts itself after a grace rather than joining one that
-       * happens to be under way already: a request arriving in the seconds
-       * before the fetch was registered found nothing to race against and
-       * waited out the direct verdict instead — an extraction, a ladder, a
-       * second extraction, a second ladder — with the file it needed already
-       * arriving beside it.
+       * A player asks in ranges and comes back for more, so it is served as
+       * the file arrives. A downloader issues one plain GET and expects one
+       * complete body — answered with a partial one it saves a truncated file
+       * or calls the download failed, which is what a client reported.
        */
-      const direct = directResponse(userId, videoId, range, c.req.raw.signal);
-      const fallback = Bun.sleep(directGrace()).then(() => {
-        const entry = pendingFetch(videoId, kind, height) ?? startFetch(userId, videoId, kind, height);
-        return entry ? partialFileResponse(entry, range, c.req.raw.signal, kind) : null;
-      });
-      const streamed = await firstServed([direct, fallback]);
-      if (streamed) return answered("direct-or-fetch", streamed);
-      if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
-      noteRefusal(videoId);
-    }
-
-    /*
-     * Refused. For some videos every format, client, header set and range
-     * answers 403 to an address extracted here — YouTube binds the
-     * proof-of-origin token to the video — while yt-dlp downloads the same
-     * format without trouble. So it fetches, and the file is served as it
-     * arrives rather than when it is whole.
-     */
-    const fetching = pendingFetch(videoId, kind, height) ?? startFetch(userId, videoId, kind, height);
-    if (fetching) {
-      const served = await partialFileResponse(fetching, range, c.req.raw.signal, kind);
+      if (!range) return answered("streamed-file", await growingFileResponse(arriving, kind));
+      const served = await partialFileResponse(arriving, range, c.req.raw.signal, kind);
       if (served) return answered("fetch", served);
     }
     /*
@@ -279,7 +108,7 @@ export function registerMediaRoutes(app: Hono): void {
      * real refusals among them.
      */
     if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
-    log.warn("invidious.media_unavailable", { videoId, range: c.req.header("range") ?? null, downloaded: Boolean(download?.path) });
+    log.warn("invidious.media_unavailable", { videoId, kind, height, range: range ?? null, downloaded: Boolean(download?.path) });
     return c.json({ error: "video unavailable" }, 502);
   });
 

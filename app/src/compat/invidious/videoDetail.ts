@@ -3,7 +3,6 @@ import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { ADAPTIVE_HEIGHTS, BEST_HEIGHT, OFFERED_HEIGHTS, cachedEntry, cachedMedia, startFetch } from "./mediaCache";
-import { directGrace, directResponse } from "./mediaRoutes";
 import { signedCaptionPath, signedMediaUrl } from "./media";
 import { channelThumbnails, labelledQualities, videoFromRow, type VideoRowLike } from "./shapes";
 
@@ -63,7 +62,10 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
 export function warmMedia(userId: number, videoId: string): void {
   void (async () => {
     if (alreadyPlayable(cachedMedia(videoId, "muxed", BEST_HEIGHT), await getDownload(userId, videoId))) return;
-    warmFromYouTube(userId, videoId);
+    // Cheap when it turns out to be unnecessary: the file is capped, evicted
+    // least-recently-served first, and makes the next play of it instant. The
+    // quality a client asks for first, so the warm one is the one wanted.
+    startFetch(userId, videoId, "muxed", BEST_HEIGHT);
   })().catch(() => {});
 }
 
@@ -80,25 +82,6 @@ export function alreadyPlayable(
 ): boolean {
   if (cached) return true;
   return download?.status === "done" && Boolean(download.path) && existsSync(download.path!);
-}
-
-function warmFromYouTube(userId: number, videoId: string): void {
-  let served = false;
-  const probe = directResponse(userId, videoId, "bytes=0-1", new AbortController().signal)
-    .then((response) => {
-      served = Boolean(response);
-      return response?.body?.cancel().catch(() => {});
-    })
-    .catch(() => {});
-  // Nothing to wait for while the address is refused, or while the last videos
-  // were: the extraction the grace hopes for is the one already failing.
-  const fallback = Bun.sleep(directGrace()).then(() => {
-    // Cheap when it turns out to be unnecessary: the file is capped, evicted
-    // least-recently-served first, and makes the next play of it instant.
-    // The quality a client asks for first, so the warm one is the one wanted.
-    if (!served) startFetch(userId, videoId, "muxed", BEST_HEIGHT);
-  });
-  void Promise.all([probe, fallback]).catch(() => {});
 }
 
 /**
