@@ -6,7 +6,7 @@ import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { compatUserId } from "./context";
-import { cachedMedia, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
+import { cachedMedia, offeredHeight, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
 import { localFileResponse, mediaSecret } from "./media";
 import { mediaTokenValid } from "./mediaToken";
 
@@ -168,7 +168,8 @@ async function tokenHolds(c: Context, resource: string, videoId: string): Promis
 export function registerMediaRoutes(app: Hono): void {
   app.get("/api/v1/media/:id", async (c) => {
     const videoId = c.req.param("id");
-    if (!await tokenHolds(c, "media", videoId)) return c.json({ error: "expired or invalid link" }, 403);
+    const height = offeredHeight(c.req.query("height"));
+    if (!await tokenHolds(c, `media:${height}`, videoId)) return c.json({ error: "expired or invalid link" }, 403);
     const userId = await compatUserId();
 
     const askedAt = Date.now();
@@ -181,7 +182,7 @@ export function registerMediaRoutes(app: Hono): void {
      * request, and reading it required knowing which silences were good ones.
      */
     const answered = (by: string, response: Response) => {
-      log.info("invidious.media_answered", { videoId, by, ms: Date.now() - askedAt });
+      log.info("invidious.media_answered", { videoId, height, by, ms: Date.now() - askedAt });
       return response;
     };
 
@@ -194,7 +195,7 @@ export function registerMediaRoutes(app: Hono): void {
     }
 
     // Already fetched once because the direct path was refused for it.
-    const kept = cachedMedia(videoId);
+    const kept = cachedMedia(videoId, height);
     if (kept) {
       const response = localFileResponse(kept, c.req.header("range"));
       if (response) return answered("cached", response);
@@ -223,7 +224,7 @@ export function registerMediaRoutes(app: Hono): void {
        */
       const direct = directResponse(userId, videoId, range ?? "bytes=0-", c.req.raw.signal);
       const fallback = Bun.sleep(directGrace()).then(() => {
-        const entry = pendingFetch(videoId) ?? startFetch(userId, videoId);
+        const entry = pendingFetch(videoId, height) ?? startFetch(userId, videoId, height);
         return entry ? partialFileResponse(entry, range, c.req.raw.signal) : null;
       });
       const streamed = await firstServed([direct, fallback]);
@@ -239,7 +240,7 @@ export function registerMediaRoutes(app: Hono): void {
      * format without trouble. So it fetches, and the file is served as it
      * arrives rather than when it is whole.
      */
-    const fetching = pendingFetch(videoId) ?? startFetch(userId, videoId);
+    const fetching = pendingFetch(videoId, height) ?? startFetch(userId, videoId, height);
     if (fetching) {
       const served = await partialFileResponse(fetching, range, c.req.raw.signal);
       if (served) return answered("fetch", served);

@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
-import { cachedMedia, startFetch } from "./mediaCache";
+import { BEST_HEIGHT, OFFERED_HEIGHTS, cachedMedia, startFetch } from "./mediaCache";
 import { directGrace, directResponse } from "./mediaRoutes";
 import { signedCaptionPath, signedMediaUrl } from "./media";
 import { channelThumbnails, videoFromRow, type VideoRowLike } from "./shapes";
@@ -62,7 +62,7 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
  */
 export function warmMedia(userId: number, videoId: string): void {
   void (async () => {
-    if (alreadyPlayable(cachedMedia(videoId), await getDownload(userId, videoId))) return;
+    if (alreadyPlayable(cachedMedia(videoId, BEST_HEIGHT), await getDownload(userId, videoId))) return;
     warmFromYouTube(userId, videoId);
   })().catch(() => {});
 }
@@ -95,7 +95,8 @@ function warmFromYouTube(userId: number, videoId: string): void {
   const fallback = Bun.sleep(directGrace()).then(() => {
     // Cheap when it turns out to be unnecessary: the file is capped, evicted
     // least-recently-served first, and makes the next play of it instant.
-    if (!served) startFetch(userId, videoId);
+    // The quality a client asks for first, so the warm one is the one wanted.
+    if (!served) startFetch(userId, videoId, BEST_HEIGHT);
   });
   void Promise.all([probe, fallback]).catch(() => {});
 }
@@ -126,19 +127,25 @@ export async function videoDetail(userId: number, row: DetailRow, origin: string
     genre: "",
     keywords: [] as string[],
     /*
-     * One entry, and only for what can actually be played through: a muxed
-     * file. Splitting audio from video would mean announcing adaptive formats
-     * whose separate URLs we do not resolve, and a live stream needs an HLS
-     * manifest this does not mint yet — named here, either would be a promise
-     * the next request breaks.
+     * One entry per quality that can be served as a single muxed file, each
+     * saying its height.
+     *
+     * The height is not decoration: a client's downloader keeps only the
+     * streams that declare one — `resolution != nil` — so an entry without it
+     * is invisible to it, and asking to download the video fails before any
+     * request reaches this server. It is also what lets the viewer choose,
+     * since the link carries the choice and the fetch honours it.
      */
-    formatStreams: live ? [] : [{
-      url: await signedMediaUrl(origin, row.video_id),
-      itag: "18",
-      type: downloaded?.path?.endsWith(".webm") ? "video/webm" : "video/mp4",
-      container: downloaded?.path?.endsWith(".webm") ? "webm" : "mp4",
-      quality: "medium",
-    }],
+    formatStreams: live ? [] : await Promise.all(OFFERED_HEIGHTS.map(async (height) => ({
+      url: await signedMediaUrl(origin, row.video_id, height),
+      itag: height === 720 ? "22" : "18",
+      type: "video/mp4",
+      container: "mp4",
+      quality: height === 720 ? "hd720" : "medium",
+      qualityLabel: `${height}p`,
+      resolution: `${height}p`,
+      size: `${Math.round((height * 16) / 9)}x${height}`,
+    }))),
     adaptiveFormats: [] as unknown[],
     captions: await Promise.all(languages.map(async (language) => ({
       label: language,
