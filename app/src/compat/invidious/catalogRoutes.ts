@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { requestOrigin } from "../../auth";
+import { durationSeconds } from "../../shortClassification";
 import { database } from "../../database";
 import { log } from "../../logger";
 import { SEARCH_PROVIDERS } from "../../searchProviderCatalog";
@@ -8,11 +9,13 @@ import { ensureVideoImported } from "../../videoImport";
 import { fetchSearchSuggestions } from "../../youtube";
 import { fetchVideoComments } from "../../youtubeComments";
 import { compatUserId } from "./context";
+import { dailymotionDetail, dailymotionIdFrom, prefixedDailymotionId } from "./dailymotion";
 import { invidiousStats } from "./stats";
 import {
   channelFromRow,
   channelFromSearchResult,
   commentsFrom,
+  videoFromDailymotion,
   videoFromRow,
   videoFromSearchResult,
   type ChannelRowLike,
@@ -59,12 +62,28 @@ export function registerCatalogRoutes(app: Hono): void {
     if (!query) return c.json([]);
     const type = c.req.query("type") ?? "all";
     if (type === "playlist") return c.json([]);
-    const youtube = SEARCH_PROVIDERS.filter((provider) => provider.id === "youtube");
-    const { found } = await searchAcrossProviders(query, youtube, pageFrom(c.req.query("page")), await compatUserId());
-    const search = found.youtube;
+    /*
+     * Every provider the instance offers, in one list, the way the web search
+     * asks for them. A client has no notion of where a result came from, so
+     * what tells the reader is the author line and what tells this server is
+     * the id — see `videoFromDailymotion`.
+     */
+    const providers = SEARCH_PROVIDERS.filter((provider) => provider.capabilities.library || provider.id === "dailymotion");
+    const { found } = await searchAcrossProviders(query, providers, pageFrom(c.req.query("page")), await compatUserId());
     const items: unknown[] = [];
-    if (type !== "video") items.push(...(search?.channels ?? []).map(channelFromSearchResult));
-    if (type !== "channel") items.push(...(search?.results ?? []).map((result) => videoFromSearchResult(result)));
+    if (type !== "video") items.push(...(found.youtube?.channels ?? []).map(channelFromSearchResult));
+    if (type !== "channel") {
+      items.push(...(found.youtube?.results ?? []).map((result) => videoFromSearchResult(result)));
+      items.push(...(found.dailymotion?.results ?? []).map((result) => videoFromDailymotion({
+        videoId: result.videoId,
+        title: result.title,
+        channelTitle: result.channelTitle,
+        thumbnail: result.thumbnail,
+        durationSeconds: durationSeconds(result.duration),
+        publishedAt: result.publishedAt ?? null,
+        views: result.viewCount,
+      }, prefixedDailymotionId(result.videoId))));
+    }
     return c.json(items);
   });
 
@@ -81,6 +100,17 @@ export function registerCatalogRoutes(app: Hono): void {
 
   app.get("/api/v1/videos/:id", async (c) => {
     const videoId = c.req.param("id");
+    /*
+     * A Dailymotion video is answered from Dailymotion. Its id cannot be
+     * mistaken for a library one — the prefix is not in that space — and none
+     * of what follows applies to it: nothing to import, nothing to extract, and
+     * a manifest where the others have a file.
+     */
+    const dailymotion = dailymotionIdFrom(videoId);
+    if (dailymotion) {
+      const detail = await dailymotionDetail(dailymotion, requestOrigin(c));
+      return detail ? c.json(detail) : c.json({ error: "not found" }, 404);
+    }
     const userId = await compatUserId();
     /*
      * The file first, before anything is known about the video.

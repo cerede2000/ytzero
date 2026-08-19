@@ -292,3 +292,46 @@ export function labelledQualities(
   }
   return chosen;
 }
+
+export interface DailymotionVideoLike {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+  durationSeconds: number | null;
+  publishedAt: string | null;
+  views: number | null;
+}
+
+/**
+ * A Dailymotion video as a client's list entry.
+ *
+ * The dialect has no field for where a video came from, and a client drops
+ * what it does not know — so the origin is written where it will be read: the
+ * author line, which every card and every row draws. It is not decoration
+ * either, since the channel really is a Dailymotion channel.
+ *
+ * The id carries the prefix nothing else can spell, which is what makes the
+ * tap that follows land on the right provider.
+ */
+export function videoFromDailymotion(video: DailymotionVideoLike, prefixed: string): InvidiousVideo {
+  const published = publishedSeconds(video.publishedAt);
+  return {
+    type: "video",
+    videoId: prefixed,
+    title: video.title,
+    author: `${video.channelTitle} · Dailymotion`,
+    // No channel of ours to link to: the dialect's channel routes speak the
+    // library's id space, and a Dailymotion channel is not in it.
+    authorId: "",
+    authorUrl: "",
+    lengthSeconds: Math.max(0, Math.round(video.durationSeconds ?? 0)),
+    videoThumbnails: video.thumbnail
+      ? [{ quality: "maxres", url: video.thumbnail, width: 1280, height: 720 }]
+      : [],
+    ...(published === null ? {} : { published }),
+    ...(video.views == null ? {} : { viewCount: video.views }),
+    liveNow: false,
+    isUpcoming: false,
+  };
+}
