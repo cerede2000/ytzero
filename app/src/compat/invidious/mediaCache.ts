@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, utimesSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { DB_PATH } from "../../db";
-import { localFileResponse } from "./media";
+import { MAX_ANSWER_BYTES, localFileResponse } from "./media";
 import { YTDLP, downloadCookiesConfigured, downloadCookiesFile } from "../../downloadConfig";
 import { log } from "../../logger";
 import { potArgsFor } from "../../ytdlpPotProvider";
@@ -398,8 +398,6 @@ export function startFetch(
   return entry;
 }
 
-/** Max bytes answered at once, so a length can be set without holding a film in memory. */
-const CHUNK_BYTES = 8 * 1024 * 1024;
 /** Bytes read from disk per turn while streaming a file that is still arriving. */
 const STREAM_CHUNK_BYTES = 1024 * 1024;
 /**
@@ -419,7 +417,7 @@ export function wantedRange(range: string | undefined, total: number): { start: 
   const start = match?.[1] ? Number(match[1]) : 0;
   if (!Number.isFinite(start) || start >= total) return null;
   const askedEnd = match?.[2] ? Number(match[2]) : Number.POSITIVE_INFINITY;
-  const end = Math.min(askedEnd, start + CHUNK_BYTES - 1, total - 1);
+  const end = Math.min(askedEnd, start + MAX_ANSWER_BYTES - 1, total - 1);
   return { start, end: Math.max(start, end) };
 }
 

@@ -74,11 +74,31 @@ export async function signedCaptionPath(videoId: string, language: string, now: 
 }
 
 /**
+ * The most one range answer carries.
+ *
+ * A player opens with `bytes=0-`, meaning the rest of the file, and a kept
+ * copy could answer that literally: a hundred megabytes in a single body, on a
+ * socket held open for as long as the player takes to drink it. It reads at
+ * the speed it plays, so the gaps between its reads are minutes, and anything
+ * between here and the phone — this server's own idle timeout at two minutes,
+ * a reverse proxy, a CDN — closes a connection that quiet. The video stops in
+ * the middle of nowhere, and nothing on either side calls it an error.
+ *
+ * So every answer is bounded, and the player comes back for the next one, the
+ * way it already does while a file is still arriving. Eight megabytes is about
+ * a minute of the 1080p tracks here.
+ */
+export const MAX_ANSWER_BYTES = 8 * 1024 * 1024;
+
+/**
  * A downloaded file, served with the byte ranges a player seeks by.
  *
  * The local copy is preferred over resolving anything upstream: it is already
  * the quality that was chosen, it costs no yt-dlp call, and it plays when
  * YouTube would refuse us.
+ *
+ * A request with no range at all is a downloader rather than a player: it gets
+ * the file entire, because a bounded answer is a truncated download.
  */
 export function localFileResponse(path: string, range: string | undefined, contentType?: string): Response | null {
   if (!existsSync(path)) return null;
@@ -96,7 +116,7 @@ export function localFileResponse(path: string, range: string | undefined, conte
   if (!Number.isFinite(start) || start >= size) {
     return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } });
   }
-  const last = Math.min(Number.isFinite(end) ? end : size - 1, size - 1);
+  const last = Math.min(Number.isFinite(end) ? end : size - 1, start + MAX_ANSWER_BYTES - 1, size - 1);
   return new Response(file.slice(start, last + 1), {
     status: 206,
     headers: {

@@ -45,7 +45,14 @@ export function registerMediaRoutes(app: Hono): void {
      * request, and reading it required knowing which silences were good ones.
      */
     const answered = (by: string, response: Response) => {
-      log.info("invidious.media_answered", { videoId, kind, height, by, ms: Date.now() - askedAt });
+      log.info("invidious.media_answered", {
+        videoId, kind, height, by, ms: Date.now() - askedAt,
+        // What was asked for and what went back. Without these a kept copy
+        // answered "cached, 0 ms" and said nothing about the hundred megabytes
+        // it had just promised to push down one socket.
+        asked: c.req.header("range") ?? null,
+        sent: response.headers.get("content-range") ?? response.headers.get("content-length"),
+      });
       return response;
     };
 
