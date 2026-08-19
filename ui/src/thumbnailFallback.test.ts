@@ -28,6 +28,13 @@ describe("the name that does not rotate", () => {
     expect(plainYouTubeThumbnail("https://img.youtube.com/vi/WjXDkL1FERs/maxresdefault.jpg")).toBe(PLAIN);
   });
 
+  test("is found for the WebP path as well", () => {
+    // Feeds hand back `vi_webp`, which had no fallback here until upstream's
+    // own version of this pointed it out.
+    expect(plainYouTubeThumbnail("https://i.ytimg.com/vi_webp/abc123/maxresdefault.webp"))
+      .toBe("https://i.ytimg.com/vi/abc123/hqdefault.jpg");
+  });
+
   test("is not invented for an address that is not YouTube's", () => {
     expect(plainYouTubeThumbnail(DEARROW)).toBe(null);
     expect(plainYouTubeThumbnail("")).toBe(null);
