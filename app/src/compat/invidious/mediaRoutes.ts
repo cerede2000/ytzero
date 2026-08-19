@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { existsSync } from "node:fs";
 import { getDownload, getVideoResponse, listSubtitleFiles, srtToVtt } from "../../downloader";
+import { notePlayback } from "../../playbackActivity";
 import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
@@ -180,6 +181,8 @@ export function registerMediaRoutes(app: Hono): void {
 
     // Already fetched once because the direct path was refused for it.
     const askedAt = Date.now();
+    // Somebody is watching: the background passes stand aside until they stop.
+    notePlayback();
     const kept = cachedMedia(videoId);
     if (kept) {
       const response = localFileResponse(kept, c.req.header("range"));
