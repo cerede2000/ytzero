@@ -27,6 +27,7 @@ import { DEFAULT_SCREENSHOT_FILENAME_TEMPLATE, parsePlayerScreenshotFormat, type
 import { formatAppDate } from "../dateTime";
 import { mergeRemoteChangelog } from "../changelog";
 import DatabaseSettings from "../components/DatabaseSettings";
+import InvidiousAccess from "../components/InvidiousAccess";
 import { FollowedPlaylistSettingsList } from "../components/settings/FollowedPlaylistSettingsList";
 import { scheduleSettingWrite } from "../settingsWriteQueue";
 import ProfilesSettings, { ProfilePasswordSettings } from "../components/settings/ProfileSettings";
@@ -1074,6 +1075,7 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
               </SettingRow>
               <ChannelOwnership showToast={showToast} />
               <DatabaseSettings showToast={showToast} />
+              <InvidiousAccess showToast={showToast} />
             </>
           )}
 

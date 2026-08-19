@@ -97,6 +97,7 @@ import {
   type VideoSubtitle,
   type YtdlpConfig,
   type YtdlpUpdateResult,
+  type InvidiousTokenState,
 } from "./apiTypes";
 import type { ChannelPost } from "./channelPostTypes";
 import type { ExternalSearch, SearchProviderDescription } from "./searchProviderTypes";
@@ -107,6 +108,11 @@ export const api = {
   health: () => http<AppHealth>("/health"),
   clusterStatus: () => http<ClusterStatus>("/cluster/status"),
   databaseStatus: () => http<DatabaseStatus>("/database/status"),
+  invidiousToken: () => http<InvidiousTokenState>("/invidious/token"),
+  // The only moment the token is readable: what is stored is a keyed hash, so
+  // asking again mints a new one and revokes this.
+  mintInvidiousToken: () => http<{ token: string }>("/invidious/token", { method: "POST" }),
+  revokeInvidiousToken: () => http<{ ok: boolean }>("/invidious/token", { method: "DELETE" }),
   migrateDatabaseToPostgres: (target_url: string) => http<{ receiptId: string; tables: number; rows: number; next: string }>("/database/migration/sqlite-to-postgres", { method: "POST", body: JSON.stringify({ target_url }) }),
   confirmDatabaseMigration: () => http<{ ok: true; status: DatabaseStatus }>("/database/migration/confirm", { method: "POST", body: "{}" }),
   backupOptions: () => http<BackupOptions>("/backup/options"),
