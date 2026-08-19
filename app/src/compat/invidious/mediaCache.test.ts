@@ -131,11 +131,23 @@ describe("answering while the file is still arriving", () => {
     expect(response?.status).toBe(416);
   });
 
-  /* Without a length there is nothing to answer a range against. */
-  test("says nothing when the size was never announced", async () => {
+  /*
+   * A range answer must name the total, so a file whose size yt-dlp would not
+   * say cannot be served while it grows. It is served once it is whole — which
+   * is slower, and is the difference between a separate track that plays and
+   * one that fails.
+   */
+  test("waits for the whole file when the size was never announced", async () => {
     const path = join(root, "sizeless.partial");
     writeFileSync(path, new Uint8Array(1_000));
     const entry = { path, total: Promise.resolve(null), done: Promise.resolve(path) };
+    const response = await partialFileResponse(entry, "bytes=0-99", undefined, "audio");
+    expect(response?.status).toBe(206);
+    expect(response?.headers.get("content-type")).toBe("audio/mp4");
+  });
+
+  test("says nothing when a sizeless fetch failed outright", async () => {
+    const entry = { path: join(root, "gone.partial"), total: Promise.resolve(null), done: Promise.resolve(null) };
     expect(await partialFileResponse(entry, "bytes=0-")).toBeNull();
   });
 });
