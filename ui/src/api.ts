@@ -429,8 +429,6 @@ export const api = {
   refresh: () => http<{ channels: number; added: number; errors: string[] }>("/refresh", { method: "POST" }),
   settings: () => sharedGet<{ settings: AppSettings; settings_meta: { timezone_locked: boolean } }>("settings", "/settings"),
   bootstrapSettings: () => sharedGet<{ settings: AppSettings; settings_meta: { timezone_locked: boolean } }>("bootstrap-settings", "/settings", { suppressAuthenticationNavigation: true }),
-  updateYtdlp: () => http<{ ok: boolean; before: string | null; after: string | null; detail: string | null }>(
-    "/downloads/ytdlp/update", { method: "POST" }),
   updateSettings: (s: Partial<AppSettings>) =>
     http("/settings", { method: "PUT", body: JSON.stringify(s) }),
   childLock: () => sharedGet<{ child_lock: ChildLockStatus }>("child-lock", "/child-lock"),

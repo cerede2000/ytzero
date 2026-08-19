@@ -17,7 +17,6 @@ export default function DownloadConfiguration({ shortsEnabled }: { shortsEnabled
   const { t, locale } = useI18n();
   const [config, setConfig] = useState<DownloadConfigResponse | null>(null);
   const [error, setError] = useState("");
-  const [checkingYtdlp, setCheckingYtdlp] = useState(false);
   const [cookies, setCookies] = useState(false);
   const [cookieHealth, setCookieHealth] = useState<DownloadCookieHealth | null>(null);
   const [uploading, setUploading] = useState(false);
