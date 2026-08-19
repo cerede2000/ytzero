@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { invidiousStats } from "./stats";
 import { invidiousCompatEnabled, registerInvidiousCompat } from "./index";
-import { directResponse, firstServed, noteRefusal, recentlyRefused } from "./mediaRoutes";
+import { directGrace, directResponse, firstServed, noteDirectOutcome, noteRefusal, recentlyRefused } from "./mediaRoutes";
 
 const original = process.env.YTZERO_INVIDIOUS_COMPAT;
 afterEach(() => {
@@ -164,5 +164,34 @@ describe("two ways of serving one video, racing", () => {
   test("survives a path that throws", async () => {
     const served = await firstServed([Promise.reject(new Error("refused")), answers(206, 5)]);
     expect(served?.status).toBe(206);
+  });
+});
+
+describe("betting on the direct path", () => {
+  test("waits for it while it is still working", () => {
+    noteDirectOutcome(true);
+    expect(directGrace()).toBeGreaterThan(0);
+  });
+
+  /*
+   * The grace is a bet that the address will serve. On an instance where it
+   * never does, it is paid on every video — and paid twice over, because the
+   * fetch behind it then starts its own extraction with the player already
+   * waiting.
+   */
+  test("stops waiting after it has been refused twice running", () => {
+    noteDirectOutcome(true);
+    noteDirectOutcome(false);
+    expect(directGrace()).toBeGreaterThan(0);
+    noteDirectOutcome(false);
+    expect(directGrace()).toBe(0);
+  });
+
+  test("starts waiting again the moment it works", () => {
+    noteDirectOutcome(false);
+    noteDirectOutcome(false);
+    expect(directGrace()).toBe(0);
+    noteDirectOutcome(true);
+    expect(directGrace()).toBeGreaterThan(0);
   });
 });

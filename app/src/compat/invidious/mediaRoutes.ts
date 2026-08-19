@@ -64,8 +64,29 @@ const directVerdicts = new Map<string, Promise<boolean>>();
  */
 const DIRECT_GRACE_MS = 2_500;
 
-function directGrace(): number {
-  return videoInfoRefusalQuiet.quiet() ? 0 : DIRECT_GRACE_MS;
+/**
+ * What the last few videos said about the direct path.
+ *
+ * The grace is a bet that the address will serve. On an instance where it
+ * never does, that bet is paid on every video — and paid twice over, because
+ * the fetch behind it then starts its own five-second extraction while the
+ * player is already waiting. Two refusals in a row is enough to stop betting;
+ * one success is enough to start again, so an experiment that ends is noticed
+ * without anything to reset by hand.
+ */
+const REFUSALS_BEFORE_GIVING_UP = 2;
+let consecutiveRefusals = 0;
+
+export function noteDirectOutcome(worked: boolean): void {
+  consecutiveRefusals = worked ? 0 : consecutiveRefusals + 1;
+}
+
+export function directLooksDead(): boolean {
+  return consecutiveRefusals >= REFUSALS_BEFORE_GIVING_UP;
+}
+
+export function directGrace(): number {
+  return videoInfoRefusalQuiet.quiet() || directLooksDead() ? 0 : DIRECT_GRACE_MS;
 }
 
 export async function directResponse(
@@ -84,6 +105,9 @@ export async function directResponse(
   directVerdicts.set(videoId, new Promise<boolean>((resolve) => { settle = resolve; }));
   try {
     const response = await ask(userId, videoId, range, signal);
+    // An abandoned request settles nothing: the player hanging up says nothing
+    // about whether YouTube would have answered.
+    if (!signal.aborted) noteDirectOutcome(Boolean(response));
     settle(Boolean(response) || signal.aborted);
     return response;
   } catch (error) {
