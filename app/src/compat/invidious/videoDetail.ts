@@ -1,6 +1,7 @@
-import { getDownload, getVideoResponse, listSubtitleFiles } from "../../downloader";
+import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
+import { ensureCached } from "./mediaCache";
 import { signedCaptionPath, signedMediaUrl } from "./media";
 import { channelThumbnails, videoFromRow, type VideoRowLike } from "./shapes";
 
@@ -46,22 +47,14 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
 /**
  * Have the file ready before the player asks for it.
  *
- * Resolving the progressive URL is a yt-dlp run of four to five seconds, and
- * on this route nothing has paid it yet: the web player primes the source
- * while importing, but a video already in the library is imported once and
- * never again. So the first request for bytes waits the whole resolution, and
- * a native player hangs up before it arrives — which is what an abandoned
- * request with no upstream trace behind it looks like.
- *
- * Two bytes are enough. The resolution lands in the cache the real request
- * reads, and the fetch walks the retry ladder that a freshly signed URL needs
- * anyway — so the URL handed over has already been refused its first second
- * somewhere nobody was watching.
+ * Fetching it takes seconds, and a native player asks for its first bytes a
+ * moment after it reads this document — then hangs up rather than wait. Opening
+ * a video is intent to play it, so the fetch starts here, beside the subtitle
+ * resolution this request already waits on, and is usually done or nearly done
+ * by the time the first range arrives.
  */
 function warmSource(userId: number, videoId: string): void {
-  void getVideoResponse(userId, videoId, "bytes=0-1")
-    .then((response) => response?.body?.cancel().catch(() => {}))
-    .catch(() => {});
+  void ensureCached(userId, videoId).catch(() => {});
 }
 
 /**
