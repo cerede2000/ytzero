@@ -42,6 +42,46 @@ function factory(overrides: Partial<Parameters<typeof createDownloadVideoProgres
 }
 
 describe("direct video streaming", () => {
+  test("asks the CDN as the client the URL was signed for", async () => {
+    // A file resolved with a profile's cookies is bound to whoever asked for
+    // it. Fetched with a generic user agent it answers 403 to every range, for
+    // as long as the address stays signed in — which is the only state in
+    // which resolving works at all.
+    let sent: Headers | null = null;
+    const video = factory({
+      spawn: (() => fakeProcess(
+        `${url("video")}\nmp4\n{"User-Agent":"Chrome/146 (yt-dlp)","Accept":"text/html","Sec-Fetch-Mode":"navigate"}\n`,
+      )) as unknown as typeof Bun.spawn,
+      fetchImpl: (async (_input: string, init: RequestInit) => {
+        sent = new Headers(init.headers);
+        return chunk(64);
+      }) as unknown as typeof fetch,
+    });
+
+    await video.getVideoResponse(1, "abc", "bytes=0-63");
+
+    expect(sent!.get("user-agent")).toBe("Chrome/146 (yt-dlp)");
+    // Only that one. The rest describe fetching a watch page, and sent on a
+    // byte range they describe something that is not happening.
+    expect(sent!.get("accept")).toBeNull();
+    expect(sent!.get("sec-fetch-mode")).toBeNull();
+  });
+
+  test("still asks when yt-dlp said nothing about headers", async () => {
+    let sent: Headers | null = null;
+    const video = factory({
+      spawn: (() => fakeProcess(`${url("video")}\nmp4\n`)) as unknown as typeof Bun.spawn,
+      fetchImpl: (async (_input: string, init: RequestInit) => {
+        sent = new Headers(init.headers);
+        return chunk(64);
+      }) as unknown as typeof fetch,
+    });
+
+    await video.getVideoResponse(1, "abc", "bytes=0-63");
+
+    expect(sent!.get("user-agent")).toBe("Mozilla/5.0");
+  });
+
   test("waits out a fresh URL rather than buying another one", async () => {
     // A signed googlevideo URL answers 403 to everything for about a second
     // after it is issued, and then serves. Resolving a replacement costs

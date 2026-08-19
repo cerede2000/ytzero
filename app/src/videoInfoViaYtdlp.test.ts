@@ -133,4 +133,15 @@ describe("both playable tracks taken from the same answer", () => {
     expect(progressiveVideoFromPrinted({ ...muxed, vcodec: "none" })).toBeNull();
     expect(progressiveVideoFromPrinted({ ...muxed, url: "https://example.com/muxed.mp4" })).toBeNull();
   });
+
+  test("carries who the file was signed for, as the audio track already did", () => {
+    const muxed = printedFormats(progressive, FIELDS)[0]!;
+    const source = progressiveVideoFromPrinted({
+      ...muxed,
+      headers: JSON.stringify({ "User-Agent": "Chrome/146 (yt-dlp)", Accept: "text/html" }),
+    });
+    // A URL resolved with a profile's cookies is refused to a caller that does
+    // not look like the client it was minted for.
+    expect(source?.headers).toEqual({ "User-Agent": "Chrome/146 (yt-dlp)" });
+  });
 });
