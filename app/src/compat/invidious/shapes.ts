@@ -265,3 +265,30 @@ export function commentsFrom(comments: CommentLike[]) {
       })),
   };
 }
+
+/**
+ * The qualities worth offering, once it is known what each one really is.
+ *
+ * A request for 360p on a video that has no 360p muxed file comes back with
+ * whatever it does have — often the same file the 720p request returns. Left
+ * alone, the document then offers one file twice under two labels, one of them
+ * false, and a client picking "360p" downloads the larger file believing it
+ * chose the smaller.
+ *
+ * So a quality whose real height is known is labelled with it, and two that
+ * turn out to be the same thing are offered once. What is still unknown keeps
+ * the optimistic label: it is the first time anybody has asked, and the answer
+ * arrives with the file.
+ */
+export function labelledQualities(
+  offered: readonly number[],
+  known: (asked: number) => number | null,
+): { asked: number; label: number }[] {
+  const chosen: { asked: number; label: number }[] = [];
+  for (const asked of offered) {
+    const label = known(asked) ?? asked;
+    if (chosen.some((quality) => quality.label === label)) continue;
+    chosen.push({ asked, label });
+  }
+  return chosen;
+}

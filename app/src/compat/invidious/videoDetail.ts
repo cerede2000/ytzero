@@ -2,10 +2,10 @@ import { existsSync } from "node:fs";
 import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
-import { ADAPTIVE_HEIGHTS, BEST_HEIGHT, OFFERED_HEIGHTS, cachedMedia, startFetch } from "./mediaCache";
+import { ADAPTIVE_HEIGHTS, BEST_HEIGHT, OFFERED_HEIGHTS, cachedEntry, cachedMedia, startFetch } from "./mediaCache";
 import { directGrace, directResponse } from "./mediaRoutes";
 import { signedCaptionPath, signedMediaUrl } from "./media";
-import { channelThumbnails, videoFromRow, type VideoRowLike } from "./shapes";
+import { channelThumbnails, labelledQualities, videoFromRow, type VideoRowLike } from "./shapes";
 
 export interface DetailRow extends VideoRowLike {
   channel_thumbnail?: string | null;
@@ -136,16 +136,20 @@ export async function videoDetail(userId: number, row: DetailRow, origin: string
      * request reaches this server. It is also what lets the viewer choose,
      * since the link carries the choice and the fetch honours it.
      */
-    formatStreams: live ? [] : await Promise.all(OFFERED_HEIGHTS.map(async (height) => ({
-      url: await signedMediaUrl(origin, row.video_id, height),
-      itag: height === 720 ? "22" : "18",
-      type: "video/mp4",
-      container: "mp4",
-      quality: height === 720 ? "hd720" : "medium",
-      qualityLabel: `${height}p`,
-      resolution: `${height}p`,
-      size: `${Math.round((height * 16) / 9)}x${height}`,
-    }))),
+    formatStreams: live ? [] : await Promise.all(
+      labelledQualities(OFFERED_HEIGHTS, (asked) => cachedEntry(row.video_id, "muxed", asked)?.height ?? null)
+        .map(async ({ asked, label }) => ({
+          // The link asks for what selects the file; the label says what it is.
+          url: await signedMediaUrl(origin, row.video_id, asked),
+          itag: label >= 720 ? "22" : "18",
+          type: "video/mp4",
+          container: "mp4",
+          quality: label >= 720 ? "hd720" : "medium",
+          qualityLabel: `${label}p`,
+          resolution: `${label}p`,
+          size: `${Math.round((label * 16) / 9)}x${label}`,
+        })),
+    ),
     /*
      * The qualities that exist only as separate tracks.
      *
@@ -156,16 +160,19 @@ export async function videoDetail(userId: number, row: DetailRow, origin: string
      * costs nothing here: no assembly, two ordinary downloads.
      */
     adaptiveFormats: live ? [] : [
-      ...await Promise.all(ADAPTIVE_HEIGHTS.map(async (height) => ({
-        url: await signedMediaUrl(origin, row.video_id, height, "video"),
-        itag: "137",
-        type: 'video/mp4; codecs="avc1.640028"',
-        container: "mp4",
-        encoding: "h264",
-        resolution: `${height}p`,
-        qualityLabel: `${height}p`,
-        fps: 30,
-      }))),
+      ...await Promise.all(
+        labelledQualities(ADAPTIVE_HEIGHTS, (asked) => cachedEntry(row.video_id, "video", asked)?.height ?? null)
+          .map(async ({ asked, label }) => ({
+            url: await signedMediaUrl(origin, row.video_id, asked, "video"),
+            itag: "137",
+            type: 'video/mp4; codecs="avc1.640028"',
+            container: "mp4",
+            encoding: "h264",
+            resolution: `${label}p`,
+            qualityLabel: `${label}p`,
+            fps: 30,
+          })),
+      ),
       {
         url: await signedMediaUrl(origin, row.video_id, BEST_HEIGHT, "audio"),
         itag: "140",
