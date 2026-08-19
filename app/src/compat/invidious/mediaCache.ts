@@ -302,6 +302,8 @@ export async function ensureCached(
 
 /** Max bytes answered at once, so a length can be set without holding a film in memory. */
 const CHUNK_BYTES = 8 * 1024 * 1024;
+/** Bytes read from disk per turn while streaming a file that is still arriving. */
+const STREAM_CHUNK_BYTES = 1024 * 1024;
 /**
  * Enough of a first answer to be worth sending, rather than all that was asked.
  *
@@ -321,6 +323,65 @@ export function wantedRange(range: string | undefined, total: number): { start: 
   const askedEnd = match?.[2] ? Number(match[2]) : Number.POSITIVE_INFINITY;
   const end = Math.min(askedEnd, start + CHUNK_BYTES - 1, total - 1);
   return { start, end: Math.max(start, end) };
+}
+
+/**
+ * The whole file, sent as it is written rather than once it is whole.
+ *
+ * A downloader asks for the file with no range and waits for one complete
+ * body. Holding the response until the fetch finishes means sending nothing
+ * for a minute or more, and a client whose connection has gone that long
+ * without a byte gives up — an abandoned request, which leaves no trace here
+ * and shows up as a failed download there.
+ *
+ * So the body streams from the file as it grows. Bun will not put a
+ * Content-Length on a stream — it answers chunked — but the client reads
+ * `X-Expected-Content-Length` when the length is missing, which is what its
+ * own server sends for exactly this reason.
+ */
+export async function growingFileResponse(entry: PendingFetch, kind: MediaKind): Promise<Response> {
+  const total = await entry.total;
+  let finished: string | null | undefined;
+  void entry.done.then((path) => { finished = path; }, () => { finished = null; });
+  let offset = 0;
+
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      for (;;) {
+        const settled = finished !== undefined;
+        const path = settled && finished ? finished : entry.path;
+        let size = 0;
+        try {
+          size = statSync(path).size;
+        } catch {
+          size = 0;
+        }
+        if (offset < size) {
+          const end = Math.min(offset + STREAM_CHUNK_BYTES, size);
+          controller.enqueue(new Uint8Array(await Bun.file(path).slice(offset, end).arrayBuffer()));
+          offset = end;
+          return;
+        }
+        if (settled) {
+          if (finished === null && offset === 0) {
+            controller.error(new Error("fetch failed"));
+          } else {
+            controller.close();
+          }
+          return;
+        }
+        await Bun.sleep(120);
+      }
+    },
+  });
+
+  const headers = new Headers({
+    "Content-Type": mimeFor(kind, entry.path),
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "no-store",
+  });
+  if (total !== null) headers.set("X-Expected-Content-Length", String(total));
+  return new Response(body, { status: 200, headers });
 }
 
 /**
