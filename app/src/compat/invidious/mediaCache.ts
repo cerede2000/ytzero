@@ -337,6 +337,15 @@ export async function partialFileResponse(
   signal?: AbortSignal,
   kind: MediaKind = "muxed",
 ): Promise<Response | null> {
+  /*
+   * A request with no range is a request for the whole file, and a partial
+   * answer to one is a truncated download. Wait for it and hand it over whole.
+   */
+  if (range === undefined) {
+    const finished = await entry.done;
+    return finished ? localFileResponse(finished, undefined, mimeFor(kind, finished)) : null;
+  }
+
   const total = await entry.total;
   /*
    * Without a length there is nothing to answer a range against while the file
