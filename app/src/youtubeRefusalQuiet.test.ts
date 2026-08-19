@@ -12,13 +12,39 @@ describe("video info refusal quiet", () => {
     expect(quiet.quiet()).toBe(false);
   });
 
-  test("holds after the caller is turned away", () => {
+  test("one refusal holds nothing; a second one does", () => {
+    /*
+     * A morning of them proved a single refusal means nothing: the same
+     * command, the same jar, succeeded every way it was run by hand minutes
+     * after the application had been turned away by it.
+     */
     const clock = { value: 1_000 };
     const quiet = createRefusalQuiet({ now: () => clock.value, quietMs: 100 });
+    quiet.note(REFUSAL);
+    expect(quiet.quiet()).toBe(false);
     quiet.note(REFUSAL);
     expect(quiet.quiet()).toBe(true);
     clock.value += 100;
     expect(quiet.quiet()).toBe(false);
+  });
+
+  test("and never seals: one attempt is let through per interval", () => {
+    /*
+     * It used to lift early only on a success, which could not happen — while
+     * it held, nothing was attempted. A refusal lasting seconds cost the best
+     * part of an hour with no way out but to wait.
+     */
+    const clock = { value: 1_000 };
+    const quiet = createRefusalQuiet({ now: () => clock.value, quietMs: 100, maxQuietMs: 10_000 });
+    quiet.note(REFUSAL);
+    quiet.note(REFUSAL);
+    quiet.note(REFUSAL);
+    quiet.note(REFUSAL);
+    // Well inside a window that has grown past the base interval.
+    expect(quiet.quiet()).toBe(true);
+    clock.value += 100;
+    expect(quiet.quiet()).toBe(false);
+    expect(quiet.quiet()).toBe(true);
   });
 
   test("recognises the refusal in whichever language it arrives", () => {
@@ -82,18 +108,22 @@ describe("a refusal that does not lift", () => {
     let clock = 0;
     const quiet = createRefusalQuiet({ now: () => clock });
 
+    // Two refusals arm it; the window then doubles per refusal after that.
+    quiet.note(refusal);
     quiet.note(refusal);
     clock += 91_000;
     expect(quiet.quiet()).toBe(false);
 
     quiet.note(refusal);
     clock += 91_000;
+    // Past the base interval, so the probe is spent here and the hold shows
+    // on the next question rather than this one.
+    expect(quiet.quiet()).toBe(false);
     expect(quiet.quiet()).toBe(true);
 
-    clock += 90_000;
-    expect(quiet.quiet()).toBe(false);
     quiet.note(refusal);
     clock += 5 * 60_000;
+    expect(quiet.quiet()).toBe(false);
     expect(quiet.quiet()).toBe(true);
   });
 
