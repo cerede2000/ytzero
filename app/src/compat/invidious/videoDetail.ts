@@ -1,9 +1,8 @@
 import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
-import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { startFetch } from "./mediaCache";
-import { directResponse } from "./mediaRoutes";
+import { directGrace, directResponse } from "./mediaRoutes";
 import { signedCaptionPath, signedMediaUrl } from "./media";
 import { channelThumbnails, videoFromRow, type VideoRowLike } from "./shapes";
 
@@ -52,20 +51,6 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
 }
 
 /**
- * How long the direct path is given before the other way is started too.
- *
- * Waiting for its verdict costs seventeen seconds — five for an extraction,
- * four for a ladder of retries, five for a second extraction, four for a
- * second ladder — and only then does the fetch that works begin its own five.
- * Half a minute before a frame, nearly all of it spent finding out.
- *
- * So the fetch starts while the question is still open. Long enough that a
- * working address usually answers first and costs nothing; short enough that a
- * refused one is not what the viewer waits for.
- */
-const DIRECT_GRACE_MS = 4_000;
-
-/**
  * Have something ready before the player asks for it.
  *
  * Both ways of serving a video cost seconds before their first byte — an
@@ -82,9 +67,9 @@ export function warmMedia(userId: number, videoId: string): void {
       return response?.body?.cancel().catch(() => {});
     })
     .catch(() => {});
-  // Nothing to wait for while YouTube is refusing this address: the extraction
-  // the grace hopes for is the one already reported as failing.
-  const fallback = Bun.sleep(videoInfoRefusalQuiet.quiet() ? 0 : DIRECT_GRACE_MS).then(() => {
+  // Nothing to wait for while the address is refused, or while the last videos
+  // were: the extraction the grace hopes for is the one already failing.
+  const fallback = Bun.sleep(directGrace()).then(() => {
     // Cheap when it turns out to be unnecessary: the file is capped, evicted
     // least-recently-served first, and makes the next play of it instant.
     if (!served) startFetch(userId, videoId);
