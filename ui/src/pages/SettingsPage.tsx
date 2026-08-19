@@ -376,6 +376,15 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
             </SettingsSection>
           )}
 
+          {/* A profile's own way into an app, minted by whoever the profile is
+              — not by an administrator on their behalf. Restricted profiles are
+              left out: the dialect serves a library, not a supervised one. */}
+          {!isChildProfile && (
+            <SettingsSection>
+              <InvidiousAccess showToast={showToast} />
+            </SettingsSection>
+          )}
+
           {canManageArea("profiles") && <ProfilesSettings showToast={showToast} isAdmin={isPrimary} canManageAdministrators={canManageAdministrators} adminDelegationAvailable={adminDelegationAvailable} activeAuthMethod={activeAuthMethod} />}
 
           {canManageArea("profiles") && !isChildProfile && (
@@ -1075,7 +1084,6 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
               </SettingRow>
               <ChannelOwnership showToast={showToast} />
               <DatabaseSettings showToast={showToast} />
-              <InvidiousAccess showToast={showToast} />
             </>
           )}
 
