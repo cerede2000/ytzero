@@ -1,23 +1,26 @@
 import type { Context, Hono } from "hono";
 import { existsSync } from "node:fs";
-import { getDownload, listSubtitleFiles, srtToVtt } from "../../downloader";
+import { getDownload, getVideoResponse, listSubtitleFiles, srtToVtt } from "../../downloader";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { compatUserId } from "./context";
-import { cachedMedia, ensureCached } from "./mediaCache";
+import { cachedMedia, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
 import { localFileResponse, mediaSecret } from "./media";
 import { mediaTokenValid } from "./mediaToken";
 
 /**
- * How long a video stays written off after upstream refused it outright.
+ * How long the direct path stays written off for a video that refused it.
  *
  * A native player opens several connections and reopens them as each fails,
  * and every one of them was paying the full retry ladder and a re-resolution
- * before giving up — a hundred seconds of asking YouTube about a video it has
- * just refused, on an address that is already being challenged for robots.
+ * before giving up — a minute and a half of asking YouTube about a video it
+ * has just refused, on an address already being challenged for robots. Once
+ * one connection has learned the answer, the others go straight to the way
+ * that works.
  *
- * Short on purpose. This is a way to fail quickly, not a verdict: the next
- * press of play a moment later is entitled to find out for itself.
+ * Short on purpose. This is not a verdict on the video: the refusal is an
+ * experiment YouTube runs, and the next press of play is entitled to find out
+ * for itself.
  */
 const REFUSAL_MEMORY_MS = 30_000;
 const refusedAt = new Map<string, number>();
@@ -66,17 +69,36 @@ export function registerMediaRoutes(app: Hono): void {
       if (response) return response;
     }
 
-    /*
-     * Everything else is served out of the cache yt-dlp fills, because nothing
-     * else can be: an address extracted here and fetched from here answers 403
-     * to every format, client, header set and range — while yt-dlp downloads
-     * the same format without trouble. The file is fetched once and served
-     * from disk with the ranges a player seeks by.
-     */
-    const kept = cachedMedia(videoId) ?? (recentlyRefused(videoId) ? null : await ensureCached(userId, videoId));
+    // Already fetched once because the direct path was refused for it.
+    const kept = cachedMedia(videoId);
     if (kept) {
       const response = localFileResponse(kept, c.req.header("range"));
       if (response) return response;
+    }
+
+    /*
+     * The direct path first: it costs no disk and starts at once. A player
+     * that sent no range still gets a bounded chunk — range-less, the relay
+     * reads to the end of the file and buffers it to put a length on it.
+     */
+    if (!recentlyRefused(videoId)) {
+      const streamed = await getVideoResponse(userId, videoId, c.req.header("range") ?? "bytes=0-", c.req.raw.signal);
+      if (streamed) return streamed;
+      if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
+      noteRefusal(videoId);
+    }
+
+    /*
+     * Refused. For some videos every format, client, header set and range
+     * answers 403 to an address extracted here — YouTube binds the
+     * proof-of-origin token to the video — while yt-dlp downloads the same
+     * format without trouble. So it fetches, and the file is served as it
+     * arrives rather than when it is whole.
+     */
+    const arriving = pendingFetch(videoId) ?? await startFetch(userId, videoId);
+    if (arriving) {
+      const served = await partialFileResponse(arriving, c.req.header("range"), c.req.raw.signal);
+      if (served) return served;
     }
     /*
      * Nothing came back, and the two reasons for that are not the same event.
@@ -86,7 +108,6 @@ export function registerMediaRoutes(app: Hono): void {
      * real refusals among them.
      */
     if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
-    noteRefusal(videoId);
     log.warn("invidious.media_unavailable", { videoId, range: c.req.header("range") ?? null, downloaded: Boolean(download?.path) });
     return c.json({ error: "video unavailable" }, 502);
   });

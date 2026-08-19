@@ -6,20 +6,22 @@ import { log } from "../../logger";
 import { potArgsFor } from "../../ytdlpPotProvider";
 
 /**
- * Letting yt-dlp fetch the bytes, because nothing else can.
+ * The way back when the address itself is refused.
  *
- * The obvious design was to resolve the file's address and range-proxy it, the
- * way the web player's direct streaming does. Measured on a live instance, that
- * is now impossible: every format, every client, every combination of headers
- * and ranges answers 403 to a URL that yt-dlp printed — while yt-dlp itself
- * downloads the same format at twenty-five megabytes a second. YouTube is
- * running an experiment binding the proof-of-origin token to the video, and an
- * address extracted by one process and fetched by another is dead on arrival.
+ * Normally the file's address is resolved and range-proxied, which costs
+ * nothing and starts at once. Measured on a live instance, that fails for some
+ * videos completely: every format, every client, every combination of headers
+ * and ranges answers 403 to a URL yt-dlp printed — while yt-dlp downloads the
+ * same format at twenty-five megabytes a second, saying in its debug output
+ * that YouTube is running an experiment binding the proof-of-origin token to
+ * the video. An address extracted by one process and fetched by another is
+ * then dead on arrival.
  *
- * So the file is fetched the only way that works, kept, and served from disk
- * with the byte ranges a player seeks by. What it costs is space, which is why
- * it is capped and evicted oldest-first, and why it lives apart from the
- * profile's own downloads: nobody asked for these to be kept.
+ * So this is the fallback, not the rule: when the direct path is refused, the
+ * file is fetched the one way that works and served from disk as it arrives.
+ * What it costs is space, which is why it is capped and evicted
+ * least-recently-served first, and why it lives apart from the profile's own
+ * downloads: nobody asked for these to be kept.
  */
 const CACHE_DIR = process.env.YTZERO_INVIDIOUS_CACHE_DIR
   ?? resolve(dirname(DB_PATH), "../invidious-cache");
@@ -92,35 +94,79 @@ export function pruneCache(limit = CACHE_LIMIT_BYTES, keep?: string): void {
   }
 }
 
-const fetching = new Map<string, Promise<string | null>>();
+/** A fetch under way: where it is being written, how big it will be, and when it ends. */
+export interface PendingFetch {
+  path: string;
+  /** Bytes the finished file will have, when yt-dlp told us before starting. */
+  total: number | null;
+  done: Promise<string | null>;
+}
+
+const fetching = new Map<string, PendingFetch>();
+
+/** The fetch under way for this video, if there is one. */
+export function pendingFetch(videoId: string): PendingFetch | null {
+  for (const [key, entry] of fetching) {
+    if (key.endsWith(`:${videoId}`)) return entry;
+  }
+  return null;
+}
 
 /**
- * The file on disk, fetching it first if this is the first time it is wanted.
+ * The first line of a stream, without waiting for the rest of it.
  *
- * One fetch per video however many are waiting: a native player opens several
- * connections at once, and each of them arrives here for the same file.
+ * Reading the whole of yt-dlp's output means waiting for yt-dlp to finish,
+ * which is the one thing this must not do: the size is printed before the
+ * download starts, and it is what lets the first range be answered while the
+ * rest is still arriving. The stream keeps draining afterwards so the process
+ * is never blocked writing into a full pipe.
  */
-export function ensureCached(userId: number, videoId: string): Promise<string | null> {
-  if (!cacheableVideoId(videoId)) return Promise.resolve(null);
-  const existing = cachedMedia(videoId);
-  if (existing) return Promise.resolve(existing);
+function firstLine(stream: ReadableStream<Uint8Array>): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let settled = false;
+    const settle = (value: string) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    void (async () => {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (value) buffer += decoder.decode(value, { stream: true });
+        const newline = buffer.indexOf("\n");
+        if (newline >= 0) settle(buffer.slice(0, newline));
+        if (done) return settle(buffer);
+      }
+    })().catch(() => settle(""));
+  });
+}
+
+/**
+ * Start fetching, and say straight away where it lands and how big it will be.
+ *
+ * The size comes out of the same run that does the downloading: `--print` with
+ * `--no-simulate` prints the field and fetches the file. A player told nothing
+ * about the length will not start, and one told `bytes 0-99/*` cannot seek.
+ */
+export async function startFetch(userId: number, videoId: string): Promise<PendingFetch | null> {
+  if (!cacheableVideoId(videoId)) return null;
   const key = `${userId}:${videoId}`;
   const running = fetching.get(key);
   if (running) return running;
-  const started = fetch(userId, videoId).finally(() => fetching.delete(key));
-  fetching.set(key, started);
-  return started;
-}
 
-async function fetch(userId: number, videoId: string): Promise<string | null> {
   mkdirSync(CACHE_DIR, { recursive: true });
   const target = pathFor(videoId);
   // Written under another name and moved into place, so a partial file is
-  // never mistaken for one that can be served.
+  // never mistaken for one that can be served in full.
   const partial = join(CACHE_DIR, `${videoId}.partial`);
+  rmSync(partial, { force: true });
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
-    "--no-playlist", "--no-warnings", "--no-part",
+    "--no-playlist", "--no-warnings", "--no-part", "--no-simulate",
+    "--print", "%(filesize,filesize_approx)s",
     "-f", FORMAT,
     "-o", partial,
     ...potArgsFor(true),
@@ -128,27 +174,122 @@ async function fetch(userId: number, videoId: string): Promise<string | null> {
   if (downloadCookiesConfigured(userId)) args.push("--cookies", downloadCookiesFile(userId));
 
   const startedAt = Date.now();
-  const process = Bun.spawn([YTDLP, ...args], { stdout: "pipe", stderr: "pipe" });
-  const timer = setTimeout(() => process.kill(), FETCH_TIMEOUT_MS);
-  try {
-    const [said, exitCode] = await Promise.all([
-      new Response(process.stderr as ReadableStream<Uint8Array>).text(),
-      process.exited,
-    ]);
-    if (exitCode !== 0 || !existsSync(partial)) {
-      log.warn("invidious.cache_fetch_failed", {
-        videoId, exitCode,
-        said: said.split(/\r?\n/).filter(Boolean).slice(-2).map((line) => line.replace(/https?:\/\/\S+/gi, "<url>").slice(0, 300)),
-      });
-      rmSync(partial, { force: true });
-      return null;
+  const child = Bun.spawn([YTDLP, ...args], { stdout: "pipe", stderr: "pipe" });
+  const timer = setTimeout(() => child.kill(), FETCH_TIMEOUT_MS);
+  const announced = firstLine(child.stdout as ReadableStream<Uint8Array>);
+
+  const done = (async () => {
+    try {
+      const [said, exitCode] = await Promise.all([
+        new Response(child.stderr as ReadableStream<Uint8Array>).text(),
+        child.exited,
+      ]);
+      if (exitCode !== 0 || !existsSync(partial)) {
+        log.warn("invidious.cache_fetch_failed", {
+          videoId, exitCode,
+          said: said.split(/\r?\n/).filter(Boolean).slice(-2)
+            .map((line) => line.replace(/https?:\/\/\S+/gi, "<url>").slice(0, 300)),
+        });
+        rmSync(partial, { force: true });
+        return null;
+      }
+      renameSync(partial, target);
+      const size = statSync(target).size;
+      log.info("invidious.cache_fetched", { videoId, bytes: size, ms: Date.now() - startedAt });
+      pruneCache(CACHE_LIMIT_BYTES, target);
+      return target;
+    } finally {
+      clearTimeout(timer);
+      fetching.delete(key);
     }
-    renameSync(partial, target);
-    const size = statSync(target).size;
-    log.info("invidious.cache_fetched", { videoId, bytes: size, ms: Date.now() - startedAt });
-    pruneCache(CACHE_LIMIT_BYTES, target);
-    return target;
-  } finally {
-    clearTimeout(timer);
+  })();
+
+  // Never hold the caller on a size that is not coming: without one the first
+  // range waits for the whole file, which is slower but still plays.
+  const printed = await Promise.race([announced, Bun.sleep(20_000).then(() => "")]);
+  const total = Number(printed.trim());
+  const entry: PendingFetch = {
+    path: partial,
+    total: Number.isFinite(total) && total > 0 ? total : null,
+    done,
+  };
+  fetching.set(key, entry);
+  log.info("invidious.cache_fetch_started", { videoId, announcedBytes: entry.total });
+  return entry;
+}
+
+/** The finished file, waiting for a fetch under way if there is one. */
+export async function ensureCached(userId: number, videoId: string): Promise<string | null> {
+  const existing = cachedMedia(videoId);
+  if (existing) return existing;
+  const started = await startFetch(userId, videoId);
+  return started ? started.done : null;
+}
+
+/** Max bytes answered at once, so a length can be set without holding a film in memory. */
+const CHUNK_BYTES = 8 * 1024 * 1024;
+
+/** What a player asked for, from what has arrived so far. */
+export function wantedRange(range: string | undefined, total: number): { start: number; end: number } | null {
+  const match = range?.match(/bytes=(\d*)-(\d*)/);
+  const start = match?.[1] ? Number(match[1]) : 0;
+  if (!Number.isFinite(start) || start >= total) return null;
+  const askedEnd = match?.[2] ? Number(match[2]) : Number.POSITIVE_INFINITY;
+  const end = Math.min(askedEnd, start + CHUNK_BYTES - 1, total - 1);
+  return { start, end: Math.max(start, end) };
+}
+
+/**
+ * Serve out of a file that is still being written.
+ *
+ * Waiting for the whole file before the first frame is the difference between
+ * a video that starts now and one that starts in a minute, and a player asks
+ * for the front of the file first — which arrives first. So a range is
+ * answered as soon as the bytes it names are on disk.
+ */
+export async function partialFileResponse(
+  entry: PendingFetch,
+  range: string | undefined,
+  signal?: AbortSignal,
+): Promise<Response | null> {
+  if (entry.total === null) {
+    const finished = await entry.done;
+    return finished ? null : null;
   }
+  const wanted = wantedRange(range, entry.total);
+  if (!wanted) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${entry.total}` } });
+
+  let path = entry.path;
+  let finished = false;
+  for (;;) {
+    if (signal?.aborted) return null;
+    let size = 0;
+    try {
+      size = statSync(path).size;
+    } catch {
+      size = 0;
+    }
+    if (size > wanted.end) break;
+    const settled = await Promise.race([entry.done, Bun.sleep(120).then(() => undefined)]);
+    if (settled !== undefined) {
+      if (settled === null) return null;
+      path = settled;
+      finished = true;
+      break;
+    }
+  }
+  if (finished && !existsSync(path)) return null;
+  const available = statSync(path).size;
+  const end = Math.min(wanted.end, available - 1);
+  if (end < wanted.start) return null;
+  return new Response(Bun.file(path).slice(wanted.start, end + 1), {
+    status: 206,
+    headers: {
+      "Content-Type": "video/mp4",
+      "Content-Length": String(end - wanted.start + 1),
+      "Content-Range": `bytes ${wanted.start}-${end}/${entry.total}`,
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "no-store",
+    },
+  });
 }
