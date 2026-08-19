@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
-import { BEST_HEIGHT, OFFERED_HEIGHTS, cachedMedia, startFetch } from "./mediaCache";
+import { ADAPTIVE_HEIGHTS, BEST_HEIGHT, OFFERED_HEIGHTS, cachedMedia, startFetch } from "./mediaCache";
 import { directGrace, directResponse } from "./mediaRoutes";
 import { signedCaptionPath, signedMediaUrl } from "./media";
 import { channelThumbnails, videoFromRow, type VideoRowLike } from "./shapes";
@@ -62,7 +62,7 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
  */
 export function warmMedia(userId: number, videoId: string): void {
   void (async () => {
-    if (alreadyPlayable(cachedMedia(videoId, BEST_HEIGHT), await getDownload(userId, videoId))) return;
+    if (alreadyPlayable(cachedMedia(videoId, "muxed", BEST_HEIGHT), await getDownload(userId, videoId))) return;
     warmFromYouTube(userId, videoId);
   })().catch(() => {});
 }
@@ -96,7 +96,7 @@ function warmFromYouTube(userId: number, videoId: string): void {
     // Cheap when it turns out to be unnecessary: the file is capped, evicted
     // least-recently-served first, and makes the next play of it instant.
     // The quality a client asks for first, so the warm one is the one wanted.
-    if (!served) startFetch(userId, videoId, BEST_HEIGHT);
+    if (!served) startFetch(userId, videoId, "muxed", BEST_HEIGHT);
   });
   void Promise.all([probe, fallback]).catch(() => {});
 }
@@ -146,7 +146,38 @@ export async function videoDetail(userId: number, row: DetailRow, origin: string
       resolution: `${height}p`,
       size: `${Math.round((height * 16) / 9)}x${height}`,
     }))),
-    adaptiveFormats: [] as unknown[],
+    /*
+     * The qualities that exist only as separate tracks.
+     *
+     * A client downloads these as two files and keeps them side by side — it
+     * asks for an audio track itself whenever the video one carries no sound —
+     * and its player pairs them, choosing a video-only stream only when the
+     * backend in use supports one. So resolution above what YouTube muxes
+     * costs nothing here: no assembly, two ordinary downloads.
+     */
+    adaptiveFormats: live ? [] : [
+      ...await Promise.all(ADAPTIVE_HEIGHTS.map(async (height) => ({
+        url: await signedMediaUrl(origin, row.video_id, height, "video"),
+        itag: "137",
+        type: 'video/mp4; codecs="avc1.640028"',
+        container: "mp4",
+        encoding: "h264",
+        resolution: `${height}p`,
+        qualityLabel: `${height}p`,
+        fps: 30,
+      }))),
+      {
+        url: await signedMediaUrl(origin, row.video_id, BEST_HEIGHT, "audio"),
+        itag: "140",
+        // A client reads this and nothing else to know a track carries no
+        // picture: `type` starting with "audio/" is the whole test.
+        type: 'audio/mp4; codecs="mp4a.40.2"',
+        container: "m4a",
+        encoding: "aac",
+        audioQuality: "AUDIO_QUALITY_MEDIUM",
+        bitrate: "128000",
+      },
+    ],
     captions: await Promise.all(languages.map(async (language) => ({
       label: language,
       languageCode: language,

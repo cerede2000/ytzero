@@ -47,14 +47,15 @@ export async function signedMediaUrl(
   origin: string,
   videoId: string,
   height: number,
+  kind: "muxed" | "video" | "audio" = "muxed",
   now: number = Date.now(),
 ): Promise<string> {
   const expires = Math.floor(now / 1000) + TOKEN_TTL_SECONDS;
-  // The height is signed with the rest: a link to one quality is not a link to
-  // another, and the file each names is a different file on disk.
-  const signature = mediaSignature(await mediaSecret(), `media:${height}`, videoId, expires);
+  // Kind and height are signed with the rest: a link to one track is not a
+  // link to another, and each names a different file on disk.
+  const signature = mediaSignature(await mediaSecret(), `media:${kind}:${height}`, videoId, expires);
   return `${origin}/api/v1/media/${encodeURIComponent(videoId)}`
-    + `?height=${height}&expires=${expires}&signature=${signature}`;
+    + `?kind=${kind}&height=${height}&expires=${expires}&signature=${signature}`;
 }
 
 /**
