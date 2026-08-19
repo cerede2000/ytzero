@@ -1,4 +1,4 @@
-import { getDownload, listSubtitleFiles } from "../../downloader";
+import { getDownload, getVideoResponse, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { signedCaptionPath, signedMediaUrl } from "./media";
@@ -44,6 +44,27 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
 }
 
 /**
+ * Have the file ready before the player asks for it.
+ *
+ * Resolving the progressive URL is a yt-dlp run of four to five seconds, and
+ * on this route nothing has paid it yet: the web player primes the source
+ * while importing, but a video already in the library is imported once and
+ * never again. So the first request for bytes waits the whole resolution, and
+ * a native player hangs up before it arrives — which is what an abandoned
+ * request with no upstream trace behind it looks like.
+ *
+ * Two bytes are enough. The resolution lands in the cache the real request
+ * reads, and the fetch walks the retry ladder that a freshly signed URL needs
+ * anyway — so the URL handed over has already been refused its first second
+ * somewhere nobody was watching.
+ */
+function warmSource(userId: number, videoId: string): void {
+  void getVideoResponse(userId, videoId, "bytes=0-1")
+    .then((response) => response?.body?.cancel().catch(() => {}))
+    .catch(() => {});
+}
+
+/**
  * One video, as a client expects to receive it.
  *
  * The stream it names is this server's own, never YouTube's. A CDN link
@@ -54,9 +75,11 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
  * what works and what keeps the client out of the decision.
  */
 export async function videoDetail(userId: number, row: DetailRow, origin: string) {
-  const languages = await captionLanguages(userId, row.video_id);
   const downloaded = await getDownload(userId, row.video_id);
   const live = row.live_status === "live";
+  // A kept copy is served from disk and needs nothing resolved.
+  if (!live && !(downloaded?.status === "done" && downloaded.path)) warmSource(userId, row.video_id);
+  const languages = await captionLanguages(userId, row.video_id);
   return {
     ...videoFromRow(row),
     descriptionHtml: row.description ?? "",

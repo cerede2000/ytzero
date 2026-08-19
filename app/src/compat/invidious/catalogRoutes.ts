@@ -46,6 +46,14 @@ function pageFrom(value: string | undefined): number {
 export function registerCatalogRoutes(app: Hono): void {
   app.get("/api/v1/stats", (c) => c.json(invidiousStats()));
 
+  /*
+   * Yattee probes for PeerTube before it probes for us, on a path that would
+   * otherwise reach the session-guarded API and be refused. A 401 there is
+   * read as "this instance wants HTTP Basic credentials" — so the probe is
+   * answered plainly instead: there is no PeerTube here.
+   */
+  app.get("/api/v1/config", (c) => c.json({ error: "not found" }, 404));
+
   app.get("/api/v1/search", async (c) => {
     const query = c.req.query("q")?.trim();
     if (!query) return c.json([]);
