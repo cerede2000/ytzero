@@ -9,6 +9,7 @@ import { defaultAudioDiagnostic, type AudioDiagnostic } from "./audioDiagnostics
 import { audioSourceKey } from "./audioSourceCache";
 import { createAudioSourceResolver, type AudioSource } from "./audioSourceResolver";
 import { googleVideoHost, safeGoogleVideoUrl } from "./audioUpstreamUrl";
+import { notePlayback } from "./playbackActivity";
 import { createDownloadAudioVodStreaming } from "./downloadAudioVodStreaming";
 import { rangedYtdlpHeaders } from "./ytdlpHttpHeaders";
 
@@ -338,6 +339,8 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     range: string | null,
     signal?: AbortSignal,
   ): Promise<Response | null> {
+    // Somebody is listening: the background passes stand aside until they stop.
+    notePlayback();
     const parsed = parseAudioRange(range);
     if (!parsed) return rangeNotSatisfiable();
     if (parsed.requested) {
