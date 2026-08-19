@@ -7,6 +7,7 @@ const root = mkdtempSync(join(tmpdir(), "ytzero-invidious-cache-"));
 process.env.YTZERO_INVIDIOUS_CACHE_DIR = root;
 
 const { cacheableVideoId, cachedMedia, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
+const { alreadyPlayable } = await import("./videoDetail");
 
 // Each test owns the directory: the order they run in is not fixed, and one
 // leaving files behind decided what the next one measured.
@@ -136,5 +137,37 @@ describe("answering while the file is still arriving", () => {
     writeFileSync(path, new Uint8Array(1_000));
     const entry = { path, total: Promise.resolve(null), done: Promise.resolve(path) };
     expect(await partialFileResponse(entry, "bytes=0-")).toBeNull();
+  });
+});
+
+describe("a video that can already be played", () => {
+  /*
+   * A copy on disk is the whole point of keeping it. Warming past one meant
+   * every opened video paid an extraction and then downloaded a file that was
+   * already there — on an address being watched for robots.
+   */
+  test("is one that was downloaded", () => {
+    const path = join(root, "kept.mp4");
+    writeFileSync(path, new Uint8Array(10));
+    expect(alreadyPlayable(null, { status: "done", path })).toBe(true);
+  });
+
+  test("is one already in the cache", () => {
+    expect(alreadyPlayable("/somewhere/x.mp4", null)).toBe(true);
+  });
+
+  test("is not one whose download never finished", () => {
+    const path = join(root, "queued.mp4");
+    writeFileSync(path, new Uint8Array(10));
+    expect(alreadyPlayable(null, { status: "queued", path })).toBe(false);
+  });
+
+  /* A row saying "done" for a file somebody deleted is not a video. */
+  test("is not one whose file has gone", () => {
+    expect(alreadyPlayable(null, { status: "done", path: join(root, "vanished.mp4") })).toBe(false);
+  });
+
+  test("is not one nothing is known about", () => {
+    expect(alreadyPlayable(null, null)).toBe(false);
   });
 });
