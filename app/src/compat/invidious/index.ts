@@ -1,5 +1,8 @@
 import type { Hono } from "hono";
+export { invidiousCompatEnabled } from "./enabled";
 import { log } from "../../logger";
+import { registerAuthRoutes } from "./authRoutes";
+import { invidiousCompatEnabled } from "./enabled";
 import { registerCatalogRoutes } from "./catalogRoutes";
 import { registerMediaRoutes } from "./mediaRoutes";
 
@@ -20,10 +23,6 @@ import { registerMediaRoutes } from "./mediaRoutes";
  * Off unless asked for. This is a second front door on a server that is often
  * exposed, and a door nobody opened should not exist.
  */
-export function invidiousCompatEnabled(): boolean {
-  return (process.env.YTZERO_INVIDIOUS_COMPAT ?? "").trim() === "1";
-}
-
 export function registerInvidiousCompat(app: Hono): void {
   if (!invidiousCompatEnabled()) return;
 
@@ -38,6 +37,12 @@ export function registerInvidiousCompat(app: Hono): void {
    */
   registerCatalogRoutes(app);
   registerMediaRoutes(app);
+  /*
+   * The one part a client does authenticate: it attaches its session to
+   * `/api/v1/auth/*` and to nothing else. So these routes serve whoever
+   * presented the token, while everything above serves the configured profile.
+   */
+  registerAuthRoutes(app);
 
   log.info("invidious.compat_enabled", {});
 }
