@@ -14,10 +14,10 @@
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@simplewebauthn/server": "^13.3.2",
-    "fast-xml-parser": "^5.7.0",
-    "hono": "^4.6.0",
+    "fast-xml-parser": "^5.11.0",
+    "hono": "^4.13.3",
     "innertube.js": "^1.1.5",
-    "openid-client": "^6.8.4",
+    "openid-client": "^6.8.6",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
