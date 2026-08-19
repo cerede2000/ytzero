@@ -17,9 +17,11 @@
  * Thumbnails come from more than one host. A row imported from the page scrape
  * carries `i.ytimg.com`; one imported from a feed carries `i2`, `i4`, or
  * `img.youtube.com`. Matching only the first left three quarters of a library
- * with no fallback at all.
+ * with no fallback at all. The WebP path is theirs too — upstream's own
+ * fallback matches it, and a row that carries `vi_webp` had no fallback here
+ * until it did.
  */
-const YOUTUBE_THUMBNAIL = /^https?:\/\/(?:i\d*\.ytimg\.com|img\.youtube\.com)\/vi\/([\w-]+)\//i;
+const YOUTUBE_THUMBNAIL = /^https?:\/\/(?:i\d*\.ytimg\.com|img\.youtube\.com)\/vi(?:_webp)?\/([\w-]+)\//i;
 
 /** The never-rotating name for the same video, or null if that is this URL. */
 export function plainYouTubeThumbnail(url: string): string | null {
