@@ -78,6 +78,34 @@ export async function directResponse(
   }
 }
 
+/**
+ * Whichever way answers first, and nothing kept from the one that lost.
+ *
+ * When a fetch is already under way it is because the direct path was still
+ * undecided seconds ago, so there is no sense in waiting out its verdict
+ * before starting to serve: the file that is arriving may well be ahead of it.
+ * A late answer from the loser is drained rather than dropped, so the
+ * connection behind it is not left open.
+ */
+export async function firstServed(candidates: Promise<Response | null>[]): Promise<Response | null> {
+  return new Promise((resolve) => {
+    let outstanding = candidates.length;
+    let settled = false;
+    for (const candidate of candidates) {
+      candidate.then((response) => {
+        if (settled) return void response?.body?.cancel().catch(() => {});
+        if (response) {
+          settled = true;
+          return resolve(response);
+        }
+        if (--outstanding === 0) resolve(null);
+      }, () => {
+        if (!settled && --outstanding === 0) resolve(null);
+      });
+    }
+  });
+}
+
 async function tokenHolds(c: Context, resource: string, videoId: string): Promise<boolean> {
   return mediaTokenValid(
     await mediaSecret(),
@@ -121,9 +149,18 @@ export function registerMediaRoutes(app: Hono): void {
      * The direct path first: it costs no disk and starts at once. A player
      * that sent no range still gets a bounded chunk — range-less, the relay
      * reads to the end of the file and buffers it to put a length on it.
+     *
+     * If a fetch is already under way, the two race. Waiting out the direct
+     * verdict costs seventeen seconds of extractions and retry ladders, and
+     * the file arriving beside it is often ready long before that.
      */
+    const range = c.req.header("range");
     if (!recentlyRefused(videoId)) {
-      const streamed = await directResponse(userId, videoId, c.req.header("range") ?? "bytes=0-", c.req.raw.signal);
+      const direct = directResponse(userId, videoId, range ?? "bytes=0-", c.req.raw.signal);
+      const arriving = pendingFetch(videoId);
+      const streamed = arriving
+        ? await firstServed([direct, partialFileResponse(arriving, range, c.req.raw.signal)])
+        : await direct;
       if (streamed) return streamed;
       if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
       noteRefusal(videoId);
@@ -136,9 +173,9 @@ export function registerMediaRoutes(app: Hono): void {
      * format without trouble. So it fetches, and the file is served as it
      * arrives rather than when it is whole.
      */
-    const arriving = pendingFetch(videoId) ?? startFetch(userId, videoId);
-    if (arriving) {
-      const served = await partialFileResponse(arriving, c.req.header("range"), c.req.raw.signal);
+    const fetching = pendingFetch(videoId) ?? startFetch(userId, videoId);
+    if (fetching) {
+      const served = await partialFileResponse(fetching, range, c.req.raw.signal);
       if (served) return served;
     }
     /*
