@@ -12,8 +12,10 @@ a server that is often exposed, and a door nobody opened should not exist.
 
 1. Set `YTZERO_INVIDIOUS_COMPAT=1` and `YTZERO_INVIDIOUS_COMPAT_AUTH=basic`, then
    restart. The log line `invidious.compat_enabled` reports both.
-2. Each person opens **Settings → Profiles**, finds **Client access token**, and
-   generates one. It is shown once; generating another revokes the first.
+2. Each person opens **Settings → Client access** and generates a token. It is
+   shown once; generating another revokes the first. The entry is there for
+   every profile, which is the point: the credentials are the profile's own,
+   not something an administrator hands out.
 3. In the client, add an instance of type **Invidious** pointing at your server.
    Fill its HTTP Basic Auth fields with the **profile name** as the username and
    the **token** as the password. Signing in to an account on the same instance

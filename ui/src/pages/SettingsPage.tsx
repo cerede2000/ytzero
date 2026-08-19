@@ -368,20 +368,21 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
         </SettingsSection>
       )}
 
+      {/* A profile's own way into an app, minted by whoever the profile is —
+          not by an administrator on their behalf. It had been sitting in the
+          Profiles tab, which is the one tab a profile without administration
+          rights never sees: the people who needed it could not reach it. */}
+      {!isCurrentTabLocked && tab === "clients" && (
+        <SettingsSection>
+          <InvidiousAccess showToast={showToast} />
+        </SettingsSection>
+      )}
+
       {!isCurrentTabLocked && tab === "profiles" && (
         <>
           {activeAuthMethod === "per_profile" && (
             <SettingsSection title={t("authChangeOwnPassword")} description={t("authChangeOwnPasswordHint")}>
               <ProfilePasswordSettings showToast={showToast} />
-            </SettingsSection>
-          )}
-
-          {/* A profile's own way into an app, minted by whoever the profile is
-              — not by an administrator on their behalf. Restricted profiles are
-              left out: the dialect serves a library, not a supervised one. */}
-          {!isChildProfile && (
-            <SettingsSection>
-              <InvidiousAccess showToast={showToast} />
             </SettingsSection>
           )}
 
