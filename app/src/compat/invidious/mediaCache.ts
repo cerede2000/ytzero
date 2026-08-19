@@ -174,13 +174,17 @@ export function startFetch(userId: number, videoId: string): PendingFetch | null
     `https://www.youtube.com/watch?v=${videoId}`,
     "--no-playlist", "--no-warnings", "--no-part", "--no-simulate",
     /*
-     * Four megabytes took nineteen seconds on the instance — two hundred
-     * kilobytes a second, where the same file fetched by hand ran at twenty-
-     * five megabytes a second. YouTube throttles a single long-running
-     * connection; asking in bounded pieces is the ordinary way past it, and
-     * the pieces are what the player is waiting for anyway.
+     * The same instance, minutes apart: seven and a half megabytes in
+     * two-thirds of a second, and seven and a half megabytes in twenty
+     * seconds. Same size, same code, thirty times the speed — which is not
+     * contention or a slow line but YouTube throttling a connection once it
+     * has been open a few seconds.
+     *
+     * Pieces small enough to finish before the throttle takes hold. Ten
+     * megabytes was one piece for most of these files, which is to say no
+     * pieces at all.
      */
-    "--http-chunk-size", "10M",
+    "--http-chunk-size", "1M",
     "--print", "%(filesize,filesize_approx)s",
     "-f", FORMAT,
     "-o", partial,
