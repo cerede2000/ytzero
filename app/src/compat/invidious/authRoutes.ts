@@ -3,6 +3,7 @@ import { database } from "../../database";
 import { log } from "../../logger";
 import { refreshChannel } from "../../refresher";
 import { resolveChannelId } from "../../youtube";
+import { listLocalPlaylists, localPlaylist, playlistPage } from "./playlists";
 import { channelThumbnails, videoFromRow } from "./shapes";
 import { profileForToken, sidFrom } from "./tokens";
 import type { DetailRow } from "./videoDetail";
@@ -148,31 +149,23 @@ export function registerAuthRoutes(app: Hono): void {
   app.get("/api/v1/auth/playlists", async (c) => {
     const userId = await profileFor(c.req.header("cookie"));
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
-    const playlists = await database.prepare(
-      "SELECT id, name FROM user_playlists WHERE user_id = ? ORDER BY sort_order, id"
-    ).all(userId) as { id: number; name: string }[];
-    return c.json(await Promise.all(playlists.map(async (playlist) => {
-      const rows = await database.prepare(
-        `SELECT ${VIDEO_COLUMNS}
-           FROM videos v
-           JOIN channels c ON c.channel_id = v.channel_id
-           JOIN user_playlist_videos pv ON pv.video_id = v.video_id AND pv.playlist_id = ?
-          ORDER BY pv.position, pv.added_at`
-      ).all(playlist.id) as DetailRow[];
-      return {
-        type: "invidiousPlaylist",
-        title: playlist.name,
-        // A client keys playlists by string; ours are numbered, and the prefix
-        // keeps one from colliding with a YouTube playlist id.
-        playlistId: `ytz${playlist.id}`,
-        author: "",
-        authorId: "",
-        description: "",
-        videoCount: rows.length,
-        isListed: false,
-        videos: rows.map((row, index) => ({ ...videoFromRow(row), index, indexId: String(index) })),
-      };
-    })));
+    return c.json(await listLocalPlaylists(userId));
+  });
+
+  /**
+   * One playlist, which is where the videos a client shows actually come from.
+   *
+   * The list above carries videos as well, and a client displays none of them:
+   * opening a playlist refetches that one playlist, and the answer replaces
+   * what the list said. Without this route the refetch lands on the public
+   * one, which looks for a channel's playlist under an account's id, finds
+   * nothing, and the playlist opens empty.
+   */
+  app.get("/api/v1/auth/playlists/:id", async (c) => {
+    const userId = await profileFor(c.req.header("cookie"));
+    if (userId === null) return c.json({ error: "unauthorised" }, 401);
+    const playlist = await localPlaylist(userId, c.req.param("id"), playlistPage(c.req.query("page")));
+    return playlist ? c.json(playlist) : c.json({ error: "not found" }, 404);
   });
 }
 

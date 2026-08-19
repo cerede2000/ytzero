@@ -10,6 +10,7 @@ import { fetchSearchSuggestions } from "../../youtube";
 import { fetchVideoComments } from "../../youtubeComments";
 import { compatUserId } from "./context";
 import { dailymotionDetail, dailymotionIdFrom, prefixedDailymotionId } from "./dailymotion";
+import { localPlaylistForCookie, localPlaylistNumber, playlistPage } from "./playlists";
 import { invidiousStats } from "./stats";
 import {
   channelFromRow,
@@ -185,6 +186,16 @@ export function registerCatalogRoutes(app: Hono): void {
 
   app.get("/api/v1/playlists/:id", async (c) => {
     const playlistId = c.req.param("id");
+    /*
+     * A playlist of this library's own, asked for here rather than on the
+     * account route. A client picks between the two from the id alone, so one
+     * that reads ours differently still opens it — provided it sent the
+     * session that owns it, since these playlists are nobody else's.
+     */
+    if (localPlaylistNumber(playlistId) !== null) {
+      const own = await localPlaylistForCookie(c.req.header("cookie"), playlistId, playlistPage(c.req.query("page")));
+      return own ? c.json(own) : c.json({ error: "not found" }, 404);
+    }
     const playlist = await database.prepare(
       `SELECT p.playlist_id, p.title, p.thumbnail, p.channel_id, COALESCE(c.custom_title, c.title) AS author
          FROM channel_playlists p JOIN channels c ON c.channel_id = p.channel_id
