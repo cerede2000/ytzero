@@ -40,7 +40,7 @@ RUN apk add --no-cache curl ca-certificates && \
     chmod a+rx /yt-dlp
 
 FROM oven/bun:1.3-slim
-ARG DENO_VERSION=2.8.1
+ARG DENO_VERSION=2.9.5
 ARG POT_PROVIDER_VERSION=1.3.1
 WORKDIR /app
 RUN apt-get update && \
