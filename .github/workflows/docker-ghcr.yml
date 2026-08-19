@@ -238,6 +238,7 @@ jobs:
             YTZERO_VERSION=${{ needs.prepare.outputs.version }}
             YTZERO_COMMIT=${{ needs.prepare.outputs.commit }}
             YTZERO_CHANGELOG_PREGENERATED=1
+            YTDLP_REVISION=${{ needs.prepare.outputs.commit }}
           cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
