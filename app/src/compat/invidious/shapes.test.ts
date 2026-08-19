@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   channelFromSearchResult,
+  interleave,
   labelledQualities,
   commentsFrom,
   videoFromRow,
@@ -191,5 +192,25 @@ describe("the qualities a document offers", () => {
   test("keeps the asked-for height, which is what the link carries", () => {
     const [only] = labelledQualities([720, 360], (asked) => (asked === 720 ? 480 : 480));
     expect(only).toEqual({ asked: 720, label: 480 });
+  });
+});
+
+describe("two providers in one list", () => {
+  /*
+   * The dialect returns a flat list and a client shows it in the order given.
+   * Appending one provider after the other buries the second: forty results
+   * deep on a phone is not a result anybody sees.
+   */
+  test("are taken in turn, so both are on screen at once", () => {
+    expect(interleave([["a1", "a2", "a3"], ["b1", "b2", "b3"]])).toEqual(["a1", "b1", "a2", "b2", "a3", "b3"]);
+  });
+
+  test("keep going when one runs out", () => {
+    expect(interleave([["a1", "a2", "a3"], ["b1"]])).toEqual(["a1", "b1", "a2", "a3"]);
+  });
+
+  test("are just the one when the other found nothing", () => {
+    expect(interleave([["a1", "a2"], []])).toEqual(["a1", "a2"]);
+    expect(interleave([[], []])).toEqual([]);
   });
 });
