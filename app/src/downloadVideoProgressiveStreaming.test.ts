@@ -42,6 +42,48 @@ function factory(overrides: Partial<Parameters<typeof createDownloadVideoProgres
 }
 
 describe("direct video streaming", () => {
+  test("resolves once for a player that opens several connections at a time", async () => {
+    // A browser opens one connection to a video file; a native player opens
+    // several, all at the same moment for the same video. Unshared, each pays
+    // its own four-to-five-second extraction, and they compete for the address
+    // they are all asking about.
+    let resolutions = 0;
+    const video = factory({
+      spawn: (() => {
+        resolutions++;
+        return fakeProcess(`${url("video")}\nmp4\n`);
+      }) as unknown as typeof Bun.spawn,
+      fetchImpl: (async () => chunk(64)) as unknown as typeof fetch,
+      ytdlpStatus: async () => { await Bun.sleep(5); return "test"; },
+    });
+
+    const responses = await Promise.all([
+      video.getVideoResponse(1, "abc", "bytes=0-63"),
+      video.getVideoResponse(1, "abc", "bytes=64-127"),
+      video.getVideoResponse(1, "abc", "bytes=128-191"),
+    ]);
+
+    expect(responses.every((response) => response?.status === 206)).toBe(true);
+    expect(resolutions).toBe(1);
+  });
+
+  test("keeps one profile's resolution out of another's", async () => {
+    let resolutions = 0;
+    const video = factory({
+      spawn: (() => { resolutions++; return fakeProcess(`${url("video")}\nmp4\n`); }) as unknown as typeof Bun.spawn,
+      fetchImpl: (async () => chunk(64)) as unknown as typeof fetch,
+      ytdlpStatus: async () => { await Bun.sleep(5); return "test"; },
+    });
+
+    await Promise.all([
+      video.getVideoResponse(1, "abc", "bytes=0-63"),
+      video.getVideoResponse(2, "abc", "bytes=0-63"),
+    ]);
+
+    // The URL was signed for whoever asked, and a profile's cookies are its own.
+    expect(resolutions).toBe(2);
+  });
+
   test("asks the CDN as the client the URL was signed for", async () => {
     // A file resolved with a profile's cookies is bound to whoever asked for
     // it. Fetched with a generic user agent it answers 403 to every range, for
