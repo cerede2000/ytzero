@@ -39,9 +39,24 @@ export function registerMediaRoutes(app: Hono): void {
       if (response) return response;
     }
 
-    const streamed = await getVideoResponse(userId, videoId, c.req.header("range") ?? null, c.req.raw.signal);
+    /*
+     * A player that asked for no range still gets a bounded first chunk.
+     * Range-less, the relay fetches to the end of the file and buffers it to
+     * put a length on it — minutes of video held in memory before the first
+     * frame, for a client that was going to seek immediately anyway.
+     */
+    const asked = c.req.header("range") ?? "bytes=0-";
+    const streamed = await getVideoResponse(userId, videoId, asked, c.req.raw.signal);
     if (streamed) return streamed;
-    log.warn("invidious.media_unavailable", { videoId });
+    /*
+     * Nothing came back, and the two reasons for that are not the same event.
+     * A native player opens connections it abandons a moment later — probing
+     * the file, then reopening at the byte it actually wants — and answering a
+     * request nobody is listening to with a 502 logged as a failure buries the
+     * real refusals among them.
+     */
+    if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
+    log.warn("invidious.media_unavailable", { videoId, range: asked, downloaded: Boolean(download?.path) });
     return c.json({ error: "video unavailable" }, 502);
   });
 
