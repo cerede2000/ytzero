@@ -14,6 +14,7 @@
 - [Authentication](Authentication)
 - [Child Lock](Child-Lock)
 - [Browser Extensions](Browser-Extensions)
+- [Third-Party Clients](Third-Party-Clients)
 - [YT-DLP Integration](YT-DLP-Integration)
 - [TubeArchivist Integration](TubeArchivist-Integration)
 

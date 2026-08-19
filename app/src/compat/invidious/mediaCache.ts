@@ -27,6 +27,21 @@ import { potArgsFor } from "../../ytdlpPotProvider";
 const CACHE_DIR = process.env.YTZERO_INVIDIOUS_CACHE_DIR
   ?? resolve(dirname(DB_PATH), "../invidious-cache");
 const CACHE_LIMIT_BYTES = Math.max(1, Number(process.env.YTZERO_INVIDIOUS_CACHE_MB) || 4096) * 1024 * 1024;
+/**
+ * How many videos this layer fetches at once.
+ *
+ * Every fetch is a yt-dlp process, and opening a video's document starts one.
+ * Nothing about that request proves a person is behind it: these routes answer
+ * ahead of the session middleware because no client of this dialect can
+ * satisfy one, so an instance reachable from outside can be asked to fetch as
+ * many videos as somebody cares to name.
+ *
+ * The number is generous for the household this is for — a play is one fetch,
+ * a 1080p download is two — and far below what a script would ask for. Past
+ * it, a request is declined rather than queued: the caller falls back to the
+ * direct path, which is what it would have done had the file not been there.
+ */
+const MAX_ACTIVE_FETCHES = Math.max(1, Number(process.env.YTZERO_INVIDIOUS_MAX_FETCHES) || 6);
 /** Long enough for a long video on a slow line; short enough to end. */
 const FETCH_TIMEOUT_MS = 10 * 60_000;
 /**
@@ -190,6 +205,17 @@ export interface PendingFetch {
 
 const fetching = new Map<string, PendingFetch>();
 
+/**
+ * Whether another fetch may start.
+ *
+ * The count is of everything running, not of this caller's own: the point is
+ * to bound the processes on the machine, and the dialect has no caller to
+ * count per.
+ */
+export function fetchSlotFree(active: number, limit: number = MAX_ACTIVE_FETCHES): boolean {
+  return active < limit;
+}
+
 /** The fetch under way for this video, if there is one. */
 export function pendingFetch(videoId: string, kind: MediaKind = "muxed", height: number = BEST_HEIGHT): PendingFetch | null {
   for (const [key, entry] of fetching) {
@@ -247,6 +273,10 @@ export function startFetch(
   const key = `${userId}:${videoId}:${kind}:${height}`;
   const running = fetching.get(key);
   if (running) return running;
+  if (!fetchSlotFree(fetching.size)) {
+    log.warn("invidious.cache_fetch_declined", { videoId, kind, height, active: fetching.size });
+    return null;
+  }
 
   mkdirSync(CACHE_DIR, { recursive: true });
   const prefix = prefixFor(videoId, kind, height);
