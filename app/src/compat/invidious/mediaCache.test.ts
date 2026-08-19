@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 
 const root = mkdtempSync(join(tmpdir(), "ytzero-invidious-cache-"));
 process.env.YTZERO_INVIDIOUS_CACHE_DIR = root;
+process.env.YTZERO_INVIDIOUS_MAX_FETCHES = "3";
 
-const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedEntry, cachedMedia, growingFileResponse, mimeFor, offeredHeight, offeredKind, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
+const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedEntry, cachedMedia, growingFileResponse, mimeFor, offeredHeight, offeredKind, partialFileResponse, fetchSlotFree, pruneCache, wantedRange } = await import("./mediaCache");
 const { alreadyPlayable } = await import("./videoDetail");
 
 // Each test owns the directory: the order they run in is not fixed, and one
@@ -304,5 +305,23 @@ describe("streaming a file that is still being written", () => {
     expect(response.headers.get("x-expected-content-length")).toBeNull();
     expect(response.headers.get("content-type")).toBe("audio/mp4");
     expect((await response.arrayBuffer()).byteLength).toBe(10);
+  });
+});
+
+describe("how many videos are fetched at once", () => {
+  /*
+   * These routes answer before the session middleware, so the caller asking
+   * for a video is unknown by design. What bounds the processes is this.
+   */
+  test("stops at the limit the instance was given", () => {
+    expect(fetchSlotFree(0)).toBe(true);
+    expect(fetchSlotFree(2)).toBe(true);
+    expect(fetchSlotFree(3)).toBe(false);
+    expect(fetchSlotFree(30)).toBe(false);
+  });
+
+  test("takes the limit it is handed over the configured one", () => {
+    expect(fetchSlotFree(3, 6)).toBe(true);
+    expect(fetchSlotFree(6, 6)).toBe(false);
   });
 });
