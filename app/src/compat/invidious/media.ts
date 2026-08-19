@@ -43,10 +43,18 @@ export function mediaSecret(): Promise<string> {
   return pending;
 }
 
-export async function signedMediaUrl(origin: string, videoId: string, now: number = Date.now()): Promise<string> {
+export async function signedMediaUrl(
+  origin: string,
+  videoId: string,
+  height: number,
+  now: number = Date.now(),
+): Promise<string> {
   const expires = Math.floor(now / 1000) + TOKEN_TTL_SECONDS;
-  const signature = mediaSignature(await mediaSecret(), "media", videoId, expires);
-  return `${origin}/api/v1/media/${encodeURIComponent(videoId)}?expires=${expires}&signature=${signature}`;
+  // The height is signed with the rest: a link to one quality is not a link to
+  // another, and the file each names is a different file on disk.
+  const signature = mediaSignature(await mediaSecret(), `media:${height}`, videoId, expires);
+  return `${origin}/api/v1/media/${encodeURIComponent(videoId)}`
+    + `?height=${height}&expires=${expires}&signature=${signature}`;
 }
 
 /**

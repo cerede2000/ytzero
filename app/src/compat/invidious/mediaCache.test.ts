@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 const root = mkdtempSync(join(tmpdir(), "ytzero-invidious-cache-"));
 process.env.YTZERO_INVIDIOUS_CACHE_DIR = root;
 
-const { cacheableVideoId, cachedMedia, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
+const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedMedia, offeredHeight, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
 const { alreadyPlayable } = await import("./videoDetail");
 
 // Each test owns the directory: the order they run in is not fixed, and one
@@ -169,5 +169,37 @@ describe("a video that can already be played", () => {
 
   test("is not one nothing is known about", () => {
     expect(alreadyPlayable(null, null)).toBe(false);
+  });
+});
+
+describe("the qualities offered to a client", () => {
+  /*
+   * A client's downloader keeps only the streams that declare a resolution.
+   * Without a height there is nothing to declare, the list it filters comes
+   * out empty, and asking to download the video fails before any request
+   * reaches this server.
+   */
+  test("are a real list, best first", () => {
+    expect(OFFERED_HEIGHTS).toEqual([720, 360]);
+    expect(BEST_HEIGHT).toBe(720);
+  });
+
+  test("are the only ones a link can name", () => {
+    expect(offeredHeight("360")).toBe(360);
+    expect(offeredHeight("720")).toBe(720);
+  });
+
+  /* A height nobody offered is not an error to answer with, it is the best one. */
+  test("stand in for anything else asked for", () => {
+    expect(offeredHeight("1080")).toBe(720);
+    expect(offeredHeight("nonsense")).toBe(720);
+    expect(offeredHeight(undefined)).toBe(720);
+    expect(offeredHeight("../../etc")).toBe(720);
+  });
+
+  test("keep one quality's file apart from another's", () => {
+    writeFileSync(join(root, "abc12345678.720.mp4"), new Uint8Array(4));
+    expect(cachedMedia("abc12345678", 720)).toContain("720");
+    expect(cachedMedia("abc12345678", 360)).toBeNull();
   });
 });
