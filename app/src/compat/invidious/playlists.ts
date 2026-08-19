@@ -1,6 +1,5 @@
 import { database } from "../../database";
 import { videoFromRow } from "./shapes";
-import { profileForToken, sidFrom } from "./tokens";
 import type { DetailRow } from "./videoDetail";
 
 /**
@@ -136,16 +135,4 @@ export async function localPlaylist(userId: number, playlistId: string, page: nu
     .get(id, userId) as PlaylistRow | null;
   if (!playlist) return null;
   return documentFor(playlist, await profileName(userId), page);
-}
-
-/**
- * The same playlist, asked for on the public path.
- *
- * A client that did not read the id as an account's still gets it, provided it
- * sent the session that owns it — one of ours is private, and the public route
- * is the one route a client reaches without a session at all.
- */
-export async function localPlaylistForCookie(cookie: string | undefined, playlistId: string, page: number) {
-  const userId = await profileForToken(sidFrom(cookie));
-  return userId === null ? null : localPlaylist(userId, playlistId, page);
 }

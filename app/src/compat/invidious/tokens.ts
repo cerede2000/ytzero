@@ -85,6 +85,22 @@ export async function profileForToken(token: string | undefined | null): Promise
   return row.user_id;
 }
 
+/**
+ * A profile named and proved in one go.
+ *
+ * Both halves are checked. A token finds its own profile, so the name adds
+ * nothing to the lookup — but it means a token pasted against the wrong
+ * profile is refused instead of quietly opening the library it does belong to,
+ * which is the mistake somebody sharing an instance would actually make.
+ */
+export async function profileForNameAndToken(name: string, token: string): Promise<number | null> {
+  const userId = await profileForToken(token);
+  if (userId === null) return null;
+  const profile = await database.prepare("SELECT name FROM users WHERE id = ?").get(userId) as { name: string } | null;
+  if (!profile || profile.name.toLowerCase() !== name.trim().toLowerCase()) return null;
+  return userId;
+}
+
 /** The `SID` a client sends back on every account request. */
 export function sidFrom(cookieHeader: string | undefined): string | null {
   const match = cookieHeader?.match(/(?:^|;\s*)SID=([^;]+)/);

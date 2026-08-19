@@ -3,9 +3,10 @@ import { database } from "../../database";
 import { log } from "../../logger";
 import { refreshChannel } from "../../refresher";
 import { resolveChannelId } from "../../youtube";
+import { accountProfile } from "./clientAuth";
 import { listLocalPlaylists, localPlaylist, playlistPage } from "./playlists";
 import { channelThumbnails, videoFromRow } from "./shapes";
-import { profileForToken, sidFrom } from "./tokens";
+import { profileForNameAndToken, profileForToken } from "./tokens";
 import type { DetailRow } from "./videoDetail";
 
 /**
@@ -22,8 +23,17 @@ const VIDEO_COLUMNS = `
   COALESCE(c.custom_title, c.title) AS channel_title
 `;
 
-async function profileFor(cookie: string | undefined): Promise<number | null> {
-  return profileForToken(sidFrom(cookie));
+type Request = { req: { header: (name: string) => string | undefined } };
+
+/**
+ * Whose account this request is about.
+ *
+ * The session the client was given, and failing that the credentials it sends
+ * on every request anyway: a profile that only filled in the credential fields
+ * of its app still reaches its own feed.
+ */
+async function profileFor(c: Request): Promise<number | null> {
+  return accountProfile(c.req.header("cookie"), c.req.header("authorization"));
 }
 
 export function registerAuthRoutes(app: Hono): void {
@@ -42,15 +52,9 @@ export function registerAuthRoutes(app: Hono): void {
    */
   app.post("/login", async (c) => {
     const form = await c.req.parseBody().catch(() => ({} as Record<string, unknown>));
-    const name = String(form.email ?? "").trim();
-    const userId = await profileForToken(String(form.password ?? ""));
+    const userId = await profileForNameAndToken(String(form.email ?? ""), String(form.password ?? ""));
     if (userId === null) {
-      log.info("invidious.login_refused", { reason: "unknown token" });
-      return c.text("Wrong username or password", 401);
-    }
-    const profile = await database.prepare("SELECT name FROM users WHERE id = ?").get(userId) as { name: string } | null;
-    if (!profile || profile.name.toLowerCase() !== name.toLowerCase()) {
-      log.info("invidious.login_refused", { reason: "name does not match the token", userId });
+      log.info("invidious.login_refused", { reason: "no profile for that name and token" });
       return c.text("Wrong username or password", 401);
     }
     log.info("invidious.login", { userId });
@@ -64,7 +68,7 @@ export function registerAuthRoutes(app: Hono): void {
   });
 
   app.get("/api/v1/auth/feed", async (c) => {
-    const userId = await profileFor(c.req.header("cookie"));
+    const userId = await profileFor(c);
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
     const rows = await database.prepare(
       `SELECT ${VIDEO_COLUMNS}
@@ -82,7 +86,7 @@ export function registerAuthRoutes(app: Hono): void {
   });
 
   app.get("/api/v1/auth/subscriptions", async (c) => {
-    const userId = await profileFor(c.req.header("cookie"));
+    const userId = await profileFor(c);
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
     const rows = await database.prepare(
       `SELECT ch.channel_id, COALESCE(ch.custom_title, ch.title) AS title, ch.thumbnail
@@ -106,7 +110,7 @@ export function registerAuthRoutes(app: Hono): void {
    * behind and the first refresh happens without being asked for.
    */
   app.post("/api/v1/auth/subscriptions/:id", async (c) => {
-    const userId = await profileFor(c.req.header("cookie"));
+    const userId = await profileFor(c);
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
     const channelId = c.req.param("id");
     const known = await database.prepare("SELECT 1 FROM channels WHERE channel_id = ?").get(channelId);
@@ -135,7 +139,7 @@ export function registerAuthRoutes(app: Hono): void {
   });
 
   app.delete("/api/v1/auth/subscriptions/:id", async (c) => {
-    const userId = await profileFor(c.req.header("cookie"));
+    const userId = await profileFor(c);
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
     // Unfollowed, not forgotten: the channel and its videos stay, exactly as
     // unsubscribing in the web interface leaves them.
@@ -147,7 +151,7 @@ export function registerAuthRoutes(app: Hono): void {
   });
 
   app.get("/api/v1/auth/playlists", async (c) => {
-    const userId = await profileFor(c.req.header("cookie"));
+    const userId = await profileFor(c);
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
     return c.json(await listLocalPlaylists(userId));
   });
@@ -162,7 +166,7 @@ export function registerAuthRoutes(app: Hono): void {
    * nothing, and the playlist opens empty.
    */
   app.get("/api/v1/auth/playlists/:id", async (c) => {
-    const userId = await profileFor(c.req.header("cookie"));
+    const userId = await profileFor(c);
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
     const playlist = await localPlaylist(userId, c.req.param("id"), playlistPage(c.req.query("page")));
     return playlist ? c.json(playlist) : c.json({ error: "not found" }, 404);
