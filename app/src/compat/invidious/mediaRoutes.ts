@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { existsSync } from "node:fs";
 import { getDownload, getVideoResponse, listSubtitleFiles, srtToVtt } from "../../downloader";
+import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { compatUserId } from "./context";
@@ -56,9 +57,16 @@ const directVerdicts = new Map<string, Promise<boolean>>();
  * How long the direct path runs alone before the other way starts beside it.
  *
  * Long enough that an address which works answers first and costs nothing;
- * short enough that a refused one is not what the viewer waits for.
+ * short enough that a refused one is not what the viewer waits for. And none
+ * at all while YouTube is refusing this address outright: the extraction the
+ * grace is waiting for has already been reported as failing, so waiting for it
+ * again is four seconds spent on an answer we have.
  */
 const DIRECT_GRACE_MS = 2_500;
+
+function directGrace(): number {
+  return videoInfoRefusalQuiet.quiet() ? 0 : DIRECT_GRACE_MS;
+}
 
 export async function directResponse(
   userId: number,
@@ -147,6 +155,7 @@ export function registerMediaRoutes(app: Hono): void {
     }
 
     // Already fetched once because the direct path was refused for it.
+    const askedAt = Date.now();
     const kept = cachedMedia(videoId);
     if (kept) {
       const response = localFileResponse(kept, c.req.header("range"));
@@ -175,12 +184,15 @@ export function registerMediaRoutes(app: Hono): void {
        * arriving beside it.
        */
       const direct = directResponse(userId, videoId, range ?? "bytes=0-", c.req.raw.signal);
-      const fallback = Bun.sleep(DIRECT_GRACE_MS).then(() => {
+      const fallback = Bun.sleep(directGrace()).then(() => {
         const entry = pendingFetch(videoId) ?? startFetch(userId, videoId);
         return entry ? partialFileResponse(entry, range, c.req.raw.signal) : null;
       });
       const streamed = await firstServed([direct, fallback]);
-      if (streamed) return streamed;
+      if (streamed) {
+        log.info("invidious.media_answered", { videoId, by: "direct-or-fetch", ms: Date.now() - askedAt });
+        return streamed;
+      }
       if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
       noteRefusal(videoId);
     }
@@ -195,7 +207,10 @@ export function registerMediaRoutes(app: Hono): void {
     const fetching = pendingFetch(videoId) ?? startFetch(userId, videoId);
     if (fetching) {
       const served = await partialFileResponse(fetching, range, c.req.raw.signal);
-      if (served) return served;
+      if (served) {
+        log.info("invidious.media_answered", { videoId, by: "fetch", ms: Date.now() - askedAt });
+        return served;
+      }
     }
     /*
      * Nothing came back, and the two reasons for that are not the same event.
