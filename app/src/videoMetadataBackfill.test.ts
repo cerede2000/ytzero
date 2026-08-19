@@ -35,6 +35,9 @@ if (process.env[ISOLATION_FLAG] !== "1") {
         db.prepare(`INSERT INTO videos(video_id,channel_id,title,published_at,live_status,duration)
           VALUES(?, 'UCbackfill', 'A video', datetime('now'), 'none', NULL)`).run(id);
       }
+      // Two of them: one refusal holds nothing now, having been shown to mean
+      // nothing — the same lookup succeeds by hand minutes later.
+      videoInfoRefusalQuiet.note(new Error("Sign in to confirm you're not a bot"));
       videoInfoRefusalQuiet.note(new Error("Sign in to confirm you're not a bot"));
       expect(videoInfoRefusalQuiet.quiet()).toBe(true);
 
