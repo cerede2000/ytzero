@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PLAYLIST_PAGE, localPlaylistId, localPlaylistNumber, playlistPage } from "./playlists";
+import { PLAYLIST_PAGE, localPlaylistId, localPlaylistNumber } from "./playlists";
 
 describe("the id a client is given for one of our playlists", () => {
   /*
@@ -32,14 +32,6 @@ describe("the id a client is given for one of our playlists", () => {
 });
 
 describe("how much of a playlist one answer carries", () => {
-  test("is the page asked for, and the first one otherwise", () => {
-    expect(playlistPage("2")).toBe(2);
-    expect(playlistPage(undefined)).toBe(1);
-    expect(playlistPage("0")).toBe(1);
-    expect(playlistPage("-3")).toBe(1);
-    expect(playlistPage("all")).toBe(1);
-  });
-
   // A client pages until an answer is empty — up to fifty in a row. Honouring
   // the page is what makes the second answer the last one.
   test("is a hundred videos, the way Invidious pages them", () => {

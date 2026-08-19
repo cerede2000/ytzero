@@ -4,7 +4,8 @@ import { log } from "../../logger";
 import { refreshChannel } from "../../refresher";
 import { resolveChannelId } from "../../youtube";
 import { accountProfile } from "./clientAuth";
-import { listLocalPlaylists, localPlaylist, playlistPage } from "./playlists";
+import { pageNumber } from "./paging";
+import { listLocalPlaylists, localPlaylist } from "./playlists";
 import { channelThumbnails, videoFromRow } from "./shapes";
 import { profileForNameAndToken, profileForToken } from "./tokens";
 import type { DetailRow } from "./videoDetail";
@@ -70,15 +71,19 @@ export function registerAuthRoutes(app: Hono): void {
   app.get("/api/v1/auth/feed", async (c) => {
     const userId = await profileFor(c);
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
+    const { limit, offset } = feedWindow(c.req.query("max_results"), c.req.query("page"));
     const rows = await database.prepare(
+      // The order is total, tie included: a client pages this list, and two
+      // videos published in the same second could otherwise land either side
+      // of a page boundary — once in each, or in neither.
       `SELECT ${VIDEO_COLUMNS}
          FROM videos v
          JOIN channels c ON c.channel_id = v.channel_id
          JOIN user_channels uc ON uc.channel_id = v.channel_id AND uc.user_id = ? AND uc.followed = 1
         WHERE v.published_at IS NOT NULL AND v.published_at != ''
           AND COALESCE(v.is_short, 0) = 0 AND COALESCE(v.is_unavailable, 0) = 0
-        ORDER BY v.published_at DESC LIMIT ?`
-    ).all(userId, feedSize(c.req.query("max_results"))) as DetailRow[];
+        ORDER BY v.published_at DESC, v.video_id DESC LIMIT ? OFFSET ?`
+    ).all(userId, limit, offset) as DetailRow[];
     // `notifications` is what a client shows as new; the feed itself is the
     // list. Ours has no separate notion of unseen, so it stays empty rather
     // than repeating the videos under a second name.
@@ -168,7 +173,7 @@ export function registerAuthRoutes(app: Hono): void {
   app.get("/api/v1/auth/playlists/:id", async (c) => {
     const userId = await profileFor(c);
     if (userId === null) return c.json({ error: "unauthorised" }, 401);
-    const playlist = await localPlaylist(userId, c.req.param("id"), playlistPage(c.req.query("page")));
+    const playlist = await localPlaylist(userId, c.req.param("id"), pageNumber(c.req.query("page")));
     return playlist ? c.json(playlist) : c.json({ error: "not found" }, 404);
   });
 }
@@ -178,4 +183,17 @@ export function feedSize(asked: string | undefined): number {
   const wanted = Math.trunc(Number(asked));
   if (!Number.isFinite(wanted) || wanted <= 0) return 60;
   return Math.min(wanted, 200);
+}
+
+/**
+ * Which slice of the feed one answer carries.
+ *
+ * The page is not decoration. A client scrolling this list asks for the next
+ * one and appends what comes back, and stops only when an answer is empty — so
+ * a feed that ignores the parameter hands back the same videos for as long as
+ * somebody keeps scrolling, which is what it looks like from the sofa.
+ */
+export function feedWindow(maxResults: string | undefined, page: string | undefined): { limit: number; offset: number } {
+  const limit = feedSize(maxResults);
+  return { limit, offset: (pageNumber(page) - 1) * limit };
 }
