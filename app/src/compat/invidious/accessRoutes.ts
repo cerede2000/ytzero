@@ -1,4 +1,5 @@
 import type { Context, Hono } from "hono";
+import { isChildUser } from "../../childTime";
 import { invidiousCompatEnabled } from "./enabled";
 import { mintToken, revokeToken, tokenState } from "./tokens";
 
@@ -29,7 +30,16 @@ export function registerInvidiousAccessRoutes(api: Api, currentUserId: (context:
    * keyed hash, so this answer cannot be produced again — asking twice means
    * minting a second token, which revokes the first.
    */
-  api.post("/invidious/token", async (c) => c.json({ token: await mintToken(currentUserId(c)) }));
+  api.post("/invidious/token", async (c) => {
+    /*
+     * Not for a restricted profile. The dialect serves a library without any of
+     * the limits this server puts on one — no local-only rule, no hidden live
+     * streams, no watch-time ceiling — so a token minted here would be a way
+     * around all of them, held by the person they apply to.
+     */
+    if (await isChildUser(currentUserId(c))) return c.json({ error: "not allowed" }, 403);
+    return c.json({ token: await mintToken(currentUserId(c)) });
+  });
 
   api.delete("/invidious/token", async (c) => {
     await revokeToken(currentUserId(c));
