@@ -9,6 +9,7 @@ process.env.YTZERO_INVIDIOUS_MAX_FETCHES = "3";
 
 const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedEntry, cachedMedia, mimeFor, offeredHeight, offeredKind, partialFileResponse, fetchSlotFree, growingFileResponse, promisedTotal, pruneCache, wantedRange } = await import("./mediaCache");
 const { alreadyPlayable } = await import("./videoDetail");
+const { MAX_ANSWER_BYTES, localFileResponse } = await import("./media");
 
 // Each test owns the directory: the order they run in is not fixed, and one
 // leaving files behind decided what the next one measured.
@@ -360,5 +361,37 @@ describe("a whole file asked for with no range", () => {
   test("says so when the fetch it was waiting for failed", async () => {
     const entry = { path: join(root, "never.m4a"), total: Promise.resolve(null), done: Promise.resolve(null) };
     expect((await growingFileResponse(entry, "audio")).status).toBe(502);
+  });
+});
+
+describe("a kept file answered to a player", () => {
+  /*
+   * `bytes=0-` means the rest of the file, and answering it literally is a
+   * hundred megabytes on one socket for as long as the player takes to drink
+   * it — minutes of silence between its reads, which every timeout between
+   * here and the phone reads as a dead connection. The video then stops in the
+   * middle, and nobody logs anything, because nothing failed.
+   */
+  test("is bounded, so the player comes back instead of holding a socket open", () => {
+    const path = file("kept.muxed720.h720.mp4", 20 * 1024 * 1024, Date.now());
+    const response = localFileResponse(path, "bytes=0-");
+    expect(response?.status).toBe(206);
+    expect(response?.headers.get("content-length")).toBe(String(MAX_ANSWER_BYTES));
+    expect(response?.headers.get("content-range")).toBe(`bytes 0-${MAX_ANSWER_BYTES - 1}/${20 * 1024 * 1024}`);
+  });
+
+  test("is what was asked for when that is less than the bound", () => {
+    const path = file("small.muxed720.h720.mp4", 4096, Date.now());
+    const response = localFileResponse(path, "bytes=0-1023");
+    expect(response?.headers.get("content-range")).toBe("bytes 0-1023/4096");
+  });
+
+  // A downloader sends no range and wants one complete body; bounding that is
+  // a truncated file, which is the bug this cap must not reintroduce.
+  test("is the whole file when no range was asked for at all", () => {
+    const path = file("whole.muxed720.h720.mp4", 12 * 1024 * 1024, Date.now());
+    const response = localFileResponse(path, undefined);
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get("content-length")).toBe(String(12 * 1024 * 1024));
   });
 });
