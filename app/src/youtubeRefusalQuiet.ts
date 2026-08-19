@@ -20,6 +20,16 @@ import { log } from "./logger";
  */
 const QUIET_MS = 90_000;
 const MAX_QUIET_MS = 30 * 60_000;
+/**
+ * How many refusals in a row before anything is held.
+ *
+ * One refusal turned out to mean nothing. Measured across a morning of them:
+ * the same command, with the same jar, succeeded every way it was run by hand
+ * — alone, five at once, five spaced out — minutes after the application had
+ * been turned away by it. A single refusal is weather; two in a row is a
+ * spell.
+ */
+const REFUSALS_BEFORE_QUIET = 2;
 
 export interface RefusalQuiet {
   /** True while YouTube's refusal is still being taken at its word. */
@@ -44,23 +54,54 @@ export function createRefusalQuiet({
 } = {}): RefusalQuiet {
   let refusedAt = 0;
   let refusals = 0;
+  /** When one attempt was last let through to see whether the spell has lifted. */
+  let probedAt = 0;
   /** Doubling per consecutive refusal: 90s, 3m, 6m, 12m, 24m, then capped. */
   const window = () => Math.min(quietMs * 2 ** Math.max(0, refusals - 1), maxQuietMs);
-  const quiet = () => refusedAt > 0 && now() - refusedAt < window();
+  /*
+   * Quiet, but never sealed.
+   *
+   * This used to hold until its window elapsed, and the window only ever grew:
+   * ninety seconds, then three minutes, six, twelve, twenty-four, thirty. It
+   * lifted early on a success — which could not happen, because while it held
+   * nothing was attempted, so nothing could succeed. A refusal lasting seconds
+   * therefore cost the best part of an hour, and there was no way out but to
+   * wait.
+   *
+   * So one attempt is let through every base interval. An address that has
+   * recovered is noticed within ninety seconds instead of at the end of a
+   * window that keeps doubling, and the cost is one lookup a minute and a half
+   * rather than every lookup asked for.
+   */
+  const quiet = () => {
+    if (refusedAt === 0 || now() - refusedAt >= window()) return false;
+    if (now() - probedAt >= quietMs) {
+      probedAt = now();
+      return false;
+    }
+    return true;
+  };
   return {
     quiet,
     note(error: unknown): void {
       const message = error instanceof Error ? error.message : String(error);
       if (!callerWasRefused(message)) return;
-      const was = quiet();
+      const was = refusedAt > 0 && now() - refusedAt < window();
       refusals++;
+      // Below the threshold nothing is held: the refusal is remembered so a
+      // second one counts, and that is all.
+      if (refusals < REFUSALS_BEFORE_QUIET) return;
       refusedAt = now();
+      // The next probe is due an interval from here, not immediately: arming
+      // and then letting the very next question through would hold nothing.
+      probedAt = refusedAt;
       if (!was) onChange(true);
     },
     clear(): void {
-      const was = quiet();
+      const was = refusedAt > 0 && now() - refusedAt < window();
       refusedAt = 0;
       refusals = 0;
+      probedAt = 0;
       if (was) onChange(false);
     },
   };
