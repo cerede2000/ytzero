@@ -57,11 +57,6 @@ export function localPlaylistNumber(playlistId: string): number | null {
  */
 export const PLAYLIST_PAGE = 100;
 
-export function playlistPage(asked: string | undefined): number {
-  const page = Math.trunc(Number(asked));
-  return Number.isFinite(page) && page > 1 ? page : 1;
-}
-
 interface PlaylistRow {
   id: number;
   name: string;

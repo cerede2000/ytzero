@@ -10,7 +10,8 @@ import { fetchSearchSuggestions } from "../../youtube";
 import { fetchVideoComments } from "../../youtubeComments";
 import { accountProfile, browsingProfile, unauthorized } from "./clientAuth";
 import { dailymotionDetail, dailymotionIdFrom, prefixedDailymotionId } from "./dailymotion";
-import { localPlaylist, localPlaylistNumber, playlistPage } from "./playlists";
+import { pageNumber } from "./paging";
+import { localPlaylist, localPlaylistNumber } from "./playlists";
 import { invidiousStats } from "./stats";
 import {
   channelFromRow,
@@ -43,10 +44,6 @@ const FROM_VIDEOS = "FROM videos v JOIN channels c ON c.channel_id = v.channel_i
 
 /** Pages are the continuation: opaque to the client, a number to us. */
 const PAGE_SIZE = 30;
-function pageFrom(value: string | undefined): number {
-  const page = Math.trunc(Number(value));
-  return Number.isFinite(page) && page > 1 ? page : 1;
-}
 
 export function registerCatalogRoutes(app: Hono): void {
   /*
@@ -85,7 +82,7 @@ export function registerCatalogRoutes(app: Hono): void {
      * the id — see `videoFromDailymotion`.
      */
     const providers = SEARCH_PROVIDERS.filter((provider) => provider.capabilities.library || provider.id === "dailymotion");
-    const { found } = await searchAcrossProviders(query, providers, pageFrom(c.req.query("page")), userId);
+    const { found } = await searchAcrossProviders(query, providers, pageNumber(c.req.query("page")), userId);
     const items: unknown[] = [];
     if (type !== "video") items.push(...(found.youtube?.channels ?? []).map(channelFromSearchResult));
     if (type !== "channel") {
@@ -176,7 +173,7 @@ export function registerCatalogRoutes(app: Hono): void {
 
   const channelTab = (kind: "videos" | "shorts" | "streams") => async (c: Context) => {
     if (await browsingProfile(c.req.header("authorization")) === null) return unauthorized();
-    const page = pageFrom(c.req.query("continuation"));
+    const page = pageNumber(c.req.query("continuation"));
     const videos = await channelVideos(c.req.param("id") ?? "", page, kind);
     return c.json({ videos, continuation: videos.length < PAGE_SIZE ? null : String(page + 1) });
   };
@@ -216,7 +213,7 @@ export function registerCatalogRoutes(app: Hono): void {
      */
     if (localPlaylistNumber(playlistId) !== null) {
       const owner = await accountProfile(c.req.header("cookie"), c.req.header("authorization"));
-      const own = owner === null ? null : await localPlaylist(owner, playlistId, playlistPage(c.req.query("page")));
+      const own = owner === null ? null : await localPlaylist(owner, playlistId, pageNumber(c.req.query("page")));
       return own ? c.json(own) : c.json({ error: "not found" }, 404);
     }
     const playlist = await database.prepare(
