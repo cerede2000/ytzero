@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 const root = mkdtempSync(join(tmpdir(), "ytzero-invidious-cache-"));
 process.env.YTZERO_INVIDIOUS_CACHE_DIR = root;
 
-const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedMedia, offeredHeight, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
+const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedMedia, mimeFor, offeredHeight, offeredKind, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
 const { alreadyPlayable } = await import("./videoDetail");
 
 // Each test owns the directory: the order they run in is not fixed, and one
@@ -189,17 +189,46 @@ describe("the qualities offered to a client", () => {
     expect(offeredHeight("720")).toBe(720);
   });
 
+  test("include the ones that exist only as separate tracks", () => {
+    expect(offeredHeight("1080")).toBe(1080);
+  });
+
   /* A height nobody offered is not an error to answer with, it is the best one. */
   test("stand in for anything else asked for", () => {
-    expect(offeredHeight("1080")).toBe(720);
+    expect(offeredHeight("4320")).toBe(720);
     expect(offeredHeight("nonsense")).toBe(720);
     expect(offeredHeight(undefined)).toBe(720);
     expect(offeredHeight("../../etc")).toBe(720);
   });
 
   test("keep one quality's file apart from another's", () => {
-    writeFileSync(join(root, "abc12345678.720.mp4"), new Uint8Array(4));
-    expect(cachedMedia("abc12345678", 720)).toContain("720");
-    expect(cachedMedia("abc12345678", 360)).toBeNull();
+    writeFileSync(join(root, "abc12345678.muxed720.mp4"), new Uint8Array(4));
+    expect(cachedMedia("abc12345678", "muxed", 720)).toContain("720");
+    expect(cachedMedia("abc12345678", "muxed", 360)).toBeNull();
+  });
+
+  /* A separate track is a different file from the one that carries both. */
+  test("keep a separate track apart from the muxed file", () => {
+    writeFileSync(join(root, "def12345678.muxed720.mp4"), new Uint8Array(4));
+    expect(cachedMedia("def12345678", "video", 1080)).toBeNull();
+    expect(cachedMedia("def12345678", "audio")).toBeNull();
+  });
+
+  test("keep one audio file for the video, whatever height was asked", () => {
+    writeFileSync(join(root, "ghi12345678.audio.mp4"), new Uint8Array(4));
+    expect(cachedMedia("ghi12345678", "audio", 1080)).toBe(cachedMedia("ghi12345678", "audio", 360));
+  });
+
+  test("name only the kinds a link may ask for", () => {
+    expect(offeredKind("video")).toBe("video");
+    expect(offeredKind("audio")).toBe("audio");
+    expect(offeredKind("../etc")).toBe("muxed");
+    expect(offeredKind(undefined)).toBe("muxed");
+  });
+
+  test("say what each kind is, so a player knows what it reads", () => {
+    expect(mimeFor("audio", "/x/a.mp4")).toBe("audio/mp4");
+    expect(mimeFor("video", "/x/v.mp4")).toBe("video/mp4");
+    expect(mimeFor("muxed", "/x/m.webm")).toBe("video/webm");
   });
 });

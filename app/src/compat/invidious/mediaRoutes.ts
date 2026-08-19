@@ -6,7 +6,7 @@ import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { compatUserId } from "./context";
-import { cachedMedia, offeredHeight, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
+import { cachedMedia, offeredHeight, offeredKind, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
 import { localFileResponse, mediaSecret } from "./media";
 import { mediaTokenValid } from "./mediaToken";
 
@@ -169,7 +169,8 @@ export function registerMediaRoutes(app: Hono): void {
   app.get("/api/v1/media/:id", async (c) => {
     const videoId = c.req.param("id");
     const height = offeredHeight(c.req.query("height"));
-    if (!await tokenHolds(c, `media:${height}`, videoId)) return c.json({ error: "expired or invalid link" }, 403);
+    const kind = offeredKind(c.req.query("kind"));
+    if (!await tokenHolds(c, `media:${kind}:${height}`, videoId)) return c.json({ error: "expired or invalid link" }, 403);
     const userId = await compatUserId();
 
     const askedAt = Date.now();
@@ -182,20 +183,23 @@ export function registerMediaRoutes(app: Hono): void {
      * request, and reading it required knowing which silences were good ones.
      */
     const answered = (by: string, response: Response) => {
-      log.info("invidious.media_answered", { videoId, height, by, ms: Date.now() - askedAt });
+      log.info("invidious.media_answered", { videoId, kind, height, by, ms: Date.now() - askedAt });
       return response;
     };
 
-    // A kept copy answers immediately, at the quality that was chosen, without
-    // asking YouTube for anything.
-    const download = await getDownload(userId, videoId);
+    /*
+     * A kept copy answers immediately, at the quality that was chosen, without
+     * asking YouTube for anything — but only for the muxed file it is. A client
+     * asking for a separate track wants that track, not a file with both.
+     */
+    const download = kind === "muxed" ? await getDownload(userId, videoId) : null;
     if (download?.status === "done" && download.path) {
       const response = localFileResponse(download.path, c.req.header("range"));
       if (response) return answered("downloaded", response);
     }
 
     // Already fetched once because the direct path was refused for it.
-    const kept = cachedMedia(videoId, height);
+    const kept = cachedMedia(videoId, kind, height);
     if (kept) {
       const response = localFileResponse(kept, c.req.header("range"));
       if (response) return answered("cached", response);
@@ -224,8 +228,8 @@ export function registerMediaRoutes(app: Hono): void {
        */
       const direct = directResponse(userId, videoId, range ?? "bytes=0-", c.req.raw.signal);
       const fallback = Bun.sleep(directGrace()).then(() => {
-        const entry = pendingFetch(videoId, height) ?? startFetch(userId, videoId, height);
-        return entry ? partialFileResponse(entry, range, c.req.raw.signal) : null;
+        const entry = pendingFetch(videoId, kind, height) ?? startFetch(userId, videoId, kind, height);
+        return entry ? partialFileResponse(entry, range, c.req.raw.signal, kind) : null;
       });
       const streamed = await firstServed([direct, fallback]);
       if (streamed) return answered("direct-or-fetch", streamed);
@@ -240,9 +244,9 @@ export function registerMediaRoutes(app: Hono): void {
      * format without trouble. So it fetches, and the file is served as it
      * arrives rather than when it is whole.
      */
-    const fetching = pendingFetch(videoId, height) ?? startFetch(userId, videoId, height);
+    const fetching = pendingFetch(videoId, kind, height) ?? startFetch(userId, videoId, kind, height);
     if (fetching) {
-      const served = await partialFileResponse(fetching, range, c.req.raw.signal);
+      const served = await partialFileResponse(fetching, range, c.req.raw.signal, kind);
       if (served) return answered("fetch", served);
     }
     /*
