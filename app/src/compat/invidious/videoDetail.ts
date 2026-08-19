@@ -68,7 +68,7 @@ const DIRECT_GRACE_MS = 4_000;
  * play it, so the work starts here, beside the subtitle resolution this
  * request already waits on.
  */
-function warmSource(userId: number, videoId: string): void {
+export function warmMedia(userId: number, videoId: string): void {
   let served = false;
   const probe = directResponse(userId, videoId, "bytes=0-1", new AbortController().signal)
     .then((response) => {
@@ -97,8 +97,6 @@ function warmSource(userId: number, videoId: string): void {
 export async function videoDetail(userId: number, row: DetailRow, origin: string) {
   const downloaded = await getDownload(userId, row.video_id);
   const live = row.live_status === "live";
-  // A kept copy is served from disk and needs nothing resolved.
-  if (!live && !(downloaded?.status === "done" && downloaded.path)) warmSource(userId, row.video_id);
   const languages = await captionLanguages(userId, row.video_id);
   return {
     ...videoFromRow(row),

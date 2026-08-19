@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 const root = mkdtempSync(join(tmpdir(), "ytzero-invidious-cache-"));
 process.env.YTZERO_INVIDIOUS_CACHE_DIR = root;
 
-const { cacheableVideoId, cachedMedia, pruneCache, wantedRange } = await import("./mediaCache");
+const { cacheableVideoId, cachedMedia, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
 
 // Each test owns the directory: the order they run in is not fixed, and one
 // leaving files behind decided what the next one measured.
@@ -96,5 +96,45 @@ describe("a range asked for while the file is still arriving", () => {
     const huge = 200 * 1024 * 1024;
     const asked = wantedRange("bytes=0-", huge)!;
     expect(asked.end - asked.start + 1).toBe(8 * 1024 * 1024);
+  });
+});
+
+describe("answering while the file is still arriving", () => {
+  /*
+   * A player opens with `bytes=0-`, meaning the whole file. Waiting for all of
+   * it is the whole point of serving early thrown away — measured on a live
+   * instance, the first bytes went out at the same instant the download
+   * finished, twenty-four seconds after it began.
+   */
+  test("sends what has arrived instead of waiting for what was asked", async () => {
+    const path = join(root, "growing.partial");
+    writeFileSync(path, new Uint8Array(300 * 1024));
+    const entry = { path, total: Promise.resolve(4_000_000), done: new Promise<string | null>(() => {}) };
+
+    const answered = await Promise.race([
+      partialFileResponse(entry, "bytes=0-"),
+      Bun.sleep(1_000).then(() => "waited" as const),
+    ]);
+
+    expect(answered).not.toBe("waited");
+    const response = answered as Response;
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe(`bytes 0-${300 * 1024 - 1}/4000000`);
+  });
+
+  test("refuses a range that starts past the end", async () => {
+    const path = join(root, "short.partial");
+    writeFileSync(path, new Uint8Array(1_000));
+    const entry = { path, total: Promise.resolve(1_000), done: Promise.resolve(path) };
+    const response = await partialFileResponse(entry, "bytes=5000-");
+    expect(response?.status).toBe(416);
+  });
+
+  /* Without a length there is nothing to answer a range against. */
+  test("says nothing when the size was never announced", async () => {
+    const path = join(root, "sizeless.partial");
+    writeFileSync(path, new Uint8Array(1_000));
+    const entry = { path, total: Promise.resolve(null), done: Promise.resolve(path) };
+    expect(await partialFileResponse(entry, "bytes=0-")).toBeNull();
   });
 });

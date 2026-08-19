@@ -17,7 +17,7 @@ import {
   videoFromSearchResult,
   type ChannelRowLike,
 } from "./shapes";
-import { videoDetail, type DetailRow } from "./videoDetail";
+import { videoDetail, warmMedia, type DetailRow } from "./videoDetail";
 
 /**
  * The catalogue an Invidious client browses.
@@ -82,6 +82,15 @@ export function registerCatalogRoutes(app: Hono): void {
   app.get("/api/v1/videos/:id", async (c) => {
     const videoId = c.req.param("id");
     const userId = await compatUserId();
+    /*
+     * The file first, before anything is known about the video.
+     *
+     * Fetching it needs the id and nothing else, while the two steps below
+     * cost five seconds each — importing a video the library has never seen,
+     * and resolving its subtitles. Started after them, the player waits for
+     * all three in turn; started here, it waits for the longest of them.
+     */
+    warmMedia(userId, videoId);
     // A video reached from search is not in the library yet. Importing it is
     // what the web interface does when the same video is opened there, so
     // history and progress land in the same place whichever one played it.

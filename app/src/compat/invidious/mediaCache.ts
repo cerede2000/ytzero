@@ -235,6 +235,16 @@ export async function ensureCached(userId: number, videoId: string): Promise<str
 
 /** Max bytes answered at once, so a length can be set without holding a film in memory. */
 const CHUNK_BYTES = 8 * 1024 * 1024;
+/**
+ * Enough of a first answer to be worth sending, rather than all that was asked.
+ *
+ * A player opens with `bytes=0-`, meaning the whole file — and a file smaller
+ * than the chunk cap made that literal: the first range waited for the last
+ * byte of the download, which is the whole point of serving early thrown away.
+ * A range answer is allowed to be shorter than the range requested, so it is:
+ * as soon as there is a quarter of a megabyte to send, it goes.
+ */
+const FIRST_BYTES = 256 * 1024;
 
 /** What a player asked for, from what has arrived so far. */
 export function wantedRange(range: string | undefined, total: number): { start: number; end: number } | null {
@@ -276,7 +286,8 @@ export async function partialFileResponse(
     } catch {
       size = 0;
     }
-    if (size > wanted.end) break;
+    // Everything asked for, or enough of it to be worth answering with.
+    if (size > wanted.end || size - wanted.start >= FIRST_BYTES) break;
     const settled = await Promise.race([entry.done, Bun.sleep(120).then(() => undefined)]);
     if (settled !== undefined) {
       if (settled === null) return null;
