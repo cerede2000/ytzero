@@ -1,9 +1,10 @@
 import type { Context, Hono } from "hono";
 import { existsSync } from "node:fs";
-import { getDownload, getVideoResponse, listSubtitleFiles, srtToVtt } from "../../downloader";
+import { getDownload, listSubtitleFiles, srtToVtt } from "../../downloader";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { compatUserId } from "./context";
+import { cachedMedia, ensureCached } from "./mediaCache";
 import { localFileResponse, mediaSecret } from "./media";
 import { mediaTokenValid } from "./mediaToken";
 
@@ -65,17 +66,18 @@ export function registerMediaRoutes(app: Hono): void {
       if (response) return response;
     }
 
-    if (recentlyRefused(videoId)) return c.json({ error: "video unavailable" }, 502);
-
     /*
-     * A player that asked for no range still gets a bounded first chunk.
-     * Range-less, the relay fetches to the end of the file and buffers it to
-     * put a length on it — minutes of video held in memory before the first
-     * frame, for a client that was going to seek immediately anyway.
+     * Everything else is served out of the cache yt-dlp fills, because nothing
+     * else can be: an address extracted here and fetched from here answers 403
+     * to every format, client, header set and range — while yt-dlp downloads
+     * the same format without trouble. The file is fetched once and served
+     * from disk with the ranges a player seeks by.
      */
-    const asked = c.req.header("range") ?? "bytes=0-";
-    const streamed = await getVideoResponse(userId, videoId, asked, c.req.raw.signal);
-    if (streamed) return streamed;
+    const kept = cachedMedia(videoId) ?? (recentlyRefused(videoId) ? null : await ensureCached(userId, videoId));
+    if (kept) {
+      const response = localFileResponse(kept, c.req.header("range"));
+      if (response) return response;
+    }
     /*
      * Nothing came back, and the two reasons for that are not the same event.
      * A native player opens connections it abandons a moment later — probing
@@ -85,7 +87,7 @@ export function registerMediaRoutes(app: Hono): void {
      */
     if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
     noteRefusal(videoId);
-    log.warn("invidious.media_unavailable", { videoId, range: asked, downloaded: Boolean(download?.path) });
+    log.warn("invidious.media_unavailable", { videoId, range: c.req.header("range") ?? null, downloaded: Boolean(download?.path) });
     return c.json({ error: "video unavailable" }, 502);
   });
 
