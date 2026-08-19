@@ -30,8 +30,3 @@ export async function compatUserId(): Promise<number> {
   if (!fallback) throw new Error("no profile to serve");
   return (resolved = fallback.id);
 }
-
-/** Test seam: forget the resolved profile so a later call looks again. */
-export function forgetCompatUser(): void {
-  resolved = null;
-}
