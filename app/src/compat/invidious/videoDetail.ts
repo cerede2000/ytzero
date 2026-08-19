@@ -62,7 +62,7 @@ function warmSource(userId: number, videoId: string): void {
   void getVideoResponse(userId, videoId, "bytes=0-1")
     .then(async (response) => {
       if (response) return response.body?.cancel().catch(() => {});
-      await startFetch(userId, videoId);
+      startFetch(userId, videoId);
     })
     .catch(() => {});
 }

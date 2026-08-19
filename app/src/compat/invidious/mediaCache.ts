@@ -97,8 +97,15 @@ export function pruneCache(limit = CACHE_LIMIT_BYTES, keep?: string): void {
 /** A fetch under way: where it is being written, how big it will be, and when it ends. */
 export interface PendingFetch {
   path: string;
-  /** Bytes the finished file will have, when yt-dlp told us before starting. */
-  total: number | null;
+  /**
+   * Bytes the finished file will have, when yt-dlp tells us — and a promise
+   * rather than a number because it is not known when the fetch is registered.
+   *
+   * Registering has to happen before anything is awaited: two connections
+   * arriving together both looked, both found nothing under way, and both
+   * downloaded the same video.
+   */
+  total: Promise<number | null>;
   done: Promise<string | null>;
 }
 
@@ -151,7 +158,7 @@ function firstLine(stream: ReadableStream<Uint8Array>): Promise<string> {
  * `--no-simulate` prints the field and fetches the file. A player told nothing
  * about the length will not start, and one told `bytes 0-99/*` cannot seek.
  */
-export async function startFetch(userId: number, videoId: string): Promise<PendingFetch | null> {
+export function startFetch(userId: number, videoId: string): PendingFetch | null {
   if (!cacheableVideoId(videoId)) return null;
   const key = `${userId}:${videoId}`;
   const running = fetching.get(key);
@@ -204,17 +211,17 @@ export async function startFetch(userId: number, videoId: string): Promise<Pendi
     }
   })();
 
-  // Never hold the caller on a size that is not coming: without one the first
-  // range waits for the whole file, which is slower but still plays.
-  const printed = await Promise.race([announced, Bun.sleep(20_000).then(() => "")]);
-  const total = Number(printed.trim());
-  const entry: PendingFetch = {
-    path: partial,
-    total: Number.isFinite(total) && total > 0 ? total : null,
-    done,
-  };
+  // Never hold on a size that is not coming: without one the first range waits
+  // for the whole file, which is slower but still plays.
+  const total = Promise.race([announced, Bun.sleep(20_000).then(() => "")]).then((printed) => {
+    const size = Number(printed.trim());
+    const announcedBytes = Number.isFinite(size) && size > 0 ? size : null;
+    log.info("invidious.cache_fetch_started", { videoId, announcedBytes });
+    return announcedBytes;
+  });
+
+  const entry: PendingFetch = { path: partial, total, done };
   fetching.set(key, entry);
-  log.info("invidious.cache_fetch_started", { videoId, announcedBytes: entry.total });
   return entry;
 }
 
@@ -222,7 +229,7 @@ export async function startFetch(userId: number, videoId: string): Promise<Pendi
 export async function ensureCached(userId: number, videoId: string): Promise<string | null> {
   const existing = cachedMedia(videoId);
   if (existing) return existing;
-  const started = await startFetch(userId, videoId);
+  const started = startFetch(userId, videoId);
   return started ? started.done : null;
 }
 
@@ -252,12 +259,12 @@ export async function partialFileResponse(
   range: string | undefined,
   signal?: AbortSignal,
 ): Promise<Response | null> {
-  if (entry.total === null) {
-    const finished = await entry.done;
-    return finished ? null : null;
-  }
-  const wanted = wantedRange(range, entry.total);
-  if (!wanted) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${entry.total}` } });
+  const total = await entry.total;
+  // Without a length there is nothing to answer a range against; the caller
+  // falls back to waiting for the whole file.
+  if (total === null) return null;
+  const wanted = wantedRange(range, total);
+  if (!wanted) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${total}` } });
 
   let path = entry.path;
   let finished = false;
@@ -282,12 +289,13 @@ export async function partialFileResponse(
   const available = statSync(path).size;
   const end = Math.min(wanted.end, available - 1);
   if (end < wanted.start) return null;
+  log.info("invidious.cache_served", { bytes: end - wanted.start + 1, from: wanted.start, of: total, complete: finished });
   return new Response(Bun.file(path).slice(wanted.start, end + 1), {
     status: 206,
     headers: {
       "Content-Type": "video/mp4",
       "Content-Length": String(end - wanted.start + 1),
-      "Content-Range": `bytes ${wanted.start}-${end}/${entry.total}`,
+      "Content-Range": `bytes ${wanted.start}-${end}/${total}`,
       "Accept-Ranges": "bytes",
       "Cache-Control": "no-store",
     },
