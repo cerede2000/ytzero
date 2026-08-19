@@ -45,7 +45,7 @@ export function basicCredentials(header: string | undefined | null): BasicCreden
 }
 
 /** Whose library the credentials on this request name, if they name one. */
-export async function profileFromBasic(header: string | undefined): Promise<number | null> {
+async function profileFromBasic(header: string | undefined): Promise<number | null> {
   const credentials = basicCredentials(header);
   if (!credentials) return null;
   return profileForNameAndToken(credentials.name, credentials.secret);

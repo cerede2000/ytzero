@@ -69,7 +69,7 @@ export function channelThumbnails(url: string | null | undefined): InvidiousThum
 }
 
 /** Unix seconds from the date column, or null when the row carries no date. */
-export function publishedSeconds(publishedAt: string | null | undefined): number | null {
+function publishedSeconds(publishedAt: string | null | undefined): number | null {
   if (!publishedAt) return null;
   const ms = Date.parse(publishedAt);
   return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
@@ -82,7 +82,7 @@ export function publishedSeconds(publishedAt: string | null | undefined): number
  * when it is there and fall back to formatting the timestamp when it is not,
  * so passing it through keeps a search result as informative as it was.
  */
-export function publishedTextFrom(published: PublishedAgo | null | undefined): string | undefined {
+function publishedTextFrom(published: PublishedAgo | null | undefined): string | undefined {
   if (!published) return undefined;
   const value = Math.max(0, Math.round(published.value));
   return `${value} ${published.unit}${value === 1 ? "" : "s"} ago`;

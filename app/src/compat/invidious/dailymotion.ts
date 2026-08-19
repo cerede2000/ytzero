@@ -56,7 +56,7 @@ async function credentials(videoId: string, now: number = Date.now()): Promise<s
   return `expires=${expires}&signature=${signature}`;
 }
 
-export async function signedDailymotionManifest(origin: string, videoId: string): Promise<string> {
+async function signedDailymotionManifest(origin: string, videoId: string): Promise<string> {
   return `${origin}/api/v1/dm/${encodeURIComponent(videoId)}/hls.m3u8?${await credentials(videoId)}`;
 }
 
