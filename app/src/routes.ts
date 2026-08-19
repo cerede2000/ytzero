@@ -37,6 +37,7 @@ import { registerLibraryRoutes } from "./routes/libraryRoutes";
 import { registerChildRoutes } from "./routes/childRoutes";
 import { registerInsightRoutes } from "./routes/insightRoutes";
 import { registerDailymotionRoutes } from "./routes/dailymotionRoutes";
+import { registerInvidiousAccessRoutes } from "./compat/invidious/accessRoutes";
 import { registerDownloadRoutes } from "./routes/downloadRoutes";
 import { migrateDownloadsFromPlugin, profileDownloadsEnabled } from "./downloadConfig";
 import { registerChannelPlaylistRoutes } from "./routes/channelPlaylistRoutes";
@@ -348,6 +349,7 @@ registerSocialWatchPartyRoutes(api, {
 });
 registerDownloadRoutes(api, { currentUserId, isAdmin });
 registerDailymotionRoutes(api, { currentUserId });
+registerInvidiousAccessRoutes(api, currentUserId);
 
 registerVideoRoutes(api, { currentUserId, isAdmin, attachTags });
 registerTranscriptRoutes(api, currentUserId);
