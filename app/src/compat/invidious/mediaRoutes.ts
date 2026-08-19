@@ -6,7 +6,7 @@ import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { compatUserId } from "./context";
-import { cachedMedia, offeredHeight, offeredKind, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
+import { cachedMedia, ensureCached, mimeFor, offeredHeight, offeredKind, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
 import { localFileResponse, mediaSecret } from "./media";
 import { mediaTokenValid } from "./mediaToken";
 
@@ -205,16 +205,34 @@ export function registerMediaRoutes(app: Hono): void {
       if (response) return answered("cached", response);
     }
 
+    const range = c.req.header("range");
+
     /*
-     * The direct path first: it costs no disk and starts at once. A player
-     * that sent no range still gets a bounded chunk — range-less, the relay
-     * reads to the end of the file and buffers it to put a length on it.
+     * No range at all means the whole file, and that is a downloader.
+     *
+     * A player asks in ranges and comes back for more, so it is served as the
+     * file arrives. A downloader issues one plain GET and expects one complete
+     * body — answered with a partial one it saves a truncated file or calls
+     * the download failed, which is what a client reported: the muxed quality
+     * worked, because its file was already whole in the cache, and the
+     * separate tracks failed, because theirs were still arriving.
+     */
+    if (!range) {
+      const whole = cachedMedia(videoId, kind, height) ?? await ensureCached(userId, videoId, kind, height);
+      const response = whole && localFileResponse(whole, undefined, mimeFor(kind, whole));
+      if (response) return answered("whole-file", response);
+      if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
+      log.warn("invidious.media_unavailable", { videoId, kind, height, range: null, downloaded: false });
+      return c.json({ error: "video unavailable" }, 502);
+    }
+
+    /*
+     * The direct path first: it costs no disk and starts at once.
      *
      * If a fetch is already under way, the two race. Waiting out the direct
      * verdict costs seventeen seconds of extractions and retry ladders, and
      * the file arriving beside it is often ready long before that.
      */
-    const range = c.req.header("range");
     if (!recentlyRefused(videoId)) {
       /*
        * Both ways run, and the first to produce bytes wins.
@@ -226,7 +244,7 @@ export function registerMediaRoutes(app: Hono): void {
        * second extraction, a second ladder — with the file it needed already
        * arriving beside it.
        */
-      const direct = directResponse(userId, videoId, range ?? "bytes=0-", c.req.raw.signal);
+      const direct = directResponse(userId, videoId, range, c.req.raw.signal);
       const fallback = Bun.sleep(directGrace()).then(() => {
         const entry = pendingFetch(videoId, kind, height) ?? startFetch(userId, videoId, kind, height);
         return entry ? partialFileResponse(entry, range, c.req.raw.signal, kind) : null;
