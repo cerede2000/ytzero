@@ -30,14 +30,26 @@ export default function AppSidebar({
   const renderNavLink = (item: NavItem) => {
     const Icon = item.icon;
     const activeDownloads = downloadSummary.queued + downloadSummary.downloading;
-    const downloadIndicator = downloadSummary.errors > 0
+    /*
+     * A jar that has stopped being recognised outranks a queue.
+     *
+     * Nothing that needs it works while it is dead, and until now the only
+     * place that said so was the settings page that manages it — so the way to
+     * learn of it was to go looking, usually after an hour of things failing
+     * for no stated reason. Configured and dead is the state worth saying;
+     * unknown is not, since nothing has asked yet.
+     */
+    const jarDead = downloadSummary.cookies_configured === true && downloadSummary.cookies_recognised === false;
+    const downloadIndicator = jarDead
+      ? { kind: "cookies", count: 0, icon: <AlertTriangle aria-hidden="true" /> }
+      : downloadSummary.errors > 0
       ? { kind: "error", count: downloadSummary.errors, icon: <AlertTriangle aria-hidden="true" /> }
       : activeDownloads > 0
         ? { kind: "active", count: activeDownloads, icon: <Download aria-hidden="true" /> }
         : newCompletedDownloads > 0
           ? { kind: "new", count: newCompletedDownloads, icon: <Check aria-hidden="true" /> }
           : null;
-    const downloadTooltip = t("downloadsBadgeDetails", {
+    const downloadTooltip = jarDead ? t("cookiesNotRecognisedBadge") : t("downloadsBadgeDetails", {
       downloading: downloadSummary.downloading,
       queued: downloadSummary.queued,
       completed: downloadSummary.completed,
@@ -49,10 +61,10 @@ export default function AppSidebar({
         <Icon />
         <span className="nav-label">{t(item.labelKey)}</span>
         {item.to === "/live" && liveCount > 0 && <Badge variant="danger" size="sm" className="badge nav-live-badge">{liveCount}</Badge>}
-        {item.to === "/downloads" && downloadSummary.enabled && downloadIndicator && (
+        {item.to === "/downloads" && (downloadSummary.enabled || jarDead) && downloadIndicator && (
           <Tooltip text={downloadTooltip} pos="right" className="nav-download-tooltip" portal>
             <Badge
-              variant={downloadIndicator.kind === "error" ? "danger" : "accent"}
+              variant={downloadIndicator.kind === "error" || downloadIndicator.kind === "cookies" ? "danger" : "accent"}
               size="sm"
               className={`badge nav-download-badge nav-download-badge--${downloadIndicator.kind}`}
               aria-label={downloadTooltip}
