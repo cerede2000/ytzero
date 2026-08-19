@@ -45,6 +45,11 @@ app.get("/api/health", async (c) => {
   return c.json({ status: "ok", version: VERSION, commit: COMMIT, uptime: Math.round(process.uptime()), database: mode.database, background_tasks: mode.backgroundTasks });
 });
 
+// Invidious-speaking routes for third-party clients, off unless asked for.
+// Declared before the API router for the same reason /api/health is: they must
+// answer without the session middleware, which no such client can satisfy.
+registerInvidiousCompat(app);
+
 app.route("/api", api);
 
 // App icon, generated from the saved color so the favicon and the PWA icon
