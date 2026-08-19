@@ -173,6 +173,14 @@ export function startFetch(userId: number, videoId: string): PendingFetch | null
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
     "--no-playlist", "--no-warnings", "--no-part", "--no-simulate",
+    /*
+     * Four megabytes took nineteen seconds on the instance — two hundred
+     * kilobytes a second, where the same file fetched by hand ran at twenty-
+     * five megabytes a second. YouTube throttles a single long-running
+     * connection; asking in bounded pieces is the ordinary way past it, and
+     * the pieces are what the player is waiting for anyway.
+     */
+    "--http-chunk-size", "10M",
     "--print", "%(filesize,filesize_approx)s",
     "-f", FORMAT,
     "-o", partial,
