@@ -171,6 +171,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
   const [adminDelegationAvailable, setAdminDelegationAvailable] = useState(false);
   const [activeAuthMethod, setActiveAuthMethod] = useState<AuthMethod>("none");
   const [isChildProfile, setIsChildProfile] = useState<boolean | null>(null);
+  const [invidiousAccess, setInvidiousAccess] = useState<InvidiousTokenState | null>(null);
   const [shortsFeedMode, setShortsFeedMode] = useState<ShortsFeedMode>("0");
   const [showTopChannels, setShowTopChannels] = useState(true);
   const [hideLiveFromFeed, setHideLiveFromFeed] = useState(false);
@@ -439,6 +440,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
       setAdminDelegationAvailable(auth.admin_delegation_available);
       setActiveAuthMethod(auth.method);
       setIsChildProfile(child.is_child);
+      setInvidiousAccess(invidious);
       const name = r.settings.app_name || "YT Zero";
       setAppName(name);
       setAppNameInput(name);
@@ -1093,6 +1095,12 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     const permissionArea = permissionAreaForTab(tabItem.id);
     const hasVisibleChannelSection = tabItem.id !== "channels" || channelSubTabOptions.length > 0;
     const hasVisibleDisplaySection = tabItem.id !== "display" || DISPLAY_PERMISSION_AREAS.some(canManageArea);
+    /*
+     * Shown to every profile that could use it, and to the administrator even
+     * when the instance has not turned the dialect on — that panel is where it
+     * says so, and how it is turned on.
+     */
+    const clientsApply = tabItem.id !== "clients" || (isChildProfile === false && (!!invidiousAccess?.enabled || isPrimary));
     return (!tabItem.primaryOnly || isPrimary)
       && (tabItem.id !== "auth" || canManageAdministrators)
       && (tabItem.id !== "cluster" || clusterAvailable)
