@@ -335,3 +335,22 @@ export function videoFromDailymotion(video: DailymotionVideoLike, prefixed: stri
     isUpcoming: false,
   };
 }
+
+/**
+ * Two providers' answers in one list, taken in turn.
+ *
+ * The dialect returns a flat list and a client shows it in the order given, so
+ * appending one provider after another buries the second: forty results deep
+ * on a phone is not a result anybody sees. Taken in turn, each is on screen
+ * from the first row, and a provider that runs out simply stops appearing.
+ */
+export function interleave<T>(lists: readonly (readonly T[])[]): T[] {
+  const longest = Math.max(0, ...lists.map((list) => list.length));
+  const mixed: T[] = [];
+  for (let index = 0; index < longest; index += 1) {
+    for (const list of lists) {
+      if (index < list.length) mixed.push(list[index]);
+    }
+  }
+  return mixed;
+}

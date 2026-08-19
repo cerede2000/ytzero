@@ -15,6 +15,7 @@ import {
   channelFromRow,
   channelFromSearchResult,
   commentsFrom,
+  interleave,
   videoFromDailymotion,
   videoFromRow,
   videoFromSearchResult,
@@ -73,16 +74,18 @@ export function registerCatalogRoutes(app: Hono): void {
     const items: unknown[] = [];
     if (type !== "video") items.push(...(found.youtube?.channels ?? []).map(channelFromSearchResult));
     if (type !== "channel") {
-      items.push(...(found.youtube?.results ?? []).map((result) => videoFromSearchResult(result)));
-      items.push(...(found.dailymotion?.results ?? []).map((result) => videoFromDailymotion({
-        videoId: result.videoId,
-        title: result.title,
-        channelTitle: result.channelTitle,
-        thumbnail: result.thumbnail,
-        durationSeconds: durationSeconds(result.duration),
-        publishedAt: result.publishedAt ?? null,
-        views: result.viewCount,
-      }, prefixedDailymotionId(result.videoId))));
+      items.push(...interleave([
+        (found.youtube?.results ?? []).map((result) => videoFromSearchResult(result)),
+        (found.dailymotion?.results ?? []).map((result) => videoFromDailymotion({
+          videoId: result.videoId,
+          title: result.title,
+          channelTitle: result.channelTitle,
+          thumbnail: result.thumbnail,
+          durationSeconds: durationSeconds(result.duration),
+          publishedAt: result.publishedAt ?? null,
+          views: result.viewCount,
+        }, prefixedDailymotionId(result.videoId))),
+      ]));
     }
     return c.json(items);
   });
