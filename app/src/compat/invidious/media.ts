@@ -80,10 +80,10 @@ export async function signedCaptionPath(videoId: string, language: string, now: 
  * the quality that was chosen, it costs no yt-dlp call, and it plays when
  * YouTube would refuse us.
  */
-export function localFileResponse(path: string, range: string | undefined): Response | null {
+export function localFileResponse(path: string, range: string | undefined, contentType?: string): Response | null {
   if (!existsSync(path)) return null;
   const size = statSync(path).size;
-  const type = path.endsWith(".webm") ? "video/webm" : "video/mp4";
+  const type = contentType ?? (path.endsWith(".webm") ? "video/webm" : "video/mp4");
   const file = Bun.file(path);
   const match = range?.match(/bytes=(\d*)-(\d*)/);
   if (!match) {

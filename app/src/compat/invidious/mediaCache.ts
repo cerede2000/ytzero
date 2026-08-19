@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, utimesSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { DB_PATH } from "../../db";
+import { localFileResponse } from "./media";
 import { YTDLP, downloadCookiesConfigured, downloadCookiesFile } from "../../downloadConfig";
 import { log } from "../../logger";
 import { potArgsFor } from "../../ytdlpPotProvider";
@@ -337,9 +338,17 @@ export async function partialFileResponse(
   kind: MediaKind = "muxed",
 ): Promise<Response | null> {
   const total = await entry.total;
-  // Without a length there is nothing to answer a range against; the caller
-  // falls back to waiting for the whole file.
-  if (total === null) return null;
+  /*
+   * Without a length there is nothing to answer a range against while the file
+   * is still growing — a range answer must name the total. So this one waits
+   * for the whole file and serves it from disk, which is slower but plays.
+   * yt-dlp knows the size of most formats before it starts; a few, mostly the
+   * separate tracks, it will only say `NA` for.
+   */
+  if (total === null) {
+    const finished = await entry.done;
+    return finished ? localFileResponse(finished, range, mimeFor(kind, finished)) : null;
+  }
   const wanted = wantedRange(range, total);
   if (!wanted) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${total}` } });
 
