@@ -7,7 +7,7 @@ const root = mkdtempSync(join(tmpdir(), "ytzero-invidious-cache-"));
 process.env.YTZERO_INVIDIOUS_CACHE_DIR = root;
 process.env.YTZERO_INVIDIOUS_MAX_FETCHES = "3";
 
-const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedEntry, cachedMedia, growingFileResponse, mimeFor, offeredHeight, offeredKind, partialFileResponse, fetchSlotFree, pruneCache, wantedRange } = await import("./mediaCache");
+const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedEntry, cachedMedia, mimeFor, offeredHeight, offeredKind, partialFileResponse, fetchSlotFree, growingFileResponse, promisedTotal, pruneCache, wantedRange } = await import("./mediaCache");
 const { alreadyPlayable } = await import("./videoDetail");
 
 // Each test owns the directory: the order they run in is not fixed, and one
@@ -323,5 +323,42 @@ describe("how many videos are fetched at once", () => {
   test("takes the limit it is handed over the configured one", () => {
     expect(fetchSlotFree(3, 6)).toBe(true);
     expect(fetchSlotFree(6, 6)).toBe(false);
+  });
+});
+
+describe("the length a player is promised", () => {
+  /*
+   * The bug this exists to prevent: yt-dlp rewrites the m4a container after
+   * the download, in place, on the file being served. A player that read the
+   * front before the rewrite and the rest after it stops mid-video with no
+   * error at either end — and plays perfectly on the second attempt, when the
+   * file is finished and still.
+   */
+  test("is nothing for a track that will be rewritten", () => {
+    expect(promisedTotal("audio", 13_371_734)).toBeNull();
+  });
+
+  test("is what was announced for the files that are left alone", () => {
+    expect(promisedTotal("muxed", 50_986_833)).toBe(50_986_833);
+    expect(promisedTotal("video", 96_166_042)).toBe(96_166_042);
+    expect(promisedTotal("video", null)).toBeNull();
+  });
+});
+
+describe("a whole file asked for with no range", () => {
+  test("is the finished file when nothing was promised, not the growing one", async () => {
+    const path = join(root, "rewritten.m4a");
+    writeFileSync(path, new Uint8Array(2_048));
+    const entry = { path, total: Promise.resolve(null), done: Promise.resolve(path) };
+    const response = await growingFileResponse(entry, "audio");
+    expect(response.status).toBe(200);
+    // The length of the file that exists, which is the point of waiting for it.
+    expect(response.headers.get("content-length")).toBe("2048");
+    expect(response.headers.get("content-type")).toBe("audio/mp4");
+  });
+
+  test("says so when the fetch it was waiting for failed", async () => {
+    const entry = { path: join(root, "never.m4a"), total: Promise.resolve(null), done: Promise.resolve(null) };
+    expect((await growingFileResponse(entry, "audio")).status).toBe(502);
   });
 });

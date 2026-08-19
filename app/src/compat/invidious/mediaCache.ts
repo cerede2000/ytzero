@@ -89,6 +89,30 @@ function formatFor(kind: MediaKind, height: number): string {
     + "/18/22/best[acodec!=none][vcodec!=none]";
 }
 
+/**
+ * The length we are willing to promise, which is not always the one yt-dlp
+ * printed.
+ *
+ * That number is the size of the stream YouTube will send. For a separate
+ * audio track it is not the size of the file we end up with: yt-dlp rewrites
+ * the m4a container once the download is done — the same run, in place, on the
+ * path we are serving from — and the file both shrinks by about ten kilobytes
+ * and moves its boxes around.
+ *
+ * A player that read the front of that file before the rewrite and the rest
+ * after it holds two halves of two different files. It plays for a while and
+ * then stops, without a single error at either end, and the second attempt is
+ * perfect because by then the file is finished and still. That is the bug this
+ * prevents: promising nothing for a track that will be rewritten means it is
+ * served once it is whole, which is the only moment it is true.
+ *
+ * The muxed and video-only files are not post-processed — measured, and
+ * `cache_size_drifted` says so if that ever stops being true.
+ */
+export function promisedTotal(kind: MediaKind, announced: number | null): number | null {
+  return kind === "audio" ? null : announced;
+}
+
 /** What a file of this kind is, told to the player that reads it. */
 export function mimeFor(kind: MediaKind, path: string): string {
   if (kind === "audio") return path.endsWith(".webm") ? "audio/webm" : "audio/mp4";
@@ -314,12 +338,13 @@ export function startFetch(
   const announced = firstLine(child.stdout as ReadableStream<Uint8Array>);
 
   const printed = Promise.race([announced, Bun.sleep(20_000).then(() => "")]);
-  const total = printed.then((line) => {
+  const announcedBytes = printed.then((line) => {
     const size = Number(line.trim().split(/\s+/)[0]);
-    const announcedBytes = Number.isFinite(size) && size > 0 ? size : null;
-    log.info("invidious.cache_fetch_started", { videoId, kind, height, announcedBytes });
-    return announcedBytes;
+    const said = Number.isFinite(size) && size > 0 ? size : null;
+    log.info("invidious.cache_fetch_started", { videoId, kind, height, announcedBytes: said, promised: promisedTotal(kind, said) });
+    return said;
   });
+  const total = announcedBytes.then((said) => promisedTotal(kind, said));
   const announcedHeight = printed.then((line) => {
     const said = Number(line.trim().split(/\s+/)[1]);
     return Number.isFinite(said) && said > 0 ? said : null;
@@ -348,6 +373,16 @@ export function startFetch(
       log.info("invidious.cache_fetched", {
         videoId, kind, asked: height, delivered, bytes: size, ms: Date.now() - startedAt,
       });
+      /*
+       * The length we told players, against the file they will now be given.
+       * A difference means every answer sent while this arrived named a total
+       * that does not exist, which is a video that stops in the middle for no
+       * reason anybody can see. It has to be loud.
+       */
+      const promised = await total;
+      if (promised !== null && promised !== size) {
+        log.warn("invidious.cache_size_drifted", { videoId, kind, promised, actual: size });
+      }
       pruneCache(CACHE_LIMIT_BYTES, target);
       return target;
     } finally {
@@ -404,6 +439,17 @@ export function wantedRange(range: string | undefined, total: number): { start: 
  */
 export async function growingFileResponse(entry: PendingFetch, kind: MediaKind): Promise<Response> {
   const total = await entry.total;
+  /*
+   * Nothing promised means a file that is still going to change — see
+   * `promisedTotal`. Streaming it as it grows would hand out bytes that the
+   * rewrite then moves, so this one waits and answers with the file itself,
+   * length and all.
+   */
+  if (total === null) {
+    const finished = await entry.done;
+    const whole = finished ? localFileResponse(finished, undefined, mimeFor(kind, finished)) : null;
+    return whole ?? new Response(null, { status: 502 });
+  }
   let finished: string | null | undefined;
   void entry.done.then((path) => { finished = path; }, () => { finished = null; });
   let offset = 0;
