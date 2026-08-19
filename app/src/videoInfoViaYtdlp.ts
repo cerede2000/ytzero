@@ -107,6 +107,12 @@ export interface ProgressiveVideoSource {
   url: string;
   mime: string;
   expiresAt: number;
+  /**
+   * The headers this URL expects, for the same reason the audio track carries
+   * them: a file signed for a client that was signed in answers 403 to a
+   * caller that does not look like it.
+   */
+  headers?: Record<string, string>;
 }
 
 /** googlevideo URLs carry an `expire` unix-second param; keep just under it. */
@@ -164,7 +170,12 @@ export function progressiveVideoFromPrinted(printed: PrintedFormat): Progressive
   if (absent(printed.acodec ?? "") || absent(printed.vcodec ?? "")) return null;
   const url = printed.url ? safeGoogleVideoUrl(printed.url) : null;
   if (!url) return null;
-  return { url, mime: printed.ext === "webm" ? "video/webm" : "video/mp4", expiresAt: sourceExpiry(url) };
+  return {
+    url,
+    mime: printed.ext === "webm" ? "video/webm" : "video/mp4",
+    expiresAt: sourceExpiry(url),
+    headers: audioSourceHeaders(printed.headers),
+  };
 }
 
 /**
