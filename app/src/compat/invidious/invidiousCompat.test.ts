@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { invidiousStats } from "./stats";
 import { invidiousCompatEnabled, registerInvidiousCompat } from "./index";
-import { directResponse, noteRefusal, recentlyRefused } from "./mediaRoutes";
+import { directResponse, firstServed, noteRefusal, recentlyRefused } from "./mediaRoutes";
 
 const original = process.env.YTZERO_INVIDIOUS_COMPAT;
 afterEach(() => {
@@ -128,5 +128,41 @@ describe("several connections asking for one video at once", () => {
     await directResponse(1, "later000001", "bytes=0-", signal, refuse);
     await directResponse(1, "later000001", "bytes=0-", signal, refuse);
     expect(asked).toBe(2);
+  });
+});
+
+describe("two ways of serving one video, racing", () => {
+  const answers = (status: number, after: number) =>
+    Bun.sleep(after).then(() => new Response("x", { status }));
+
+  test("serves whichever is ready first", async () => {
+    const slow = answers(206, 40);
+    const quick = answers(200, 5);
+    const served = await firstServed([slow, quick]);
+    expect(served?.status).toBe(200);
+  });
+
+  /* A path that cannot serve must not decide the race for the one that can. */
+  test("waits for the other when the first has nothing", async () => {
+    const nothing = Bun.sleep(5).then(() => null);
+    const served = await firstServed([nothing, answers(206, 30)]);
+    expect(served?.status).toBe(206);
+  });
+
+  test("says nothing only when neither could", async () => {
+    expect(await firstServed([Bun.sleep(1).then(() => null), Bun.sleep(2).then(() => null)])).toBeNull();
+  });
+
+  /* The loser's body is a connection nobody will read: drain it. */
+  test("drains the answer that arrived too late", async () => {
+    const late = answers(206, 30);
+    await firstServed([late, answers(200, 5)]);
+    await Bun.sleep(50);
+    expect((await late).bodyUsed).toBe(true);
+  });
+
+  test("survives a path that throws", async () => {
+    const served = await firstServed([Promise.reject(new Error("refused")), answers(206, 5)]);
+    expect(served?.status).toBe(206);
   });
 });

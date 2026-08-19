@@ -1,8 +1,8 @@
 import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
-import { getVideoResponse } from "../../downloader";
 import { startFetch } from "./mediaCache";
+import { directResponse } from "./mediaRoutes";
 import { signedCaptionPath, signedMediaUrl } from "./media";
 import { channelThumbnails, videoFromRow, type VideoRowLike } from "./shapes";
 
@@ -46,6 +46,20 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
 }
 
 /**
+ * How long the direct path is given before the other way is started too.
+ *
+ * Waiting for its verdict costs seventeen seconds — five for an extraction,
+ * four for a ladder of retries, five for a second extraction, four for a
+ * second ladder — and only then does the fetch that works begin its own five.
+ * Half a minute before a frame, nearly all of it spent finding out.
+ *
+ * So the fetch starts while the question is still open. Long enough that a
+ * working address usually answers first and costs nothing; short enough that a
+ * refused one is not what the viewer waits for.
+ */
+const DIRECT_GRACE_MS = 4_000;
+
+/**
  * Have something ready before the player asks for it.
  *
  * Both ways of serving a video cost seconds before their first byte — an
@@ -53,18 +67,21 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
  * this document, then hangs up rather than wait. Opening a video is intent to
  * play it, so the work starts here, beside the subtitle resolution this
  * request already waits on.
- *
- * Two bytes settle which way it will be. If the address serves them, the
- * player's own request finds it warm; if it is refused, the fetch that does
- * work is already under way by the time the first range arrives.
  */
 function warmSource(userId: number, videoId: string): void {
-  void getVideoResponse(userId, videoId, "bytes=0-1")
-    .then(async (response) => {
-      if (response) return response.body?.cancel().catch(() => {});
-      startFetch(userId, videoId);
+  let served = false;
+  const probe = directResponse(userId, videoId, "bytes=0-1", new AbortController().signal)
+    .then((response) => {
+      served = Boolean(response);
+      return response?.body?.cancel().catch(() => {});
     })
     .catch(() => {});
+  const fallback = Bun.sleep(DIRECT_GRACE_MS).then(() => {
+    // Cheap when it turns out to be unnecessary: the file is capped, evicted
+    // least-recently-served first, and makes the next play of it instant.
+    if (!served) startFetch(userId, videoId);
+  });
+  void Promise.all([probe, fallback]).catch(() => {});
 }
 
 /**
