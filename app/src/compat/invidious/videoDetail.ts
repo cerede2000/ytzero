@@ -1,7 +1,8 @@
 import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
-import { ensureCached } from "./mediaCache";
+import { getVideoResponse } from "../../downloader";
+import { startFetch } from "./mediaCache";
 import { signedCaptionPath, signedMediaUrl } from "./media";
 import { channelThumbnails, videoFromRow, type VideoRowLike } from "./shapes";
 
@@ -45,16 +46,25 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
 }
 
 /**
- * Have the file ready before the player asks for it.
+ * Have something ready before the player asks for it.
  *
- * Fetching it takes seconds, and a native player asks for its first bytes a
- * moment after it reads this document — then hangs up rather than wait. Opening
- * a video is intent to play it, so the fetch starts here, beside the subtitle
- * resolution this request already waits on, and is usually done or nearly done
- * by the time the first range arrives.
+ * Both ways of serving a video cost seconds before their first byte — an
+ * extraction, or a download — and a native player asks a moment after reading
+ * this document, then hangs up rather than wait. Opening a video is intent to
+ * play it, so the work starts here, beside the subtitle resolution this
+ * request already waits on.
+ *
+ * Two bytes settle which way it will be. If the address serves them, the
+ * player's own request finds it warm; if it is refused, the fetch that does
+ * work is already under way by the time the first range arrives.
  */
 function warmSource(userId: number, videoId: string): void {
-  void ensureCached(userId, videoId).catch(() => {});
+  void getVideoResponse(userId, videoId, "bytes=0-1")
+    .then(async (response) => {
+      if (response) return response.body?.cancel().catch(() => {});
+      await startFetch(userId, videoId);
+    })
+    .catch(() => {});
 }
 
 /**
