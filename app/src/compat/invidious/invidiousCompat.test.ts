@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { invidiousStats } from "./stats";
 import { invidiousCompatEnabled, registerInvidiousCompat } from "./index";
-import { noteRefusal, recentlyRefused } from "./mediaRoutes";
+import { directResponse, noteRefusal, recentlyRefused } from "./mediaRoutes";
 
 const original = process.env.YTZERO_INVIDIOUS_COMPAT;
 afterEach(() => {
@@ -87,5 +87,46 @@ describe("a video upstream has just refused", () => {
 
   test("says nothing about a video nobody has been refused", () => {
     expect(recentlyRefused("never-asked", 1_800_000_000_000)).toBe(false);
+  });
+});
+
+describe("several connections asking for one video at once", () => {
+  const signal = new AbortController().signal;
+
+  /*
+   * A native player opens several at once. Each was starting its own
+   * extraction and its own retry ladder against the same address — twenty
+   * seconds of 403 in parallel before any of them had a verdict to share.
+   */
+  test("only one of them finds out that the direct path is refused", async () => {
+    let asked = 0;
+    const refuse = async () => { asked += 1; await Bun.sleep(5); return null; };
+    const answers = await Promise.all([
+      directResponse(1, "refused0001", "bytes=0-", signal, refuse),
+      directResponse(1, "refused0001", "bytes=0-", signal, refuse),
+      directResponse(1, "refused0001", "bytes=0-", signal, refuse),
+    ]);
+    expect(answers).toEqual([null, null, null]);
+    expect(asked).toBe(1);
+  });
+
+  /* When it serves, the others ask too — and find the source already resolved. */
+  test("all of them are served when it works", async () => {
+    let asked = 0;
+    const serve = async () => { asked += 1; await Bun.sleep(5); return new Response("x"); };
+    const answers = await Promise.all([
+      directResponse(1, "served00001", "bytes=0-", signal, serve),
+      directResponse(1, "served00001", "bytes=0-", signal, serve),
+    ]);
+    expect(answers.every((answer) => answer !== null)).toBe(true);
+    expect(asked).toBe(2);
+  });
+
+  test("asks again once the first verdict is spent", async () => {
+    let asked = 0;
+    const refuse = async () => { asked += 1; return null; };
+    await directResponse(1, "later000001", "bytes=0-", signal, refuse);
+    await directResponse(1, "later000001", "bytes=0-", signal, refuse);
+    expect(asked).toBe(2);
   });
 });
