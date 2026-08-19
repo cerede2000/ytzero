@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 const root = mkdtempSync(join(tmpdir(), "ytzero-invidious-cache-"));
 process.env.YTZERO_INVIDIOUS_CACHE_DIR = root;
 
-const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedMedia, mimeFor, offeredHeight, offeredKind, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
+const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedMedia, growingFileResponse, mimeFor, offeredHeight, offeredKind, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
 const { alreadyPlayable } = await import("./videoDetail");
 
 // Each test owns the directory: the order they run in is not fixed, and one
@@ -268,5 +268,53 @@ describe("a request with no range at all", () => {
   test("says nothing when the file never arrived", async () => {
     const entry = { path: join(root, "never.partial"), total: Promise.resolve(10), done: Promise.resolve(null) };
     expect(await partialFileResponse(entry, undefined)).toBeNull();
+  });
+});
+
+describe("streaming a file that is still being written", () => {
+  /*
+   * A downloader asks with no range and waits for one body. Holding the
+   * response until the fetch finishes sends nothing for a minute or more, and
+   * a connection that has gone that long without a byte is abandoned — which
+   * leaves no trace on the server and shows as a failed download on the phone.
+   */
+  test("answers at once, before the file is complete", async () => {
+    const path = join(root, "streaming.partial");
+    writeFileSync(path, new Uint8Array(500));
+    let finish: (value: string) => void = () => {};
+    const entry = {
+      path,
+      total: Promise.resolve(1_500),
+      done: new Promise<string | null>((resolve) => { finish = resolve as (value: string) => void; }),
+    };
+
+    const answered = await Promise.race([
+      growingFileResponse(entry, "video"),
+      Bun.sleep(1_000).then(() => "waited" as const),
+    ]);
+    expect(answered).not.toBe("waited");
+    const response = answered as Response;
+
+    // Bun answers a stream chunked, so the size travels in the header the
+    // client reads when Content-Length is missing.
+    expect(response.headers.get("x-expected-content-length")).toBe("1500");
+    expect(response.headers.get("content-type")).toBe("video/mp4");
+
+    // The rest arrives as it is written, and the body ends when the fetch does.
+    setTimeout(() => {
+      writeFileSync(path, new Uint8Array(1_500));
+      finish(path);
+    }, 60);
+    expect((await response.arrayBuffer()).byteLength).toBe(1_500);
+  });
+
+  test("carries no expected length when nobody announced one", async () => {
+    const path = join(root, "sizeless-stream.partial");
+    writeFileSync(path, new Uint8Array(10));
+    const entry = { path, total: Promise.resolve(null), done: Promise.resolve(path) };
+    const response = await growingFileResponse(entry, "audio");
+    expect(response.headers.get("x-expected-content-length")).toBeNull();
+    expect(response.headers.get("content-type")).toBe("audio/mp4");
+    expect((await response.arrayBuffer()).byteLength).toBe(10);
   });
 });

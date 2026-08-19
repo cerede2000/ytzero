@@ -6,7 +6,7 @@ import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { knownSubtitleTracks, readSubtitleTrack } from "../../subtitleTracks";
 import { log } from "../../logger";
 import { compatUserId } from "./context";
-import { cachedMedia, ensureCached, mimeFor, offeredHeight, offeredKind, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
+import { cachedMedia, growingFileResponse, mimeFor, offeredHeight, offeredKind, partialFileResponse, pendingFetch, startFetch } from "./mediaCache";
 import { localFileResponse, mediaSecret } from "./media";
 import { mediaTokenValid } from "./mediaToken";
 
@@ -218,9 +218,13 @@ export function registerMediaRoutes(app: Hono): void {
      * separate tracks failed, because theirs were still arriving.
      */
     if (!range) {
-      const whole = cachedMedia(videoId, kind, height) ?? await ensureCached(userId, videoId, kind, height);
-      const response = whole && localFileResponse(whole, undefined, mimeFor(kind, whole));
-      if (response) return answered("whole-file", response);
+      const whole = cachedMedia(videoId, kind, height);
+      if (whole) {
+        const response = localFileResponse(whole, undefined, mimeFor(kind, whole));
+        if (response) return answered("whole-file", response);
+      }
+      const arriving = pendingFetch(videoId, kind, height) ?? startFetch(userId, videoId, kind, height);
+      if (arriving) return answered("streamed-file", await growingFileResponse(arriving, kind));
       if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
       log.warn("invidious.media_unavailable", { videoId, kind, height, range: null, downloaded: false });
       return c.json({ error: "video unavailable" }, 502);
