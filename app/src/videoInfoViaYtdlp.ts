@@ -27,6 +27,12 @@ import { potArgsFor } from "./ytdlpPotProvider";
 
 const INFO_TIMEOUT_MS = 45_000;
 
+/** The last thing said, capped: yt-dlp puts the reason on the final line. */
+function lastLine(text: string): string {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return (lines[lines.length - 1] ?? "").slice(0, 300);
+}
+
 /** Exactly what the import needs, as one JSON line whatever the text holds. */
 const INFO_FIELDS = "%(.{id,title,channel_id,channel,uploader,description,thumbnail,"
   + "view_count,duration,upload_date,timestamp,release_timestamp,live_status,is_live,was_live})j";
@@ -188,6 +194,8 @@ async function runAttempt(
   refusedRef: { refused: boolean } = { refused: false },
   audioRef: { source: AudioSource | null } = { source: null },
   videoRef: { source: ProgressiveVideoSource | null } = { source: null },
+  /** How this attempt ended, for the line that reports the failure. */
+  why: { reason: string; said: string } = { reason: "", said: "" },
 ): Promise<VideoInfo | null> {
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
@@ -218,16 +226,37 @@ async function runAttempt(
       // What this attempt learned is worth passing on: the audio resolver is
       // about to ask the same question, and can skip the same doomed attempt.
       refusedRef.refused = callerWasRefused(stderr);
+      /*
+       * And what it was told, which used to be thrown away.
+       *
+       * Three different endings returned the same silent null — a refusal, an
+       * answer that could not be read, and a thrown error — so the line
+       * reporting the failure could not say which had happened. A day went
+       * into reproducing the command by hand, where it succeeded every way it
+       * was tried, because nothing here said what was different.
+       */
+      why.reason = timedOut ? "timeout" : refusedRef.refused ? "refused" : "exit";
+      why.said = lastLine(stderr);
       return null;
     }
     const info = videoInfoFromYtdlpJson(videoId, JSON.parse(stdout.split(/\r?\n/)[0] ?? "{}") as Record<string, unknown>);
-    if (!info) return null;
+    if (!info) {
+      // yt-dlp answered, and the answer was not one this could read: a shape
+      // that changed, or a field it no longer prints.
+      why.reason = "unreadable";
+      why.said = lastLine(stdout.split(/\r?\n/)[0] ?? "");
+      return null;
+    }
     for (const printed of printedFormats(stdout, PRINTED_FIELDS.length)) {
       audioRef.source ??= audioSourceFromPrinted(printed);
       videoRef.source ??= progressiveVideoFromPrinted(printed);
     }
     return info;
-  } catch {
+  } catch (error) {
+    // The JSON parse above included: a first line that is not JSON threw here
+    // and left no trace at all.
+    why.reason = "crashed";
+    why.said = error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
     return null;
   } finally {
     clearTimeout(timer);
@@ -250,9 +279,12 @@ export async function fetchVideoInfoViaYtdlp(
   if (!(await ytdlpStatus())) return null;
   const startedAt = Date.now();
   const order = cookieAttemptMemory.order(userId, downloadCookiesConfigured(userId), videoInfoRefusalQuiet.quiet());
+  const endings: { cookies: boolean; reason: string; said: string }[] = [];
   for (const useCookies of order) {
     const refusal = { refused: false };
-    const info = await runAttempt(userId, videoId, useCookies, spawn, refusal, audioRef, videoRef);
+    const why = { reason: "", said: "" };
+    const info = await runAttempt(userId, videoId, useCookies, spawn, refusal, audioRef, videoRef, why);
+    if (!info) endings.push({ cookies: useCookies, reason: why.reason || "unknown", said: why.said });
     cookieAttemptMemory.record({
       userId, useCookies, resolved: Boolean(info), refused: refusal.refused,
     });
@@ -273,6 +305,9 @@ export async function fetchVideoInfoViaYtdlp(
     userId,
     cookiesConfigured: downloadCookiesConfigured(userId),
     attempted: order,
+    // What each attempt was actually told. Without this the line said only
+    // that something had failed, which is the one thing already obvious.
+    endings,
     ms: Date.now() - startedAt,
   });
   /*
