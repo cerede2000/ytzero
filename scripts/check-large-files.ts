@@ -8,7 +8,7 @@ const lineLimits: Record<string, number> = {
   "app/src/routes/channelRoutes.ts": 639,
   "app/src/routes/childRoutes.ts": 157,
   "app/src/routes/downloadRoutes.ts": 495,
-  "app/src/routes/feedRoutes.ts": 156,
+  "app/src/routes/feedRoutes.ts": 157,
   "app/src/routes/historyRoutes.ts": 63,
   "app/src/routes/importRoutes.ts": 245,
   "app/src/routes/insightRoutes.ts": 65,
@@ -47,8 +47,27 @@ const lineLimits: Record<string, number> = {
   "ui/src/app-shell/SidebarSubscriptions.tsx": 86,
   "ui/src/app-shell/sidebarVisibility.ts": 30,
   "ui/src/app-shell/useAppPreferences.ts": 107,
+=======
+  "ui/src/AppRoutes.tsx": 99,
+>>>>>>> 19d0a58 (Split searching from watching, and put their suggestions beside the picture)
+=======
+  "ui/src/AppRoutes.tsx": 101,
+>>>>>>> 887d8ef (Give the channel link somewhere to go)
+=======
+  "ui/src/App.tsx": 12,
+  "ui/src/AppRoutes.tsx": 103,
+>>>>>>> 1f4aba1 (Settle onto upstream's release)
+  "ui/src/app-shell/AppBootstrap.tsx": 17,
+  "ui/src/app-shell/AppShell.tsx": 104,
+  "ui/src/app-shell/AppSidebar.tsx": 109,
+  "ui/src/app-shell/AppTopBar.tsx": 146,
+  "ui/src/app-shell/SidebarPlaylists.tsx": 113,
+  "ui/src/app-shell/SidebarSubscriptions.tsx": 86,
+  "ui/src/app-shell/sidebarVisibility.ts": 30,
+  "ui/src/app-shell/useAppPreferences.ts": 103,
+>>>>>>> 874b040 (Settle onto upstream's release)
   "ui/src/app-shell/useAppToast.ts": 23,
-  "ui/src/app-shell/useNavigationActivity.ts": 54,
+  "ui/src/app-shell/useNavigationActivity.ts": 53,
   "ui/src/app-shell/usePluginRoutes.ts": 43,
   "ui/src/app-shell/useProfileSession.ts": 63,
   "ui/src/pages/SettingsPage.tsx": 1340,
@@ -82,7 +101,7 @@ const lineLimits: Record<string, number> = {
   "app/src/portableBackup.ts": 496,
 >>>>>>> 232d183 (Move the line ratchet up to where this branch actually sits)
   "app/src/portableArchive.ts": 76,
-  "ui/src/pages/SettingsPage.css": 1071,
+  "ui/src/pages/SettingsPage.css": 1015,
 };
 
 // Locale modules are typed message catalogs: every product string legitimately
