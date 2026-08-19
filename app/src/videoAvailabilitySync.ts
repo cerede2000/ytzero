@@ -7,6 +7,7 @@ import {
   isPrivateVideoError,
 } from "./youtube";
 import { isYouTubeRateLimitError } from "./youtubeRateLimit";
+import { isYouTubeRefusal } from "./youtubeRefusalQuiet";
 
 const AVAILABILITY_CANDIDATE_SCAN = 100;
 const AVAILABILITY_CHECK_LIMIT = 12;
@@ -48,6 +49,8 @@ export interface ChannelAvailabilitySyncResult {
   retitled: number;
   failed: number;
   rateLimited: boolean;
+  /** Left unasked because the address was being refused. Not the same as failed. */
+  skipped: number;
 }
 
 export async function syncChannelVideoAvailability(
@@ -100,7 +103,7 @@ export async function syncChannelVideoAvailability(
    */
   const rewriteTitle = database.prepare("UPDATE videos SET title = ? WHERE video_id = ? AND title != ?");
   const result: ChannelAvailabilitySyncResult = {
-    checked: 0, deleted: 0, private: 0, retitled: 0, failed: 0, rateLimited: false,
+    checked: 0, deleted: 0, private: 0, retitled: 0, failed: 0, rateLimited: false, skipped: 0,
   };
 
   for (const row of candidates) {
@@ -130,6 +133,26 @@ export async function syncChannelVideoAvailability(
     } catch (error) {
       if (isYouTubeRateLimitError(error)) {
         result.rateLimited = true;
+        break;
+      }
+      /*
+       * A check that was never made is not a check that failed.
+       *
+       * Once YouTube is refusing this address, every remaining lookup comes
+       * back with the same answer without leaving the building. Marking those
+       * videos checked recorded a verification that never happened — so they
+       * were not looked at again for as long as a real one would have bought
+       * — and warning once per video turned one piece of news into a page of
+       * it: twelve lines for a single refusal. The pass stops and says so
+       * once, carrying the reason the first one gave.
+       */
+      if (isYouTubeRefusal(error)) {
+        result.skipped = candidates.length - result.checked - result.failed;
+        log.warn("channel.availability_sync_refused", {
+          channelId,
+          skipped: result.skipped,
+          error: error instanceof Error ? error.message : String(error),
+        });
         break;
       }
       result.failed++;
