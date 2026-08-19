@@ -28,26 +28,43 @@ const CACHE_DIR = process.env.YTZERO_INVIDIOUS_CACHE_DIR
 const CACHE_LIMIT_BYTES = Math.max(1, Number(process.env.YTZERO_INVIDIOUS_CACHE_MB) || 4096) * 1024 * 1024;
 /** Long enough for a long video on a slow line; short enough to end. */
 const FETCH_TIMEOUT_MS = 10 * 60_000;
-/*
- * One muxed file the player reads as-is. Merging separate video and audio
- * would buy resolution and cost an ffmpeg pass in front of somebody waiting,
- * so the first version keeps what starts fastest.
+/**
+ * The qualities offered, and why they stop at 720.
+ *
+ * These are the muxed files YouTube already has: one request, no assembly, and
+ * the player reads them as they arrive. Anything above 720 exists only as
+ * separate video and audio, which means an ffmpeg pass over the whole file
+ * before the first frame — right for a download somebody walks away from,
+ * wrong for a play button.
  */
-const FORMAT = "18/22/best[ext=mp4][acodec!=none][vcodec!=none]/best[acodec!=none][vcodec!=none]";
+export const OFFERED_HEIGHTS = [720, 360] as const;
+export const BEST_HEIGHT = OFFERED_HEIGHTS[0];
+
+export function offeredHeight(value: string | number | undefined | null): number {
+  const height = Math.trunc(Number(value));
+  return (OFFERED_HEIGHTS as readonly number[]).includes(height) ? height : BEST_HEIGHT;
+}
+
+/** Muxed, at most the height asked for, falling back to whatever there is. */
+function formatFor(height: number): string {
+  return `best[height<=${height}][ext=mp4][acodec!=none][vcodec!=none]`
+    + `/best[height<=${height}][acodec!=none][vcodec!=none]`
+    + "/18/22/best[acodec!=none][vcodec!=none]";
+}
 
 /** A name that cannot escape the directory it is written into. */
 export function cacheableVideoId(videoId: string): boolean {
   return /^[A-Za-z0-9_-]{5,24}$/.test(videoId);
 }
 
-function pathFor(videoId: string): string {
-  return join(CACHE_DIR, `${videoId}.mp4`);
+function pathFor(videoId: string, height: number): string {
+  return join(CACHE_DIR, `${videoId}.${height}.mp4`);
 }
 
 /** The kept copy, if there is one — and it is marked as used just now. */
-export function cachedMedia(videoId: string): string | null {
+export function cachedMedia(videoId: string, height: number = BEST_HEIGHT): string | null {
   if (!cacheableVideoId(videoId)) return null;
-  const path = pathFor(videoId);
+  const path = pathFor(videoId, height);
   if (!existsSync(path)) return null;
   try {
     const now = new Date();
@@ -112,9 +129,9 @@ export interface PendingFetch {
 const fetching = new Map<string, PendingFetch>();
 
 /** The fetch under way for this video, if there is one. */
-export function pendingFetch(videoId: string): PendingFetch | null {
+export function pendingFetch(videoId: string, height: number = BEST_HEIGHT): PendingFetch | null {
   for (const [key, entry] of fetching) {
-    if (key.endsWith(`:${videoId}`)) return entry;
+    if (key.endsWith(`:${videoId}:${height}`)) return entry;
   }
   return null;
 }
@@ -158,17 +175,17 @@ function firstLine(stream: ReadableStream<Uint8Array>): Promise<string> {
  * `--no-simulate` prints the field and fetches the file. A player told nothing
  * about the length will not start, and one told `bytes 0-99/*` cannot seek.
  */
-export function startFetch(userId: number, videoId: string): PendingFetch | null {
+export function startFetch(userId: number, videoId: string, height: number = BEST_HEIGHT): PendingFetch | null {
   if (!cacheableVideoId(videoId)) return null;
-  const key = `${userId}:${videoId}`;
+  const key = `${userId}:${videoId}:${height}`;
   const running = fetching.get(key);
   if (running) return running;
 
   mkdirSync(CACHE_DIR, { recursive: true });
-  const target = pathFor(videoId);
+  const target = pathFor(videoId, height);
   // Written under another name and moved into place, so a partial file is
   // never mistaken for one that can be served in full.
-  const partial = join(CACHE_DIR, `${videoId}.partial`);
+  const partial = join(CACHE_DIR, `${videoId}.${height}.partial`);
   rmSync(partial, { force: true });
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
@@ -186,7 +203,7 @@ export function startFetch(userId: number, videoId: string): PendingFetch | null
      */
     "--http-chunk-size", "1M",
     "--print", "%(filesize,filesize_approx)s",
-    "-f", FORMAT,
+    "-f", formatFor(height),
     "-o", partial,
     ...potArgsFor(true),
   ];
@@ -214,7 +231,7 @@ export function startFetch(userId: number, videoId: string): PendingFetch | null
       }
       renameSync(partial, target);
       const size = statSync(target).size;
-      log.info("invidious.cache_fetched", { videoId, bytes: size, ms: Date.now() - startedAt });
+      log.info("invidious.cache_fetched", { videoId, height, bytes: size, ms: Date.now() - startedAt });
       pruneCache(CACHE_LIMIT_BYTES, target);
       return target;
     } finally {
@@ -228,7 +245,7 @@ export function startFetch(userId: number, videoId: string): PendingFetch | null
   const total = Promise.race([announced, Bun.sleep(20_000).then(() => "")]).then((printed) => {
     const size = Number(printed.trim());
     const announcedBytes = Number.isFinite(size) && size > 0 ? size : null;
-    log.info("invidious.cache_fetch_started", { videoId, announcedBytes });
+    log.info("invidious.cache_fetch_started", { videoId, height, announcedBytes });
     return announcedBytes;
   });
 
@@ -238,10 +255,10 @@ export function startFetch(userId: number, videoId: string): PendingFetch | null
 }
 
 /** The finished file, waiting for a fetch under way if there is one. */
-export async function ensureCached(userId: number, videoId: string): Promise<string | null> {
-  const existing = cachedMedia(videoId);
+export async function ensureCached(userId: number, videoId: string, height: number = BEST_HEIGHT): Promise<string | null> {
+  const existing = cachedMedia(videoId, height);
   if (existing) return existing;
-  const started = startFetch(userId, videoId);
+  const started = startFetch(userId, videoId, height);
   return started ? started.done : null;
 }
 
