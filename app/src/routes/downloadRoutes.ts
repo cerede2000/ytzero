@@ -202,9 +202,30 @@ api.get("/downloads", async (c) => {
   });
 });
 
+/**
+ * Also whether the jar this profile configured is still any good.
+ *
+ * It rides here because this is the one thing the shell already asks for
+ * everywhere: a jar that has stopped being recognised was only visible on the
+ * settings page that manages it, so the way to find out was to go looking —
+ * usually after an hour of things quietly failing for no stated reason.
+ *
+ * Never asked for on this path: it answers from what the last question found,
+ * and the questions are put where a failure already suggests one — a lookup
+ * that failed holding the jar, or somebody opening the page. A poll every few
+ * seconds must not become a request to YouTube every few seconds.
+ */
 api.get("/downloads/summary", async (c) => {
   const uid = currentUserId(c);
-  return c.json({ enabled: await profileDownloadsEnabled(uid), ...await downloadStatusSummary(uid) });
+  const jar = downloadCookiesConfigured(uid);
+  return c.json({
+    enabled: await profileDownloadsEnabled(uid),
+    ...await downloadStatusSummary(uid),
+    cookies_configured: jar,
+    // Configured and dead is the state worth a badge. Unknown is not: nothing
+    // has asked yet, and a warning on no evidence is a warning nobody trusts.
+    cookies_recognised: jar ? cookieHealth(uid)?.recognised ?? null : null,
+  });
 });
 
 api.delete("/downloads/queue", async (c) => {

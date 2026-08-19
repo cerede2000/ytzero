@@ -308,6 +308,7 @@ export const de: Locale = {
     downloadsInQueue: "in der Warteschlange",
     downloadsDisabled: "Video-Downloads sind deaktiviert — aktiviere sie unter Downloads → Konfiguration.",
     downloadsYtdlpMissing: "yt-dlp wurde nicht gefunden. Installiere yt-dlp und ffmpeg, damit Downloads funktionieren.",
+    cookiesNotRecognisedBadge: "Die YouTube-Cookies werden nicht mehr erkannt — exportieren Sie sie erneut",
     downloadsYtdlpJsRuntimeMissing: "Deno wurde nicht gefunden. Downloads, Streaming, Audiomodus, Untertitel, Transkripte und Kommentare können bei einigen Videos fehlschlagen, da yt-dlp deren JavaScript-Abfrage nicht lösen kann.",
     dlSourceManual: "manuell",
     dlSourceScheduled: "geplant",

@@ -521,6 +521,9 @@ export interface DownloadSummary {
   downloading: number;
   completed: number;
   errors: number;
+  cookies_configured?: boolean;
+  /** False when the jar is there and YouTube no longer knows it; null until asked. */
+  cookies_recognised?: boolean | null;
 }
 
 export interface DownloadRuleInput {
