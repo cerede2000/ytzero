@@ -4,6 +4,7 @@ import { log } from "../../logger";
 import { registerAuthRoutes } from "./authRoutes";
 import { invidiousCompatEnabled } from "./enabled";
 import { registerCatalogRoutes } from "./catalogRoutes";
+import { registerDailymotionMediaRoutes } from "./dailymotion";
 import { registerMediaRoutes } from "./mediaRoutes";
 
 /**
@@ -37,6 +38,7 @@ export function registerInvidiousCompat(app: Hono): void {
    */
   registerCatalogRoutes(app);
   registerMediaRoutes(app);
+  registerDailymotionMediaRoutes(app);
   /*
    * The one part a client does authenticate: it attaches its session to
    * `/api/v1/auth/*` and to nothing else. So these routes serve whoever
