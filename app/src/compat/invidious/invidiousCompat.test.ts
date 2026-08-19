@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { invidiousStats } from "./stats";
 import { invidiousCompatEnabled, registerInvidiousCompat } from "./index";
+import { noteRefusal, recentlyRefused } from "./mediaRoutes";
 
 const original = process.env.YTZERO_INVIDIOUS_COMPAT;
 afterEach(() => {
@@ -60,5 +61,31 @@ describe("Invidious detection", () => {
   test("leaves the rest of the API behind its guard", async () => {
     process.env.YTZERO_INVIDIOUS_COMPAT = "1";
     expect((await serverWithSessionGuard().request("/api/feed")).status).toBe(401);
+  });
+});
+
+describe("a video upstream has just refused", () => {
+  /*
+   * A player opens several connections and reopens them as each one fails.
+   * Unremembered, every one of them pays the full retry ladder and a
+   * re-resolution before giving up — a hundred seconds of asking YouTube about
+   * a video it refused a moment ago, on an address already being challenged.
+   */
+  test("is not asked about again straight away", () => {
+    const now = 1_800_000_000_000;
+    expect(recentlyRefused("abc", now)).toBe(false);
+    noteRefusal("abc", now);
+    expect(recentlyRefused("abc", now + 1_000)).toBe(true);
+  });
+
+  test("is asked about again once the moment has passed", () => {
+    const now = 1_800_000_000_000;
+    noteRefusal("def", now);
+    // Short on purpose: this is a way to fail quickly, not a verdict.
+    expect(recentlyRefused("def", now + 31_000)).toBe(false);
+  });
+
+  test("says nothing about a video nobody has been refused", () => {
+    expect(recentlyRefused("never-asked", 1_800_000_000_000)).toBe(false);
   });
 });

@@ -7,6 +7,32 @@ import { compatUserId } from "./context";
 import { localFileResponse, mediaSecret } from "./media";
 import { mediaTokenValid } from "./mediaToken";
 
+/**
+ * How long a video stays written off after upstream refused it outright.
+ *
+ * A native player opens several connections and reopens them as each fails,
+ * and every one of them was paying the full retry ladder and a re-resolution
+ * before giving up — a hundred seconds of asking YouTube about a video it has
+ * just refused, on an address that is already being challenged for robots.
+ *
+ * Short on purpose. This is a way to fail quickly, not a verdict: the next
+ * press of play a moment later is entitled to find out for itself.
+ */
+const REFUSAL_MEMORY_MS = 30_000;
+const refusedAt = new Map<string, number>();
+
+export function noteRefusal(videoId: string, now = Date.now()): void {
+  refusedAt.set(videoId, now);
+}
+
+export function recentlyRefused(videoId: string, now = Date.now()): boolean {
+  const at = refusedAt.get(videoId);
+  if (at === undefined) return false;
+  if (now - at < REFUSAL_MEMORY_MS) return true;
+  refusedAt.delete(videoId);
+  return false;
+}
+
 async function tokenHolds(c: Context, resource: string, videoId: string): Promise<boolean> {
   return mediaTokenValid(
     await mediaSecret(),
@@ -39,6 +65,8 @@ export function registerMediaRoutes(app: Hono): void {
       if (response) return response;
     }
 
+    if (recentlyRefused(videoId)) return c.json({ error: "video unavailable" }, 502);
+
     /*
      * A player that asked for no range still gets a bounded first chunk.
      * Range-less, the relay fetches to the end of the file and buffers it to
@@ -56,6 +84,7 @@ export function registerMediaRoutes(app: Hono): void {
      * real refusals among them.
      */
     if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
+    noteRefusal(videoId);
     log.warn("invidious.media_unavailable", { videoId, range: asked, downloaded: Boolean(download?.path) });
     return c.json({ error: "video unavailable" }, 502);
   });
