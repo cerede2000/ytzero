@@ -1,6 +1,7 @@
 import { downloadCookiesConfigured, ytdlpCommand, ytdlpStatus } from "./downloader";
 import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
 import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
+import { currentCookieHealth } from "./youtubeCookieHealth";
 import { log } from "./logger";
 import type { AudioSource } from "./audioSourceResolver";
 import { audioSourceHeaders } from "./audioSourceResolver";
@@ -274,5 +275,17 @@ export async function fetchVideoInfoViaYtdlp(
     attempted: order,
     ms: Date.now() - startedAt,
   });
+  /*
+   * Ask whether the jar is still known, now that something has just failed
+   * holding it.
+   *
+   * This is the strongest evidence there is that it has expired, and until
+   * now it went nowhere: the answer was only ever refreshed by somebody
+   * opening the page that displays it, so an instance could spend a night
+   * failing every ten minutes while still reporting the jar as good. The
+   * question carries its own ten-minute memory, so a run of failures asks it
+   * once.
+   */
+  if (downloadCookiesConfigured(userId)) void currentCookieHealth(userId).catch(() => {});
   return null;
 }

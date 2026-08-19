@@ -56,6 +56,8 @@ export async function currentCookieHealth(
   now: () => number = Date.now,
   ask = fetchYoutubeSessionState,
   header = youtubeCookieHeader,
+  /** Injected so a test can watch what is written without a jar on disk. */
+  write = persistSetCookies,
 ): Promise<CookieHealth | null> {
   const known = health.get(userId);
   if (known && now() - known.at < HEALTH_TTL_MS) return known;
@@ -65,8 +67,11 @@ export async function currentCookieHealth(
   if (!cookieHeader) return null;
   try {
     const state = await ask(cookieHeader);
+    // Recorded first: what follows only writes while the answer is yes.
     recordCookieRecognition(userId, state.signedIn, now);
-    persistSetCookies(userId, state.setCookies);
+    // Said here as well as guarded inside the writer: the guard protects every
+    // caller, this makes the rule visible where the decision is taken.
+    if (state.signedIn) write(userId, state.setCookies);
   } catch (error) {
     // A question that could not be put is not an answer: whatever was known
     // stands rather than being replaced by a network failure.
@@ -84,6 +89,18 @@ export async function currentCookieHealth(
  */
 export function persistSetCookies(userId: number, setCookies: readonly string[]): void {
   if (setCookies.length === 0 || !downloadCookiesConfigured(userId)) return;
+  /*
+   * Only a session that is still recognised has anything to renew.
+   *
+   * An expired jar is not refused, it is answered as a stranger — and a
+   * stranger is handed a fresh set of visitor cookies. Merged in, they write
+   * an anonymous session over the remains of an account one and the log says
+   * "refreshed", which reads as a repair. It is not one: the credentials that
+   * expired are not among them, and nothing short of exporting the jar again
+   * brings them back. So this writes while the account is known and stops the
+   * moment it is not.
+   */
+  if (!health.get(userId)?.recognised) return;
   const path = downloadCookiesFile(userId);
   try {
     const merged = mergeSetCookies(readFileSync(path, "utf8"), setCookies);

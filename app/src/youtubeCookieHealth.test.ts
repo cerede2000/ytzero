@@ -46,6 +46,39 @@ describe("whether YouTube still knows the account behind a jar", () => {
     expect(health?.recognised).toBe(true);
   });
 
+  test("what a stranger is handed is not written back as a renewal", async () => {
+    /*
+     * An expired jar is not refused, it is answered as a stranger — and a
+     * stranger is handed a fresh set of visitor cookies. Merged in, they wrote
+     * an anonymous session over the remains of an account one, and the log
+     * said "cookies.refreshed", which reads as a repair that had not happened.
+     * Nothing short of exporting the jar again brings back what expired.
+     */
+    let written = 0;
+    await currentCookieHealth(
+      410,
+      () => 1_000,
+      async () => ({ signedIn: false, setCookies: ["VISITOR_INFO1_LIVE=abc; Domain=.youtube.com; Path=/"] }),
+      () => "SID=stale",
+      () => { written++; },
+    );
+    expect(cookieHealth(410)?.recognised).toBe(false);
+    expect(written).toBe(0);
+  });
+
+  test("and what a known account rotates is", async () => {
+    let written = 0;
+    await currentCookieHealth(
+      411,
+      () => 1_000,
+      async () => ({ signedIn: true, setCookies: ["SID=rotated; Domain=.youtube.com; Path=/"] }),
+      () => "SID=live",
+      () => { written++; },
+    );
+    expect(cookieHealth(411)?.recognised).toBe(true);
+    expect(written).toBe(1);
+  });
+
   test("a new jar is not judged by what was known of the old one", () => {
     recordCookieRecognition(405, false, () => 1_000);
     expect(cookieHealth(405)?.recognised).toBe(false);
