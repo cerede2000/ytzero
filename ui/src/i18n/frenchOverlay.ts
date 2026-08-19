@@ -287,6 +287,22 @@ const FRENCH: Record<string, string> = {
   "Save": "Enregistrer",
   "No longer recognised by YouTube — export them again": "Plus reconnus par YouTube — réexportez-les",
   "Recognised by YouTube": "Reconnus par YouTube",
+  "yt-dlp is already up to date.": "yt-dlp est déjà à jour.",
+  "Manage the shared yt-dlp binary used for downloads, streaming, audio, subtitles and comments.": "Gérer le binaire yt-dlp partagé, utilisé pour les téléchargements, la lecture en flux, l'audio, les sous-titres et les commentaires.",
+  "Installed version": "Version installée",
+  "The version currently used by YT Zero.": "La version actuellement utilisée par YT Zero.",
+  "yt-dlp was not found or cannot be started.": "yt-dlp est introuvable ou ne démarre pas.",
+  "Updating…": "Mise à jour…",
+  "Update now": "Mettre à jour maintenant",
+  "Release channel": "Canal de publication",
+  "Nightly receives fixes fastest; stable changes less often.": "Le canal nightly reçoit les correctifs en premier ; le canal stable change moins souvent.",
+  "Automatic updates": "Mises à jour automatiques",
+  "Checks and updates yt-dlp at the selected interval.": "Vérifie et met à jour yt-dlp selon l'intervalle choisi.",
+  "Never": "Jamais",
+  "Every day": "Chaque jour",
+  "Every 3 days": "Tous les 3 jours",
+  "Every week": "Chaque semaine",
+  "Every 30 days": "Tous les 30 jours",
 };
 
 /** The French for a string these screens carry in English, when there is one. */

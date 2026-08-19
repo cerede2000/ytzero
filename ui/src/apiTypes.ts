@@ -569,8 +569,6 @@ export interface DownloadAutomationOptions {
 }
 
 export interface DownloadConfigResponse {
-  /** Only sent to an administrator; null for everyone else. */
-  ytdlp_version: string | null;
   definitions: DownloadSettingDef[];
   settings: Record<string, DownloadSettingValue>;
   can_manage: boolean;

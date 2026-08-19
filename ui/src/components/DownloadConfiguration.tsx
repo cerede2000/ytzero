@@ -18,7 +18,6 @@ export default function DownloadConfiguration({ shortsEnabled }: { shortsEnabled
   const { t, locale } = useI18n();
   const [config, setConfig] = useState<DownloadConfigResponse | null>(null);
   const [error, setError] = useState("");
-  const [checkingYtdlp, setCheckingYtdlp] = useState(false);
   const [cookies, setCookies] = useState(false);
   // Configured and recognised are different questions, and only the second
   // decides whether anything works: an expired jar is not refused, it is
@@ -33,21 +32,7 @@ export default function DownloadConfiguration({ shortsEnabled }: { shortsEnabled
   const load = useCallback(() => Promise.all([api.downloadConfig(), api.downloadCookies().catch(() => null)]).then(([result, jar]) => { setConfig(result); setCookies(result.cookies_configured); setRecognised(jar?.recognised ?? null); }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason))), []);
 
 
-  const checkYtdlp = useCallback(async () => {
-    if (checkingYtdlp) return;
-    setCheckingYtdlp(true);
-    try {
-      const result = await api.updateYtdlp();
-      if (!result.ok) emitToast(result.detail ?? t("downloadsYtdlpUpdateFailed"), "danger");
-      else if (result.before === result.after) emitToast(t("downloadsYtdlpUpToDate", { version: result.after ?? "" }), "success");
-      else emitToast(t("downloadsYtdlpUpdated", { before: result.before ?? "", after: result.after ?? "" }), "success");
-      await load();
-    } catch (reason) {
-      emitToast(reason instanceof Error ? reason.message : t("downloadsYtdlpUpdateFailed"), "danger");
-    } finally {
-      setCheckingYtdlp(false);
-    }
-  }, [checkingYtdlp, load, t]);  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const defs = useMemo(() => new Map(config?.definitions.map((definition) => [definition.key, definition]) ?? []), [config]);
   const update = async (key: string, value: DownloadSettingValue) => {
