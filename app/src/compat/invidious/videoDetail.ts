@@ -1,6 +1,7 @@
 import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
+import { videoInfoRefusalQuiet } from "../../youtubeRefusalQuiet";
 import { startFetch } from "./mediaCache";
 import { directResponse } from "./mediaRoutes";
 import { signedCaptionPath, signedMediaUrl } from "./media";
@@ -81,7 +82,9 @@ export function warmMedia(userId: number, videoId: string): void {
       return response?.body?.cancel().catch(() => {});
     })
     .catch(() => {});
-  const fallback = Bun.sleep(DIRECT_GRACE_MS).then(() => {
+  // Nothing to wait for while YouTube is refusing this address: the extraction
+  // the grace hopes for is the one already reported as failing.
+  const fallback = Bun.sleep(videoInfoRefusalQuiet.quiet() ? 0 : DIRECT_GRACE_MS).then(() => {
     // Cheap when it turns out to be unnecessary: the file is capped, evicted
     // least-recently-served first, and makes the next play of it instant.
     if (!served) startFetch(userId, videoId);
