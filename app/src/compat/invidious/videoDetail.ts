@@ -1,7 +1,8 @@
+import { existsSync } from "node:fs";
 import { getDownload, listSubtitleFiles } from "../../downloader";
 import { knownSubtitleTracks, subtitleLanguages, subtitleTracks } from "../../subtitleTracks";
 import { log } from "../../logger";
-import { startFetch } from "./mediaCache";
+import { cachedMedia, startFetch } from "./mediaCache";
 import { directGrace, directResponse } from "./mediaRoutes";
 import { signedCaptionPath, signedMediaUrl } from "./media";
 import { channelThumbnails, videoFromRow, type VideoRowLike } from "./shapes";
@@ -60,6 +61,28 @@ async function captionLanguages(userId: number, videoId: string): Promise<string
  * request already waits on.
  */
 export function warmMedia(userId: number, videoId: string): void {
+  void (async () => {
+    if (alreadyPlayable(cachedMedia(videoId), await getDownload(userId, videoId))) return;
+    warmFromYouTube(userId, videoId);
+  })().catch(() => {});
+}
+
+/**
+ * Whether this video can already be played without asking YouTube anything.
+ *
+ * A copy kept on disk is the whole point of keeping it. Warming past one meant
+ * every opened video paid an extraction and, seconds later, downloaded a file
+ * that was already there — on an address that is being watched for robots.
+ */
+export function alreadyPlayable(
+  cached: string | null,
+  download: { status?: string | null; path?: string | null } | null,
+): boolean {
+  if (cached) return true;
+  return download?.status === "done" && Boolean(download.path) && existsSync(download.path!);
+}
+
+function warmFromYouTube(userId: number, videoId: string): void {
   let served = false;
   const probe = directResponse(userId, videoId, "bytes=0-1", new AbortController().signal)
     .then((response) => {
