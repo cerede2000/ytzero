@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   channelFromSearchResult,
+  labelledQualities,
   commentsFrom,
   videoFromRow,
   videoFromSearchResult,
@@ -157,5 +158,38 @@ describe("comments", () => {
   test("treats a root marker as no parent", () => {
     const mapped = commentsFrom([{ ...base, id: "c1", parent: "root", text: "Seul", author: "A" }]);
     expect(mapped.comments).toHaveLength(1);
+  });
+});
+
+describe("the qualities a document offers", () => {
+  test("keeps them as asked while nothing is known yet", () => {
+    expect(labelledQualities([720, 360], () => null)).toEqual([
+      { asked: 720, label: 720 },
+      { asked: 360, label: 360 },
+    ]);
+  });
+
+  /*
+   * A request for 360p on a video with no 360p muxed file comes back with
+   * whatever it has — often the same file 720p returns. Offered twice under
+   * two labels, one of them is false, and a client picking the smaller
+   * downloads the larger believing otherwise.
+   */
+  test("offers one file once, however many ways it was asked for", () => {
+    expect(labelledQualities([720, 360], () => 720)).toEqual([{ asked: 720, label: 720 }]);
+  });
+
+  test("says what a quality really turned out to be", () => {
+    const known = (asked: number) => (asked === 360 ? 240 : null);
+    expect(labelledQualities([720, 360], known)).toEqual([
+      { asked: 720, label: 720 },
+      { asked: 360, label: 240 },
+    ]);
+  });
+
+  /* The link still asks for what selects the file; only the label changes. */
+  test("keeps the asked-for height, which is what the link carries", () => {
+    const [only] = labelledQualities([720, 360], (asked) => (asked === 720 ? 480 : 480));
+    expect(only).toEqual({ asked: 720, label: 480 });
   });
 });

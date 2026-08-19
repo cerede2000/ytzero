@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 const root = mkdtempSync(join(tmpdir(), "ytzero-invidious-cache-"));
 process.env.YTZERO_INVIDIOUS_CACHE_DIR = root;
 
-const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedMedia, growingFileResponse, mimeFor, offeredHeight, offeredKind, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
+const { BEST_HEIGHT, OFFERED_HEIGHTS, cacheableVideoId, cachedEntry, cachedMedia, growingFileResponse, mimeFor, offeredHeight, offeredKind, partialFileResponse, pruneCache, wantedRange } = await import("./mediaCache");
 const { alreadyPlayable } = await import("./videoDetail");
 
 // Each test owns the directory: the order they run in is not fixed, and one
@@ -214,21 +214,35 @@ describe("the qualities offered to a client", () => {
   });
 
   test("keep one quality's file apart from another's", () => {
-    writeFileSync(join(root, "abc12345678.muxed720.mp4"), new Uint8Array(4));
+    writeFileSync(join(root, "abc12345678.muxed720.h720.mp4"), new Uint8Array(4));
     expect(cachedMedia("abc12345678", "muxed", 720)).toContain("720");
     expect(cachedMedia("abc12345678", "muxed", 360)).toBeNull();
   });
 
   /* A separate track is a different file from the one that carries both. */
   test("keep a separate track apart from the muxed file", () => {
-    writeFileSync(join(root, "def12345678.muxed720.mp4"), new Uint8Array(4));
+    writeFileSync(join(root, "def12345678.muxed720.h720.mp4"), new Uint8Array(4));
     expect(cachedMedia("def12345678", "video", 1080)).toBeNull();
     expect(cachedMedia("def12345678", "audio")).toBeNull();
   });
 
   test("keep one audio file for the video, whatever height was asked", () => {
-    writeFileSync(join(root, "ghi12345678.audio.mp4"), new Uint8Array(4));
-    expect(cachedMedia("ghi12345678", "audio", 1080)).toBe(cachedMedia("ghi12345678", "audio", 360));
+    writeFileSync(join(root, "ghi12345678.audio.h0.mp4"), new Uint8Array(4));
+    expect(cachedMedia("ghi12345678", "audio", 1080)).toBe(cachedMedia("ghi12345678", "audio", 360)!);
+  });
+
+  /*
+   * What was asked for and what YouTube had are not the same thing, and the
+   * difference is what a document must not misreport. It is kept in the name,
+   * so it needs no table, survives restarts, and is evicted with the file.
+   */
+  test("remember what a quality really turned out to be", () => {
+    writeFileSync(join(root, "jkl12345678.muxed360.h720.mp4"), new Uint8Array(4));
+    expect(cachedEntry("jkl12345678", "muxed", 360)?.height).toBe(720);
+  });
+
+  test("say nothing about a height nobody has fetched", () => {
+    expect(cachedEntry("mno12345678", "muxed", 720)).toBeNull();
   });
 
   test("name only the kinds a link may ask for", () => {

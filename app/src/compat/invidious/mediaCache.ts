@@ -85,14 +85,48 @@ export function cacheableVideoId(videoId: string): boolean {
   return /^[A-Za-z0-9_-]{5,24}$/.test(videoId);
 }
 
-function pathFor(videoId: string, kind: MediaKind, height: number): string {
-  return join(CACHE_DIR, `${videoId}.${kind === "audio" ? "audio" : `${kind}${height}`}.mp4`);
+/**
+ * The name a kept file goes under, which is also where its real height lives.
+ *
+ * What was asked for and what YouTube had are not the same thing: a video with
+ * no 360p muxed file answers a request for one with whatever it does have, and
+ * a document that then offers "360p" and "720p" is offering the same file
+ * twice under two labels, one of them false.
+ *
+ * yt-dlp says the height of what it picked, in the run that fetches it, so it
+ * costs nothing to keep — and kept in the filename it needs no table, survives
+ * restarts, and is evicted with the thing it describes.
+ */
+function prefixFor(videoId: string, kind: MediaKind, height: number): string {
+  return `${videoId}.${kind === "audio" ? "audio" : `${kind}${height}`}`;
+}
+
+export interface CachedMedia {
+  path: string;
+  /** The height actually delivered, or null for a track that has none. */
+  height: number | null;
+}
+
+export function cachedEntry(videoId: string, kind: MediaKind, height: number): CachedMedia | null {
+  if (!cacheableVideoId(videoId)) return null;
+  const prefix = `${prefixFor(videoId, kind, height)}.h`;
+  let names: string[];
+  try {
+    names = readdirSync(CACHE_DIR);
+  } catch {
+    return null;
+  }
+  const found = names.find((name) => name.startsWith(prefix) && name.endsWith(".mp4"));
+  if (!found) return null;
+  const said = Number(found.slice(prefix.length, -".mp4".length));
+  return { path: join(CACHE_DIR, found), height: Number.isFinite(said) && said > 0 ? said : null };
 }
 
 /** The kept copy, if there is one — and it is marked as used just now. */
 export function cachedMedia(videoId: string, kind: MediaKind = "muxed", height: number = BEST_HEIGHT): string | null {
-  if (!cacheableVideoId(videoId)) return null;
-  const path = pathFor(videoId, kind, height);
+  const kept = cachedEntry(videoId, kind, height);
+  if (!kept) return null;
+  const { path } = kept;
   if (!existsSync(path)) return null;
   try {
     const now = new Date();
@@ -215,10 +249,11 @@ export function startFetch(
   if (running) return running;
 
   mkdirSync(CACHE_DIR, { recursive: true });
-  const target = pathFor(videoId, kind, height);
+  const prefix = prefixFor(videoId, kind, height);
   // Written under another name and moved into place, so a partial file is
-  // never mistaken for one that can be served in full.
-  const partial = `${target}.partial`;
+  // never mistaken for one that can be served in full. Its final name carries
+  // the height yt-dlp actually picked, which is not always the one asked for.
+  const partial = join(CACHE_DIR, `${prefix}.partial`);
   rmSync(partial, { force: true });
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
@@ -235,7 +270,8 @@ export function startFetch(
      * pieces at all.
      */
     "--http-chunk-size", "1M",
-    "--print", "%(filesize,filesize_approx)s",
+    // One line, so one read of the output settles both.
+    "--print", "%(filesize,filesize_approx)s %(height)s",
     "-f", formatFor(kind, height),
     "-o", partial,
     ...potArgsFor(true),
@@ -246,6 +282,19 @@ export function startFetch(
   const child = Bun.spawn([YTDLP, ...args], { stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => child.kill(), FETCH_TIMEOUT_MS);
   const announced = firstLine(child.stdout as ReadableStream<Uint8Array>);
+
+  const printed = Promise.race([announced, Bun.sleep(20_000).then(() => "")]);
+  const total = printed.then((line) => {
+    const size = Number(line.trim().split(/\s+/)[0]);
+    const announcedBytes = Number.isFinite(size) && size > 0 ? size : null;
+    log.info("invidious.cache_fetch_started", { videoId, kind, height, announcedBytes });
+    return announcedBytes;
+  });
+  const announcedHeight = printed.then((line) => {
+    const said = Number(line.trim().split(/\s+/)[1]);
+    return Number.isFinite(said) && said > 0 ? said : null;
+  });
+
 
   const done = (async () => {
     try {
@@ -262,9 +311,13 @@ export function startFetch(
         rmSync(partial, { force: true });
         return null;
       }
+      const delivered = await announcedHeight;
+      const target = join(CACHE_DIR, `${prefix}.h${delivered ?? height}.mp4`);
       renameSync(partial, target);
       const size = statSync(target).size;
-      log.info("invidious.cache_fetched", { videoId, kind, height, bytes: size, ms: Date.now() - startedAt });
+      log.info("invidious.cache_fetched", {
+        videoId, kind, asked: height, delivered, bytes: size, ms: Date.now() - startedAt,
+      });
       pruneCache(CACHE_LIMIT_BYTES, target);
       return target;
     } finally {
@@ -275,13 +328,6 @@ export function startFetch(
 
   // Never hold on a size that is not coming: without one the first range waits
   // for the whole file, which is slower but still plays.
-  const total = Promise.race([announced, Bun.sleep(20_000).then(() => "")]).then((printed) => {
-    const size = Number(printed.trim());
-    const announcedBytes = Number.isFinite(size) && size > 0 ? size : null;
-    log.info("invidious.cache_fetch_started", { videoId, kind, height, announcedBytes });
-    return announcedBytes;
-  });
-
   const entry: PendingFetch = { path: partial, total, done };
   fetching.set(key, entry);
   return entry;
