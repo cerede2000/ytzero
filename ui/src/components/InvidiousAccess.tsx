@@ -78,10 +78,10 @@ export default function InvidiousAccess({ showToast }: { showToast: (message: st
             `Créé le ${when(state.created_at)} · dernière utilisation ${when(state.last_used_at)}`,
           )
           : tx(
-            "Sign in from an app with this profile's name and a token generated here.",
-            "Zaloguj się w aplikacji nazwą tego profilu i wygenerowanym tu tokenem.",
-            "In einer App mit dem Namen dieses Profils und einem hier erzeugten Token anmelden.",
-            "Connectez-vous depuis une application avec le nom de ce profil et un jeton généré ici.",
+            "Sign in from an app with this profile's name and a token generated here. When the instance asks clients for credentials, that same pair goes in the app's HTTP Basic Auth fields.",
+            "Zaloguj się w aplikacji nazwą tego profilu i wygenerowanym tu tokenem. Gdy instancja wymaga poświadczeń, ta sama para trafia w pola HTTP Basic Auth aplikacji.",
+            "In einer App mit dem Namen dieses Profils und einem hier erzeugten Token anmelden. Verlangt die Instanz Zugangsdaten, gehört dasselbe Paar in die HTTP-Basic-Auth-Felder der App.",
+            "Connectez-vous depuis une application avec le nom de ce profil et un jeton généré ici. Si l'instance demande des identifiants, c'est la même paire qui va dans les champs HTTP Basic Auth de l'application.",
           )}
       >
         <Inline>

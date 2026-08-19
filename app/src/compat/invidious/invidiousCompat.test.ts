@@ -64,6 +64,67 @@ describe("Invidious detection", () => {
   });
 });
 
+describe("an instance that asks clients who they are", () => {
+  /*
+   * The catalogue is somebody's library, and a client sends credentials on
+   * every request — so it is answered for whoever they belong to, and refused
+   * when there are none. Each of these is one route: a new one that forgot to
+   * ask would answer 200 here.
+   */
+  const catalogue = [
+    "/api/v1/stats",
+    "/api/v1/search?q=x",
+    "/api/v1/search/suggestions?q=x",
+    "/api/v1/videos/dQw4w9WgXcQ",
+    "/api/v1/comments/dQw4w9WgXcQ",
+    "/api/v1/channels/UCabc",
+    "/api/v1/channels/UCabc/videos",
+    "/api/v1/channels/UCabc/shorts",
+    "/api/v1/channels/UCabc/streams",
+    "/api/v1/channels/UCabc/playlists",
+    "/api/v1/playlists/PLabc",
+    "/api/v1/trending",
+    "/api/v1/popular",
+  ];
+
+  test("refuses every list to a request that says nothing", async () => {
+    process.env.YTZERO_INVIDIOUS_COMPAT = "1";
+    process.env.YTZERO_INVIDIOUS_COMPAT_AUTH = "basic";
+    const app = new Hono();
+    registerInvidiousCompat(app);
+    for (const path of catalogue) {
+      expect(`${path} -> ${(await app.request(path)).status}`).toBe(`${path} -> 401`);
+    }
+    delete process.env.YTZERO_INVIDIOUS_COMPAT_AUTH;
+  });
+
+  test("says what it wants, in the header a client reads", async () => {
+    process.env.YTZERO_INVIDIOUS_COMPAT = "1";
+    process.env.YTZERO_INVIDIOUS_COMPAT_AUTH = "basic";
+    const app = new Hono();
+    registerInvidiousCompat(app);
+    const response = await app.request("/api/v1/stats");
+    expect(response.headers.get("WWW-Authenticate")).toStartWith("Basic realm=");
+    delete process.env.YTZERO_INVIDIOUS_COMPAT_AUTH;
+  });
+
+  /*
+   * The mistake this exists to prevent. A player carries no credentials, so a
+   * challenge on a media route does not ask it for any — it ends the video.
+   * These prove their own case with the signature they were handed.
+   */
+  test("never challenges the routes a player follows", async () => {
+    process.env.YTZERO_INVIDIOUS_COMPAT = "1";
+    process.env.YTZERO_INVIDIOUS_COMPAT_AUTH = "basic";
+    const app = new Hono();
+    registerInvidiousCompat(app);
+    for (const path of ["/api/v1/media/dQw4w9WgXcQ", "/api/v1/captions/dQw4w9WgXcQ?lang=en", "/api/v1/dm/x7tgad0/hls.m3u8"]) {
+      expect(`${path} -> ${(await app.request(path)).status}`).toBe(`${path} -> 403`);
+    }
+    delete process.env.YTZERO_INVIDIOUS_COMPAT_AUTH;
+  });
+});
+
 describe("a video upstream has just refused", () => {
   /*
    * A player opens several connections and reopens them as each one fails.

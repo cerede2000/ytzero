@@ -6,43 +6,62 @@ subscriptions, your channels, your playlists, and your downloads; playback and
 downloading both go through your server.
 
 The compatibility layer is **disabled by default**. It is a second front door on
-a server that is often exposed, and a door nobody opened should not exist. Read
-[Exposure](#exposure) before opening it.
+a server that is often exposed, and a door nobody opened should not exist.
 
 ## Setup
 
-1. Set `YTZERO_INVIDIOUS_COMPAT=1` and restart. The log line
-   `invidious.compat_enabled` confirms it.
-2. Open **Settings → Profiles**, find **Client access token**, and generate one.
-   It is shown once; generating another revokes the first.
-3. In the client, add an instance of type **Invidious** pointing at your server,
-   then sign in with the **profile name** as the username and the **token** as
-   the password.
+1. Set `YTZERO_INVIDIOUS_COMPAT=1` and `YTZERO_INVIDIOUS_COMPAT_AUTH=basic`, then
+   restart. The log line `invidious.compat_enabled` reports both.
+2. Each person opens **Settings → Profiles**, finds **Client access token**, and
+   generates one. It is shown once; generating another revokes the first.
+3. In the client, add an instance of type **Invidious** pointing at your server.
+   Fill its HTTP Basic Auth fields with the **profile name** as the username and
+   the **token** as the password. Signing in to an account on the same instance
+   takes exactly the same pair.
 
 Restricted (child) profiles cannot generate a token: the dialect serves a
 library without the limits this server applies to one.
 
+## Several profiles
+
+`YTZERO_INVIDIOUS_COMPAT_AUTH=basic` is what makes a household work, and it is
+worth understanding why the alternative cannot.
+
+A client of this dialect sends its session — the cookie it gets from signing in
+— to `/api/v1/auth/*` and to nothing else. On every other route there is nobody
+to recognise, which is why those are otherwise served for one named profile
+(`YTZERO_INVIDIOUS_COMPAT_USER`) whoever asks. Two people pointing their phones
+at such an instance get their own feed, subscriptions and playlists, and the
+same search results, the same channel pages, and the same home screen — one
+person's, for both.
+
+HTTP Basic credentials are different: a client bakes them into every request it
+makes. So the server checks them itself, against the profile name and the token
+minted for it, and every route knows whose library it is answering. Each person
+sees their own.
+
+Media links stay out of this and must: the platform player that follows them
+carries no credentials at all. They prove themselves with a signature naming
+the video and the hour it expires.
+
 ## What the client sees
 
-Signed in, a client reads the feed, subscriptions and playlists of the profile
-that owns the token, and can follow and unfollow channels — the same rows the
-web interface writes, so both ways of subscribing agree.
+The feed, subscriptions and playlists of the profile that owns the credentials,
+and following or unfollowing writes the same rows the web interface does, so
+both ways of subscribing agree.
 
-Everything else — search, channels, playlists, trending, a video's document —
-is served for **one** profile, the one named by `YTZERO_INVIDIOUS_COMPAT_USER`.
-Those requests carry no session, because no client of this dialect sends one
-outside `/api/v1/auth/*`.
+What a client calls trending or popular is not a place: it is the newest videos
+from the channels that profile follows. Searches go out to YouTube, and to any
+other provider this instance searches.
 
 Playback and downloads are served by the instance itself, never by a YouTube
-link: a CDN address resolved with this server's cookies answers 403 to the
-phone that would follow it. Media links carry their own signature and expire
-after six hours.
+link: a CDN address resolved with this server's cookies answers 403 to the phone
+that would follow it. Media links expire after six hours.
 
 ## Exposure
 
-**These routes answer before the session middleware**, and they have to: no
-client of this dialect can satisfy it. With the flag on, anyone who can reach
-the server can
+Without `YTZERO_INVIDIOUS_COMPAT_AUTH=basic`, **these routes answer before the
+session middleware** and ask for nothing. Anyone who can reach the server can
 
 - read the library of the configured profile — its videos, channels, and the
   newest uploads of everything it follows;
@@ -51,19 +70,21 @@ the server can
   starts a yt-dlp fetch for it**.
 
 The last one is the reason to care: an unknown caller can make the server work.
-`YTZERO_INVIDIOUS_MAX_FETCHES` bounds how many of those run at once, and the
+`YTZERO_INVIDIOUS_MAX_FETCHES` bounds how many of those run at once and the
 cache is capped and evicted, so the cost is bounded — but it is not zero, and
 the library is readable either way.
 
-An instance reachable from the internet with this flag on should have
-authentication in front of it.
+Asking clients for credentials is the answer, and the one that also makes the
+library each person's own. An instance left open should at least not be
+reachable from the internet.
 
-### Basic Auth in front, done correctly
+### Basic Auth in a reverse proxy instead
 
-Yattee supports HTTP Basic Auth per instance, and sends it on every API request.
-**Its player does not.** The stream URL is handed to the platform player with no
-credentials attached, so Basic Auth over the whole server authenticates the
-browsing and breaks the playback.
+If the credentials must be checked in front of the server rather than by it —
+one shared pair for the household, say — the split matters. Yattee sends Basic
+Auth on every API request. **Its player does not**: the stream URL is handed to
+the platform player with nothing attached, so Basic Auth over the whole server
+authenticates the browsing and breaks the playback.
 
 Protect the catalogue and account paths:
 
@@ -76,20 +97,16 @@ Protect the catalogue and account paths:
 /api/v1/auth/         /login
 ```
 
-Leave these open — they are followed by a player that holds no credentials, and
-each one already carries an HMAC signature naming the video it is for and the
-hour it expires:
+Leave these open — each already carries its own signature:
 
 ```
 /api/v1/media/        /api/v1/captions/
 /companion/           /api/v1/dm/
 ```
 
-One rule for the first list and nothing for the second is the whole
-configuration. In Traefik, that is a second router on the service you already
-have, matching only those paths and carrying the middleware — everything it
-does not match, including the signed media routes and the web interface, keeps
-going through the router you already have:
+In Traefik that is a second router on the service you already have, matching
+only those paths and carrying the middleware; everything it does not match
+keeps going through the router you already have:
 
 ```yaml
 labels:
@@ -105,10 +122,14 @@ labels:
 Mirror the entrypoint, TLS resolver and service name of your existing router.
 Generate the credentials with `htpasswd -nB yattee`, and double every `$` in the
 result when it goes into a label — a Compose file reads a single one as a
-variable. In a Traefik dynamic file, leave them single.
+variable. In a Traefik dynamic file, leave them single. An nginx `location` with
+`auth_basic` does the same job.
 
-An nginx `location` with `auth_basic`, or the equivalent in any other
-authenticating proxy, does the same job.
+A proxy checking one shared pair does not tell the server who is behind it, so
+the catalogue stays the configured profile's for everyone. The two can be
+combined: the proxy decides who may knock, the server decides whose library
+answers — but then the credentials each person types must be the proxy's, and
+`YTZERO_INVIDIOUS_COMPAT_AUTH=basic` will not see the profile behind them.
 
 Check it from outside afterwards. The first must answer `401`, the second `403`
 — not `401`, which would mean the player is being challenged too:
@@ -123,7 +144,8 @@ curl -o /dev/null -w '%{http_code}\n' https://ytzero.example.com/api/v1/media/dQ
 | Variable | Default | Description |
 | --- | --- | --- |
 | `YTZERO_INVIDIOUS_COMPAT` | _(unset)_ | Set to `1` to answer the Invidious API. Anything else, including unset, and none of these routes exist. |
-| `YTZERO_INVIDIOUS_COMPAT_USER` | first administrator | Profile id whose library the unauthenticated catalogue routes serve. |
+| `YTZERO_INVIDIOUS_COMPAT_AUTH` | `open` | Set to `basic` to require HTTP Basic credentials — a profile name and its token — on the catalogue routes, and to answer each of them for that profile. |
+| `YTZERO_INVIDIOUS_COMPAT_USER` | first administrator | Profile whose library the catalogue routes serve while `..._AUTH` is `open`. |
 | `YTZERO_INVIDIOUS_CACHE_DIR` | `invidious-cache` beside the database directory (`/data/invidious-cache` in Docker) | Where videos fetched for a client are kept. |
 | `YTZERO_INVIDIOUS_CACHE_MB` | `4096` | Cap for that directory. Past it, the least recently served file is evicted. |
 | `YTZERO_INVIDIOUS_MAX_FETCHES` | `6` | How many videos are fetched at once. Past it a request falls back to the direct path instead of starting another yt-dlp. |

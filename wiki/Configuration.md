@@ -50,7 +50,8 @@ picker is read-only until `TZ` is removed and the instance restarted.
 | `YTZERO_AUTH_METHOD` | _(unset)_ | Set to `shared` to force shared-password authentication regardless of the saved method. One-click cloud templates set this automatically. |
 | `YTZERO_AUTH_PASSWORD` | _(unset)_ | Shared login password used when `YTZERO_AUTH_METHOD=shared`. It stays environment-owned and is never written to the database, backups, or logs. A missing or empty value leaves forced authentication unconfigured and emits `auth.environment_password_missing`. |
 | `YTZERO_INVIDIOUS_COMPAT` | _(unset)_ | Set to `1` to answer the Invidious API for third-party clients such as Yattee. These routes answer before the session middleware — see [Third-Party Clients](Third-Party-Clients#exposure) before opening an instance to the internet with this set. |
-| `YTZERO_INVIDIOUS_COMPAT_USER` | _(first administrator)_ | Profile id whose library the unauthenticated catalogue routes serve. |
+| `YTZERO_INVIDIOUS_COMPAT_AUTH` | `open` | Set to `basic` to require an HTTP Basic profile name and token on the catalogue routes, and to answer each of them for that profile. See [Third-Party Clients](Third-Party-Clients#several-profiles). |
+| `YTZERO_INVIDIOUS_COMPAT_USER` | _(first administrator)_ | Profile id whose library the catalogue routes serve while `YTZERO_INVIDIOUS_COMPAT_AUTH` is `open`. |
 | `YTZERO_INVIDIOUS_CACHE_MB` | `4096` | Cap for the directory holding videos fetched for a third-party client. |
 | `YTZERO_INVIDIOUS_MAX_FETCHES` | `6` | How many videos are fetched at once for third-party clients. |
 | `YTZERO_AUTH_DISABLE` | _(unset)_ | Set to `1` to force the **None** auth method regardless of the saved setting. Emergency unlock if an auth method locks you out — see [Authentication](Authentication#recovery-anti-lockout). |

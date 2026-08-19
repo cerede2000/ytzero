@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 export { invidiousCompatEnabled } from "./enabled";
 import { log } from "../../logger";
+import { compatAuthMode } from "./clientAuth";
 import { registerAuthRoutes } from "./authRoutes";
 import { invidiousCompatEnabled } from "./enabled";
 import { registerCatalogRoutes } from "./catalogRoutes";
@@ -28,23 +29,28 @@ export function registerInvidiousCompat(app: Hono): void {
   if (!invidiousCompatEnabled()) return;
 
   /*
-   * None of these carry authentication of their own, because the clients do
-   * not offer any: Yattee attaches its session cookie to `/api/v1/auth/*` and
-   * to nothing else. What keeps a private instance private is the layer in
-   * front of it — an instance behind HTTP Basic Auth still challenges every
-   * one of these, which Yattee supports and answers on each request — and the
-   * media links, which carry their own signature because a player follows them
-   * with no session at all.
+   * What keeps a private instance private, in two halves.
+   *
+   * The catalogue can ask for HTTP Basic credentials itself — see `clientAuth`
+   * — because a client sends them on every request, which is the one identity
+   * this dialect carries outside `/api/v1/auth/*`. Set
+   * `YTZERO_INVIDIOUS_COMPAT_AUTH=basic` and the browsing is both closed and
+   * per-profile; left open it serves the configured profile to whoever asks,
+   * which is why the instance had better have something in front of it.
+   *
+   * The media links are the other half, and they are not part of that choice:
+   * a player follows them holding nothing at all, so they carry a signature
+   * naming the video and the hour it expires.
    */
   registerCatalogRoutes(app);
   registerMediaRoutes(app);
   registerDailymotionMediaRoutes(app);
   /*
-   * The one part a client does authenticate: it attaches its session to
-   * `/api/v1/auth/*` and to nothing else. So these routes serve whoever
-   * presented the token, while everything above serves the configured profile.
+   * The part a client signs in to: it attaches its session to `/api/v1/auth/*`
+   * and to nothing else. These routes serve whoever presented that session,
+   * or, failing one, whoever the credentials on the request belong to.
    */
   registerAuthRoutes(app);
 
-  log.info("invidious.compat_enabled", {});
+  log.info("invidious.compat_enabled", { auth: compatAuthMode() });
 }
