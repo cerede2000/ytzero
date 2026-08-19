@@ -171,22 +171,33 @@ export function registerMediaRoutes(app: Hono): void {
     if (!await tokenHolds(c, "media", videoId)) return c.json({ error: "expired or invalid link" }, 403);
     const userId = await compatUserId();
 
+    const askedAt = Date.now();
+    // Somebody is watching: the background passes stand aside until they stop.
+    notePlayback();
+    /*
+     * Every path says how long it took and which copy answered — the ones that
+     * cost nothing included. Served from a kept file, this route used to log
+     * nothing at all, so a quiet log meant either the fastest path or no
+     * request, and reading it required knowing which silences were good ones.
+     */
+    const answered = (by: string, response: Response) => {
+      log.info("invidious.media_answered", { videoId, by, ms: Date.now() - askedAt });
+      return response;
+    };
+
     // A kept copy answers immediately, at the quality that was chosen, without
     // asking YouTube for anything.
     const download = await getDownload(userId, videoId);
     if (download?.status === "done" && download.path) {
       const response = localFileResponse(download.path, c.req.header("range"));
-      if (response) return response;
+      if (response) return answered("downloaded", response);
     }
 
     // Already fetched once because the direct path was refused for it.
-    const askedAt = Date.now();
-    // Somebody is watching: the background passes stand aside until they stop.
-    notePlayback();
     const kept = cachedMedia(videoId);
     if (kept) {
       const response = localFileResponse(kept, c.req.header("range"));
-      if (response) return response;
+      if (response) return answered("cached", response);
     }
 
     /*
@@ -216,10 +227,7 @@ export function registerMediaRoutes(app: Hono): void {
         return entry ? partialFileResponse(entry, range, c.req.raw.signal) : null;
       });
       const streamed = await firstServed([direct, fallback]);
-      if (streamed) {
-        log.info("invidious.media_answered", { videoId, by: "direct-or-fetch", ms: Date.now() - askedAt });
-        return streamed;
-      }
+      if (streamed) return answered("direct-or-fetch", streamed);
       if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
       noteRefusal(videoId);
     }
@@ -234,10 +242,7 @@ export function registerMediaRoutes(app: Hono): void {
     const fetching = pendingFetch(videoId) ?? startFetch(userId, videoId);
     if (fetching) {
       const served = await partialFileResponse(fetching, range, c.req.raw.signal);
-      if (served) {
-        log.info("invidious.media_answered", { videoId, by: "fetch", ms: Date.now() - askedAt });
-        return served;
-      }
+      if (served) return answered("fetch", served);
     }
     /*
      * Nothing came back, and the two reasons for that are not the same event.
