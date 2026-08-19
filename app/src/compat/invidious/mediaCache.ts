@@ -287,19 +287,6 @@ export function startFetch(
   return entry;
 }
 
-/** The finished file, waiting for a fetch under way if there is one. */
-export async function ensureCached(
-  userId: number,
-  videoId: string,
-  kind: MediaKind = "muxed",
-  height: number = BEST_HEIGHT,
-): Promise<string | null> {
-  const existing = cachedMedia(videoId, kind, height);
-  if (existing) return existing;
-  const started = startFetch(userId, videoId, kind, height);
-  return started ? started.done : null;
-}
-
 /** Max bytes answered at once, so a length can be set without holding a film in memory. */
 const CHUNK_BYTES = 8 * 1024 * 1024;
 /** Bytes read from disk per turn while streaming a file that is still arriving. */
@@ -398,15 +385,6 @@ export async function partialFileResponse(
   signal?: AbortSignal,
   kind: MediaKind = "muxed",
 ): Promise<Response | null> {
-  /*
-   * A request with no range is a request for the whole file, and a partial
-   * answer to one is a truncated download. Wait for it and hand it over whole.
-   */
-  if (range === undefined) {
-    const finished = await entry.done;
-    return finished ? localFileResponse(finished, undefined, mimeFor(kind, finished)) : null;
-  }
-
   const total = await entry.total;
   /*
    * Without a length there is nothing to answer a range against while the file

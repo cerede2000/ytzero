@@ -245,32 +245,6 @@ describe("the qualities offered to a client", () => {
   });
 });
 
-describe("a request with no range at all", () => {
-  /*
-   * A player asks in ranges and comes back for more; a downloader issues one
-   * plain GET and expects one complete body. Answered with a partial one it
-   * saves a truncated file or calls the download failed — which is what the
-   * separate tracks did, while the muxed quality worked because its file was
-   * already whole in the cache.
-   */
-  test("is answered whole, not with the front of the file", async () => {
-    const path = join(root, "complete.mp4");
-    writeFileSync(path, new Uint8Array(4_000));
-    const entry = { path, total: Promise.resolve(4_000), done: Promise.resolve(path) };
-
-    const response = await partialFileResponse(entry, undefined, undefined, "video");
-
-    expect(response?.status).toBe(200);
-    expect(response?.headers.get("content-length")).toBe("4000");
-    expect(response?.headers.get("content-type")).toBe("video/mp4");
-  });
-
-  test("says nothing when the file never arrived", async () => {
-    const entry = { path: join(root, "never.partial"), total: Promise.resolve(10), done: Promise.resolve(null) };
-    expect(await partialFileResponse(entry, undefined)).toBeNull();
-  });
-});
-
 describe("streaming a file that is still being written", () => {
   /*
    * A downloader asks with no range and waits for one body. Holding the
