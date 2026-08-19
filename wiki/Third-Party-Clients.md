@@ -85,9 +85,38 @@ hour it expires:
 /companion/           /api/v1/dm/
 ```
 
-An nginx location block for the first list, with `auth_basic`, and none for the
-second, is the whole configuration. The same split applies to any other
-authenticating proxy.
+One rule for the first list and nothing for the second is the whole
+configuration. In Traefik, that is a second router on the service you already
+have, matching only those paths and carrying the middleware — everything it
+does not match, including the signed media routes and the web interface, keeps
+going through the router you already have:
+
+```yaml
+labels:
+  - "traefik.http.routers.ytzero-clients.rule=Host(`ytzero.example.com`) && (PathPrefix(`/api/v1/stats`) || PathPrefix(`/api/v1/search`) || PathPrefix(`/api/v1/videos`) || PathPrefix(`/api/v1/comments`) || PathPrefix(`/api/v1/channels`) || PathPrefix(`/api/v1/playlists`) || PathPrefix(`/api/v1/trending`) || PathPrefix(`/api/v1/popular`) || PathPrefix(`/api/v1/auth`) || (Method(`POST`) && Path(`/login`)))"
+  - "traefik.http.routers.ytzero-clients.priority=100"
+  - "traefik.http.routers.ytzero-clients.service=ytzero"
+  - "traefik.http.routers.ytzero-clients.entrypoints=websecure"
+  - "traefik.http.routers.ytzero-clients.tls.certresolver=letsencrypt"
+  - "traefik.http.routers.ytzero-clients.middlewares=ytzero-clients"
+  - "traefik.http.middlewares.ytzero-clients.basicauth.users=yattee:$$apr1$$replace$$me"
+```
+
+Mirror the entrypoint, TLS resolver and service name of your existing router.
+Generate the credentials with `htpasswd -nB yattee`, and double every `$` in the
+result when it goes into a label — a Compose file reads a single one as a
+variable. In a Traefik dynamic file, leave them single.
+
+An nginx `location` with `auth_basic`, or the equivalent in any other
+authenticating proxy, does the same job.
+
+Check it from outside afterwards. The first must answer `401`, the second `403`
+— not `401`, which would mean the player is being challenged too:
+
+```bash
+curl -o /dev/null -w '%{http_code}\n' https://ytzero.example.com/api/v1/trending
+curl -o /dev/null -w '%{http_code}\n' https://ytzero.example.com/api/v1/media/dQw4w9WgXcQ
+```
 
 ## Environment variables
 
