@@ -1,4 +1,4 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { requestOrigin } from "../../auth";
 import { durationSeconds } from "../../shortClassification";
 import { database } from "../../database";
@@ -8,9 +8,9 @@ import { searchAcrossProviders } from "../../searchProviders";
 import { ensureVideoImported } from "../../videoImport";
 import { fetchSearchSuggestions } from "../../youtube";
 import { fetchVideoComments } from "../../youtubeComments";
-import { compatUserId } from "./context";
+import { accountProfile, browsingProfile, unauthorized } from "./clientAuth";
 import { dailymotionDetail, dailymotionIdFrom, prefixedDailymotionId } from "./dailymotion";
-import { localPlaylistForCookie, localPlaylistNumber, playlistPage } from "./playlists";
+import { localPlaylist, localPlaylistNumber, playlistPage } from "./playlists";
 import { invidiousStats } from "./stats";
 import {
   channelFromRow,
@@ -49,7 +49,19 @@ function pageFrom(value: string | undefined): number {
 }
 
 export function registerCatalogRoutes(app: Hono): void {
-  app.get("/api/v1/stats", (c) => c.json(invidiousStats()));
+  /*
+   * Every route here begins the same way, and on purpose in plain sight rather
+   * than in a wrapper: it asks who is asking. Where the answer matters it is
+   * the profile served, and where it does not it is still the difference
+   * between a library its owner reads and a library anyone reads.
+   *
+   * The media routes do not do this and must not: a player carries no
+   * credentials, which is why those carry a signature instead.
+   */
+  app.get("/api/v1/stats", async (c) => {
+    if (await browsingProfile(c.req.header("authorization")) === null) return unauthorized();
+    return c.json(invidiousStats());
+  });
 
   /*
    * Yattee probes for PeerTube before it probes for us, on a path that would
@@ -60,6 +72,8 @@ export function registerCatalogRoutes(app: Hono): void {
   app.get("/api/v1/config", (c) => c.json({ error: "not found" }, 404));
 
   app.get("/api/v1/search", async (c) => {
+    const userId = await browsingProfile(c.req.header("authorization"));
+    if (userId === null) return unauthorized();
     const query = c.req.query("q")?.trim();
     if (!query) return c.json([]);
     const type = c.req.query("type") ?? "all";
@@ -71,7 +85,7 @@ export function registerCatalogRoutes(app: Hono): void {
      * the id — see `videoFromDailymotion`.
      */
     const providers = SEARCH_PROVIDERS.filter((provider) => provider.capabilities.library || provider.id === "dailymotion");
-    const { found } = await searchAcrossProviders(query, providers, pageFrom(c.req.query("page")), await compatUserId());
+    const { found } = await searchAcrossProviders(query, providers, pageFrom(c.req.query("page")), userId);
     const items: unknown[] = [];
     if (type !== "video") items.push(...(found.youtube?.channels ?? []).map(channelFromSearchResult));
     if (type !== "channel") {
@@ -92,6 +106,7 @@ export function registerCatalogRoutes(app: Hono): void {
   });
 
   app.get("/api/v1/search/suggestions", async (c) => {
+    if (await browsingProfile(c.req.header("authorization")) === null) return unauthorized();
     const query = c.req.query("q")?.trim();
     if (!query) return c.json({ query: "", suggestions: [] });
     try {
@@ -103,6 +118,8 @@ export function registerCatalogRoutes(app: Hono): void {
   });
 
   app.get("/api/v1/videos/:id", async (c) => {
+    const userId = await browsingProfile(c.req.header("authorization"));
+    if (userId === null) return unauthorized();
     const videoId = c.req.param("id");
     /*
      * A Dailymotion video is answered from Dailymotion. Its id cannot be
@@ -115,7 +132,6 @@ export function registerCatalogRoutes(app: Hono): void {
       const detail = await dailymotionDetail(dailymotion, requestOrigin(c));
       return detail ? c.json(detail) : c.json({ error: "not found" }, 404);
     }
-    const userId = await compatUserId();
     /*
      * The file first, before anything is known about the video.
      *
@@ -137,8 +153,10 @@ export function registerCatalogRoutes(app: Hono): void {
   });
 
   app.get("/api/v1/comments/:id", async (c) => {
+    const userId = await browsingProfile(c.req.header("authorization"));
+    if (userId === null) return unauthorized();
     try {
-      const comments = await fetchVideoComments(await compatUserId(), c.req.param("id"));
+      const comments = await fetchVideoComments(userId, c.req.param("id"));
       return c.json({ ...commentsFrom(comments.comments), videoId: c.req.param("id") });
     } catch (error) {
       log.warn("invidious.comments_failed", { videoId: c.req.param("id"), error: error instanceof Error ? error.message : String(error) });
@@ -147,6 +165,7 @@ export function registerCatalogRoutes(app: Hono): void {
   });
 
   app.get("/api/v1/channels/:id", async (c) => {
+    if (await browsingProfile(c.req.header("authorization")) === null) return unauthorized();
     const row = await database
       .prepare("SELECT * FROM channels WHERE channel_id = ?")
       .get(c.req.param("id")) as (ChannelRowLike & Record<string, unknown>) | null;
@@ -155,16 +174,18 @@ export function registerCatalogRoutes(app: Hono): void {
     return c.json({ ...channelFromRow(row), latestVideos: latest });
   });
 
-  const tab = (kind: "videos" | "shorts" | "streams") => async (c: { req: { param: (k: string) => string; query: (k: string) => string | undefined } }) => {
+  const channelTab = (kind: "videos" | "shorts" | "streams") => async (c: Context) => {
+    if (await browsingProfile(c.req.header("authorization")) === null) return unauthorized();
     const page = pageFrom(c.req.query("continuation"));
-    const videos = await channelVideos(c.req.param("id"), page, kind);
-    return { videos, continuation: videos.length < PAGE_SIZE ? null : String(page + 1) };
+    const videos = await channelVideos(c.req.param("id") ?? "", page, kind);
+    return c.json({ videos, continuation: videos.length < PAGE_SIZE ? null : String(page + 1) });
   };
-  app.get("/api/v1/channels/:id/videos", async (c) => c.json(await tab("videos")(c)));
-  app.get("/api/v1/channels/:id/shorts", async (c) => c.json(await tab("shorts")(c)));
-  app.get("/api/v1/channels/:id/streams", async (c) => c.json(await tab("streams")(c)));
+  app.get("/api/v1/channels/:id/videos", channelTab("videos"));
+  app.get("/api/v1/channels/:id/shorts", channelTab("shorts"));
+  app.get("/api/v1/channels/:id/streams", channelTab("streams"));
 
   app.get("/api/v1/channels/:id/playlists", async (c) => {
+    if (await browsingProfile(c.req.header("authorization")) === null) return unauthorized();
     const rows = await database.prepare(
       "SELECT playlist_id, title, thumbnail, video_count FROM channel_playlists WHERE channel_id = ? ORDER BY updated_at DESC"
     ).all(c.req.param("id")) as { playlist_id: string; title: string; thumbnail: string; video_count: string }[];
@@ -185,6 +206,7 @@ export function registerCatalogRoutes(app: Hono): void {
   });
 
   app.get("/api/v1/playlists/:id", async (c) => {
+    if (await browsingProfile(c.req.header("authorization")) === null) return unauthorized();
     const playlistId = c.req.param("id");
     /*
      * A playlist of this library's own, asked for here rather than on the
@@ -193,7 +215,8 @@ export function registerCatalogRoutes(app: Hono): void {
      * session that owns it, since these playlists are nobody else's.
      */
     if (localPlaylistNumber(playlistId) !== null) {
-      const own = await localPlaylistForCookie(c.req.header("cookie"), playlistId, playlistPage(c.req.query("page")));
+      const owner = await accountProfile(c.req.header("cookie"), c.req.header("authorization"));
+      const own = owner === null ? null : await localPlaylist(owner, playlistId, playlistPage(c.req.query("page")));
       return own ? c.json(own) : c.json({ error: "not found" }, 404);
     }
     const playlist = await database.prepare(
@@ -227,18 +250,23 @@ export function registerCatalogRoutes(app: Hono): void {
    * different server's answer — so both say what this instance is actually
    * for: the newest videos from the channels this profile follows.
    */
-  const home = async () => {
+  const home = async (userId: number) => {
     const rows = await database.prepare(
       `SELECT ${VIDEO_COLUMNS} ${FROM_VIDEOS}
          JOIN user_channels uc ON uc.channel_id = v.channel_id AND uc.user_id = ? AND uc.followed = 1
         WHERE v.published_at IS NOT NULL AND v.published_at != ''
           AND COALESCE(v.is_short, 0) = 0 AND COALESCE(v.is_unavailable, 0) = 0
         ORDER BY v.published_at DESC LIMIT 60`
-    ).all(await compatUserId()) as DetailRow[];
+    ).all(userId) as DetailRow[];
     return rows.map(videoFromRow);
   };
-  app.get("/api/v1/trending", async (c) => c.json(await home()));
-  app.get("/api/v1/popular", async (c) => c.json(await home()));
+  const feed = async (c: Context) => {
+    const userId = await browsingProfile(c.req.header("authorization"));
+    if (userId === null) return unauthorized();
+    return c.json(await home(userId));
+  };
+  app.get("/api/v1/trending", feed);
+  app.get("/api/v1/popular", feed);
 }
 
 async function channelVideos(channelId: string, page: number, kind: "videos" | "shorts" | "streams") {
