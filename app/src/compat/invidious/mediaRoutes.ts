@@ -37,6 +37,47 @@ export function recentlyRefused(videoId: string, now = Date.now()): boolean {
   return false;
 }
 
+/**
+ * One connection finds out whether the direct path works; the rest are told.
+ *
+ * A native player opens several at once, and each was starting its own
+ * extraction and its own retry ladder against the same address — twenty
+ * seconds of 403 in parallel before any of them had a verdict to share. Now
+ * the first one asks and the others wait for the answer: if it serves, they
+ * ask too and find the source already resolved; if it is refused, they go
+ * straight to the way that works.
+ *
+ * An abandoned request settles nothing. A player that hung up says nothing
+ * about whether YouTube would have answered.
+ */
+const directVerdicts = new Map<string, Promise<boolean>>();
+
+export async function directResponse(
+  userId: number,
+  videoId: string,
+  range: string,
+  signal: AbortSignal,
+  ask: (userId: number, videoId: string, range: string, signal: AbortSignal) => Promise<Response | null> =
+    (id, video, wanted, aborts) => getVideoResponse(id, video, wanted, aborts),
+): Promise<Response | null> {
+  const waiting = directVerdicts.get(videoId);
+  if (waiting) {
+    return await waiting ? ask(userId, videoId, range, signal) : null;
+  }
+  let settle: (worked: boolean) => void = () => {};
+  directVerdicts.set(videoId, new Promise<boolean>((resolve) => { settle = resolve; }));
+  try {
+    const response = await ask(userId, videoId, range, signal);
+    settle(Boolean(response) || signal.aborted);
+    return response;
+  } catch (error) {
+    settle(signal.aborted);
+    throw error;
+  } finally {
+    directVerdicts.delete(videoId);
+  }
+}
+
 async function tokenHolds(c: Context, resource: string, videoId: string): Promise<boolean> {
   return mediaTokenValid(
     await mediaSecret(),
@@ -82,7 +123,7 @@ export function registerMediaRoutes(app: Hono): void {
      * reads to the end of the file and buffers it to put a length on it.
      */
     if (!recentlyRefused(videoId)) {
-      const streamed = await getVideoResponse(userId, videoId, c.req.header("range") ?? "bytes=0-", c.req.raw.signal);
+      const streamed = await directResponse(userId, videoId, c.req.header("range") ?? "bytes=0-", c.req.raw.signal);
       if (streamed) return streamed;
       if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
       noteRefusal(videoId);
@@ -95,7 +136,7 @@ export function registerMediaRoutes(app: Hono): void {
      * format without trouble. So it fetches, and the file is served as it
      * arrives rather than when it is whole.
      */
-    const arriving = pendingFetch(videoId) ?? await startFetch(userId, videoId);
+    const arriving = pendingFetch(videoId) ?? startFetch(userId, videoId);
     if (arriving) {
       const served = await partialFileResponse(arriving, c.req.header("range"), c.req.raw.signal);
       if (served) return served;
