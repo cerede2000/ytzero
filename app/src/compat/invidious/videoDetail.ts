@@ -14,12 +14,17 @@ export interface DetailRow extends VideoRowLike {
 /**
  * How long a video's document may wait on subtitles nobody has resolved yet.
  *
- * The resolution is a yt-dlp run with no timeout of its own, and this request
- * is what the client shows a spinner for. Past the budget the answer goes out
- * without captions and the run finishes into the cache anyway, so the next
- * open of the same video has them.
+ * The resolution is a yt-dlp run of five to seven seconds with no timeout of
+ * its own, and until it returns the player has not been told where the video
+ * is — so it is not five seconds of subtitles, it is five seconds of black
+ * screen before anything can even be asked for.
+ *
+ * Past the budget the document goes out without them, and the run finishes
+ * into the cache regardless: reopening the video has them. A short wait rather
+ * than none because a video whose subtitles are already on disk answers
+ * instantly, and that is most of a library.
  */
-const CAPTION_BUDGET_MS = 8_000;
+const CAPTION_BUDGET_MS = 2_500;
 
 /**
  * Which subtitles this video can offer right now, and at what cost.

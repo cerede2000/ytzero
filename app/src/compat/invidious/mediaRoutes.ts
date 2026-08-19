@@ -52,6 +52,14 @@ export function recentlyRefused(videoId: string, now = Date.now()): boolean {
  */
 const directVerdicts = new Map<string, Promise<boolean>>();
 
+/**
+ * How long the direct path runs alone before the other way starts beside it.
+ *
+ * Long enough that an address which works answers first and costs nothing;
+ * short enough that a refused one is not what the viewer waits for.
+ */
+const DIRECT_GRACE_MS = 2_500;
+
 export async function directResponse(
   userId: number,
   videoId: string,
@@ -156,11 +164,22 @@ export function registerMediaRoutes(app: Hono): void {
      */
     const range = c.req.header("range");
     if (!recentlyRefused(videoId)) {
+      /*
+       * Both ways run, and the first to produce bytes wins.
+       *
+       * The fallback starts itself after a grace rather than joining one that
+       * happens to be under way already: a request arriving in the seconds
+       * before the fetch was registered found nothing to race against and
+       * waited out the direct verdict instead — an extraction, a ladder, a
+       * second extraction, a second ladder — with the file it needed already
+       * arriving beside it.
+       */
       const direct = directResponse(userId, videoId, range ?? "bytes=0-", c.req.raw.signal);
-      const arriving = pendingFetch(videoId);
-      const streamed = arriving
-        ? await firstServed([direct, partialFileResponse(arriving, range, c.req.raw.signal)])
-        : await direct;
+      const fallback = Bun.sleep(DIRECT_GRACE_MS).then(() => {
+        const entry = pendingFetch(videoId) ?? startFetch(userId, videoId);
+        return entry ? partialFileResponse(entry, range, c.req.raw.signal) : null;
+      });
+      const streamed = await firstServed([direct, fallback]);
       if (streamed) return streamed;
       if (c.req.raw.signal.aborted) return new Response(null, { status: 499 });
       noteRefusal(videoId);
