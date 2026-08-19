@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createRefusalQuiet } from "./youtubeRefusalQuiet";
+import { createRefusalQuiet, isYouTubeRefusal, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 
 const REFUSAL = new Error(
   "video info failed: html=videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you're not a bot); "
@@ -19,6 +19,27 @@ describe("video info refusal quiet", () => {
     expect(quiet.quiet()).toBe(true);
     clock.value += 100;
     expect(quiet.quiet()).toBe(false);
+  });
+
+  test("recognises the refusal in whichever language it arrives", () => {
+    /*
+     * Taken from a real pass. The message YouTube returns is translated —
+     * this one came back in French — and it is only recognised at all
+     * because LOGIN_REQUIRED travels beside it untranslated. Should that
+     * token ever go, the wording alone would not match and the whole
+     * arrangement would quietly stop noticing.
+     */
+    expect(isYouTubeRefusal(new Error(
+      "video info failed: html=videoDetails missing (LOGIN_REQUIRED: Connectez-vous pour confirmer "
+      + "que vous n'êtes pas un robot); innertube=HTTP error! status: 400; embed=videoDetails missing",
+    ))).toBe(true);
+    // The ones after it are not messages at all but the class itself, which is
+    // what carries the meaning: the same words in a plain Error mean nothing.
+    expect(isYouTubeRefusal(new YouTubeRefusingError())).toBe(true);
+    expect(isYouTubeRefusal(new Error("video info skipped: YouTube is refusing this address"))).toBe(false);
+    expect(isYouTubeRefusal(new Error(
+      "video info failed: html=videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you're not a bot)",
+    ))).toBe(true);
   });
 
   test("ignores failures that are about the video, not the caller", () => {
