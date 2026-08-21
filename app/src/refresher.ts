@@ -16,8 +16,8 @@ import { configuredTimeZone } from "./timeZone";
 import { manualScheduleIsDue, nextScheduleOccurrenceMs, parseManualRefreshSchedule } from "./channelRefreshSchedule";
 import { liveStatusChanged, resolveActiveLivestreams, type StoredLiveStatus } from "./liveStatus";
 import { channelSyncJobIsRunning } from "./channelSyncRuntime";
-import { isYouTubeRateLimitError, isYouTubeRefusalError } from "./youtubeRateLimit";
-import { RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
+import { isYouTubeRateLimitError } from "./youtubeRateLimit";
+import { CHANNEL_SYNC_VIDEO_UPSERT_SQL, RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
 import { syncChannelVideoAvailability } from "./videoAvailabilitySync";
 import { isYouTubeRefusal, videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 import { inferIsShortFromMetadata, shortCheckRetryInterval } from "./shortClassification";
@@ -409,7 +409,7 @@ export async function refreshChannel(channelId: string, userId?: number): Promis
   let added = 0; const discoveredVideoIds: string[] = [];
   for (const v of feed.videos) {
     const isNew = !await videoExists.get(v.videoId);
-    await upsertVideo.run(v.videoId, channelId, v.title, v.description, v.thumbnail, v.publishedAt, v.views, v.likes);
+    await upsertVideo.run(v.videoId, channelId, v.title, v.title, v.description, v.thumbnail, v.publishedAt, v.views, v.likes);
     if (isNew) {
       await applyAutoTags(v.videoId, v.title, v.description);
       await applyFilterRules(v.videoId, channelId, v.title, v.description);
@@ -822,30 +822,7 @@ async function runChannelSync(channelId: string, userId?: number): Promise<Chann
   const scrapedVideos = [...new Map([...scraped, ...streams].map((v) => [v.videoId, v])).values()];
 
   const feedMap = new Map(feed.videos.map((v) => [v.videoId, v]));
-  const insertOrUpdate = database.prepare(`
-    INSERT INTO videos (video_id, channel_id, title, description, thumbnail, published_at, published_at_approximate, members_only, views, likes, duration)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(video_id) DO UPDATE SET
-      title = excluded.title,
-      thumbnail = CASE WHEN TRIM(excluded.thumbnail) != '' THEN excluded.thumbnail ELSE videos.thumbnail END,
-      published_at = CASE
-        WHEN excluded.published_at IS NULL OR excluded.published_at = '' THEN videos.published_at
-        WHEN excluded.published_at_approximate = 0 THEN excluded.published_at
-        ELSE COALESCE(videos.published_at, excluded.published_at)
-      END,
-      published_at_approximate = CASE
-        WHEN excluded.published_at IS NULL OR excluded.published_at = '' THEN videos.published_at_approximate
-        WHEN excluded.published_at_approximate = 0 THEN 0
-        WHEN videos.published_at IS NULL OR videos.published_at = '' THEN 1
-        ELSE videos.published_at_approximate
-      END,
-      members_only = excluded.members_only,
-      views = COALESCE(excluded.views, videos.views),
-      duration = COALESCE(excluded.duration, videos.duration),
-      is_private = 0,
-      is_unavailable = 0,
-      availability_checked_at = datetime('now')
-  `);
+  const insertOrUpdate = database.prepare(CHANNEL_SYNC_VIDEO_UPSERT_SQL);
   const markArchivedStream = database.prepare(
     "UPDATE videos SET live_status = 'was_live' WHERE video_id = ? AND live_status = 'none'"
   );
@@ -865,7 +842,15 @@ async function runChannelSync(channelId: string, userId?: number): Promise<Chann
     const publishedAt = exactPublishedAt ?? v.publishedAt;
     await insertOrUpdate.run(
       v.videoId, channelId,
-      rss?.title ?? v.title,
+      /*
+       * The scraped title before the feed's, which is the whole point of
+       * asking YouTube in a language: the channel page hands back "Culture et
+       * transformation de champignons shiitakés séchés à Miyazaki !" where the
+       * feed hands back the uploader's Japanese, and the reader here reads
+       * French. The feed's is kept beside it, not thrown away.
+       */
+      v.title || rss?.title || "",
+      rss?.title ?? null,
       rss?.description ?? "",
       rss?.thumbnail ?? v.thumbnail,
       publishedAt,
@@ -880,8 +865,8 @@ async function runChannelSync(channelId: string, userId?: number): Promise<Chann
       else await markArchivedStream.run(v.videoId);
     }
     if (isNew) {
-      await applyAutoTags(v.videoId, rss?.title ?? v.title, rss?.description ?? "");
-      await applyFilterRules(v.videoId, channelId, rss?.title ?? v.title, rss?.description ?? "");
+      await applyAutoTags(v.videoId, v.title || rss?.title || "", rss?.description ?? "");
+      await applyFilterRules(v.videoId, channelId, v.title || rss?.title || "", rss?.description ?? "");
       await applyPlaylistRulesToVideo(v.videoId);
       await inheritChannelTags.run(v.videoId, channelId);
       added++; discoveredVideoIds.push(v.videoId);
@@ -895,7 +880,7 @@ async function runChannelSync(channelId: string, userId?: number): Promise<Chann
     seen.add(v.videoId);
     if (alreadySeen) continue;
     const isNew = !await videoExists.get(v.videoId);
-    await upsertVideo.run(v.videoId, channelId, v.title, v.description, v.thumbnail, v.publishedAt, v.views, v.likes);
+    await upsertVideo.run(v.videoId, channelId, v.title, v.title, v.description, v.thumbnail, v.publishedAt, v.views, v.likes);
     if (isNew) {
       await applyAutoTags(v.videoId, v.title, v.description);
       await applyFilterRules(v.videoId, channelId, v.title, v.description);

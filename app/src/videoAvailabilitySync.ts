@@ -42,6 +42,29 @@ export async function checkVideoAvailability(
   }
 }
 
+/**
+ * What this pass should write down, given the title oEmbed handed back.
+ *
+ * oEmbed never translates: it answers with what the uploader wrote. The row's
+ * `title` may not be that at all — a library kept in French lists a Japanese
+ * video under the French title YouTube shows a French reader — so the question
+ * "has this upload been renamed?" is asked of `title_original`, and of nothing
+ * else. Asked of `title`, the answer is yes for every translated video, every
+ * day, and the translation is written over within the hour.
+ *
+ * A row from before that column existed has nothing to compare against, so the
+ * uploader's title is written to both: it is the only title anybody has. That
+ * is bookkeeping rather than a rename, and `retitled` says so.
+ */
+export function titleUpdateFor(
+  row: { title: string; title_original?: string | null },
+  uploaded: string | null,
+): { write: string; retitled: boolean } | null {
+  if (!uploaded) return null;
+  if ((row.title_original ?? "") === uploaded) return null;
+  return { write: uploaded, retitled: row.title !== uploaded };
+}
+
 export interface ChannelAvailabilitySyncResult {
   checked: number;
   deleted: number;
@@ -62,12 +85,12 @@ export async function syncChannelVideoAvailability(
     ? ""
     : "AND (availability_checked_at IS NULL OR availability_checked_at <= datetime('now', '-1 day'))";
   const rows = await database.prepare(`
-    SELECT video_id FROM videos
+    SELECT video_id, title, title_original FROM videos
     WHERE channel_id = ? AND is_private = 0 AND is_unavailable = 0
       ${dueFilter}
     ORDER BY COALESCE(published_at, created_at) DESC, video_id DESC
     LIMIT ?
-  `).all(channelId, AVAILABILITY_CANDIDATE_SCAN) as { video_id: string }[];
+  `).all(channelId, AVAILABILITY_CANDIDATE_SCAN) as { video_id: string; title: string; title_original: string | null }[];
   const candidates = rows
     .filter((row) => !remotelySeenVideoIds.has(row.video_id))
     .slice(0, AVAILABILITY_CHECK_LIMIT);
@@ -88,20 +111,8 @@ export async function syncChannelVideoAvailability(
       finished_at = datetime('now')
     WHERE video_id = ? AND status != 'done'
   `);
-  /**
-   * The title this pass has already been told, written down.
-   *
-   * These are exactly the videos the channel scrape can no longer reach — the
-   * candidates are the rows YouTube did not list this time round — so whatever
-   * their title was when they were imported is what they keep for ever. Rows
-   * imported while every request went out in English kept an auto-translated
-   * title: "Rebuilding Your Wealth at 44: His Plan" for a French video on a
-   * French instance, 22 of them on one followed channel.
-   *
-   * oEmbed does not translate, and this pass already asks it. So the answer is
-   * kept rather than thrown away, and a retitled upload is picked up with it.
-   */
-  const rewriteTitle = database.prepare("UPDATE videos SET title = ? WHERE video_id = ? AND title != ?");
+  // Both columns at once: see titleUpdateFor for which is being answered.
+  const rememberTitle = database.prepare("UPDATE videos SET title = ?, title_original = ? WHERE video_id = ?");
   const result: ChannelAvailabilitySyncResult = {
     checked: 0, deleted: 0, private: 0, retitled: 0, failed: 0, rateLimited: false, skipped: 0,
   };
@@ -122,11 +133,12 @@ export async function syncChannelVideoAvailability(
         log.info("video.marked_private", { videoId: row.video_id, channelId, source: "channel_sync" });
       } else {
         await markChecked.run(row.video_id);
-        if (answer.title) {
-          const rewritten = await rewriteTitle.run(answer.title, row.video_id, answer.title);
-          if (Number((rewritten as { changes?: number } | undefined)?.changes ?? 0) > 0) {
+        const update = titleUpdateFor(row, answer.title);
+        if (update) {
+          await rememberTitle.run(update.write, update.write, row.video_id);
+          if (update.retitled) {
             result.retitled++;
-            log.info("video.title_corrected", { videoId: row.video_id, channelId, title: answer.title });
+            log.info("video.title_corrected", { videoId: row.video_id, channelId, title: update.write });
           }
         }
       }

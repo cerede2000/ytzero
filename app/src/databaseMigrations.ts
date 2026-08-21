@@ -385,6 +385,38 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
       { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_user_playlist_download_protections_video ON user_playlist_download_protections(video_id)" },
     ],
   },
+  {
+    version: 12,
+    name: "video-original-titles",
+    schemaHashes: {
+      "app/src/schema.sql": "7464674b4e1c8370f630374603552b9929cb2b09031353cf3da3b1cf02c4df8f",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+      "app/src/dailymotionSchema.sql": "6e43314a30a4f5038dfd3cc2f44df69dc48090be8c68be4315090846259cdc7a",
+      "app/src/invidiousSchema.sql": "4f77a9670470989f8822b8cc02cc36e073fa57edb20cd81804bf2af4ca3a415b",
+    },
+    /*
+     * One column, and it is never shown to anybody.
+     *
+     * `title` is what a reader here sees, and YouTube translates a title into
+     * whatever language the request asks for — so on a French instance a
+     * Japanese video can and should be listed under its French title. The
+     * trouble is that the sources which do not translate keep writing over it:
+     * the channel feed and oEmbed both hand back what the uploader wrote, and
+     * neither can tell "this upload was renamed" from "this title was
+     * translated here".
+     *
+     * Remembering the untranslated title answers that question without asking
+     * anybody anything: the feed's title against this one is a rename, and the
+     * feed's title against `title` is nothing at all.
+     */
+    sqlite: [
+      { kind: "add-column", table: "videos", column: "title_original", definition: "TEXT" },
+    ],
+    postgres: [
+      { kind: "add-column", table: "videos", column: "title_original", definition: "TEXT" },
+    ],
+  },
 ];
 
 function quoteIdentifier(identifier: string): string {
