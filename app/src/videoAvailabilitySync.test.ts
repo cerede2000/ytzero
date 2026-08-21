@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DeletedVideoError, PrivateVideoError, type VideoInfo } from "./youtube";
-import { checkVideoAvailability } from "./videoAvailabilitySync";
+import { checkVideoAvailability, titleUpdateFor } from "./videoAvailabilitySync";
 
 const info = { videoId: "video" } as VideoInfo;
 
@@ -62,5 +62,36 @@ describe("channel video availability checks", () => {
       videoInfo: async () => info,
     });
     expect(result).toEqual({ check: "available", title: null });
+  });
+});
+
+describe("what oEmbed's title is allowed to change", () => {
+  const translated = { title: "Culture de champignons shiitakés", title_original: "椎茸の生産から" };
+
+  /*
+   * The bug this exists to prevent: oEmbed answers with the uploader's
+   * Japanese title for a video this library lists in French, every pass,
+   * for ever. Compared against the title on display it looks like a rename
+   * every time, and the French title lasted about a day.
+   */
+  test("is nothing, when the uploader has not touched it", () => {
+    expect(titleUpdateFor(translated, "椎茸の生産から")).toBeNull();
+  });
+
+  test("is both titles, when the uploader really did rename the video", () => {
+    expect(titleUpdateFor(translated, "椎茸の生産から（改訂版）"))
+      .toEqual({ write: "椎茸の生産から（改訂版）", retitled: true });
+  });
+
+  // Rows written before the column existed have nothing to compare against.
+  test("is the uploader's title for a row that has never been told one", () => {
+    expect(titleUpdateFor({ title: "椎茸の生産から", title_original: null }, "椎茸の生産から"))
+      .toEqual({ write: "椎茸の生産から", retitled: false });
+    expect(titleUpdateFor({ title: "Stale English title", title_original: null }, "Titre français"))
+      .toEqual({ write: "Titre français", retitled: true });
+  });
+
+  test("is nothing when oEmbed carried no title at all", () => {
+    expect(titleUpdateFor(translated, null)).toBeNull();
   });
 });

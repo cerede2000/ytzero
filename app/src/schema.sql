@@ -12,7 +12,15 @@ CREATE TABLE IF NOT EXISTS channels (
 CREATE TABLE IF NOT EXISTS videos (
   video_id     TEXT PRIMARY KEY,
   channel_id   TEXT NOT NULL REFERENCES channels(channel_id) ON DELETE CASCADE,
+  -- What a reader here is shown, which is not always what the uploader wrote:
+  -- YouTube translates a title into the language it is asked in, and this
+  -- library is kept in one language. See title_original.
   title        TEXT NOT NULL DEFAULT '',
+  -- The title as the uploader wrote it, in whatever language that is. It is
+  -- not for showing: it is how a retitled upload is told apart from a title
+  -- this instance translated, which the sources that never translate — the
+  -- channel feed, oEmbed — cannot otherwise distinguish.
+  title_original TEXT,
   description  TEXT NOT NULL DEFAULT '',
   thumbnail    TEXT NOT NULL DEFAULT '',
   published_at TEXT,
