@@ -931,7 +931,10 @@ export const {
 
 export interface VideoInfo {
   videoId: string;
+  /** What a reader here should see: the translated title when there is one. */
   title: string;
+  /** What the uploader wrote, kept so a rename can be told from a translation. */
+  titleOriginal?: string;
   channelId: string;
   channelTitle: string;
   description: string;
@@ -1019,6 +1022,30 @@ export async function fetchVideoCreators(videoId: string, userId?: number): Prom
 const VIDEO_INFO_TTL = 10 * 60_000;
 const videoInfoCache = new AsyncTtlCache<VideoInfo>({ ttlMs: VIDEO_INFO_TTL });
 
+/**
+ * The title YouTube shows a reader in the language it was asked in.
+ *
+ * The player response carries what the uploader wrote and nothing else, so a
+ * Japanese video is a Japanese title there even when YouTube is showing every
+ * French viewer a French one. The translated title is on the page beside it,
+ * in the block the watch page draws its heading from — which is the title this
+ * library should keep, since it is the one the reader would have seen had they
+ * opened the video on YouTube.
+ *
+ * Nothing is invented: no translation, no answer.
+ */
+export function localisedTitleFromInitialData(initialData: any): string | null {
+  const contents = initialData?.contents?.twoColumnWatchNextResults?.results?.results?.contents;
+  if (!Array.isArray(contents)) return null;
+  for (const item of contents) {
+    const runs = item?.videoPrimaryInfoRenderer?.title?.runs;
+    if (!Array.isArray(runs)) continue;
+    const title = runs.map((run: any) => (typeof run?.text === "string" ? run.text : "")).join("").trim();
+    if (title) return title;
+  }
+  return null;
+}
+
 export function videoInfoFromPlayerResponse(videoId: string, pr: any): VideoInfo {
   const vd = pr?.videoDetails;
   if (!vd?.videoId) {
@@ -1058,6 +1085,7 @@ export function videoInfoFromPlayerResponse(videoId: string, pr: any): VideoInfo
   return {
     videoId: vd.videoId,
     title: decodeHtmlEntities(vd.title ?? ""),
+    titleOriginal: decodeHtmlEntities(vd.title ?? ""),
     channelId: vd.channelId ?? mf?.externalChannelId ?? "",
     channelTitle: decodeHtmlEntities(vd.author ?? mf?.ownerChannelName ?? ""),
     description: vd.shortDescription ?? "",
@@ -1108,6 +1136,10 @@ async function fetchVideoInfoAnonymously(videoId: string, userId?: number): Prom
     }
     const pr = extractVariable(html, "ytInitialPlayerResponse");
     result = videoInfoFromPlayerResponse(videoId, pr);
+    // Asked for in a language, so answered in it. The uploader's own title is
+    // kept beside it rather than replaced — see `title_original`.
+    const localised = localisedTitleFromInitialData(extractVariable(html, "ytInitialData"));
+    if (localised) result = { ...result, title: localised };
   } catch (htmlError) {
     // Once the gate is active, do not spend two more anonymous requests. The
     // first refusal in a cycle is different: preserve the normal three-source

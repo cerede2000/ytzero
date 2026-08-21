@@ -13,6 +13,7 @@ export async function persistDirectVideoInfo(info: VideoInfo, isShort: boolean |
     info.videoId,
     info.channelId,
     info.title,
+    info.titleOriginal ?? info.title,
     info.description,
     info.thumbnail,
     info.publishedAt,

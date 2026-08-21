@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { DIRECT_VIDEO_INFO_UPSERT_SQL, RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
+import { CHANNEL_SYNC_VIDEO_UPSERT_SQL, DIRECT_VIDEO_INFO_UPSERT_SQL, RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
 
 describe("RSS video upsert", () => {
   test("clears a stale members-only flag when an upload becomes public", () => {
@@ -10,6 +10,7 @@ describe("RSS video upsert", () => {
         video_id TEXT PRIMARY KEY,
         channel_id TEXT,
         title TEXT,
+        title_original TEXT,
         description TEXT,
         thumbnail TEXT,
         published_at TEXT,
@@ -31,6 +32,7 @@ describe("RSS video upsert", () => {
       "unlock-me",
       "channel",
       "Public release",
+      "Public release",
       "Now available to everyone",
       "thumbnail.jpg",
       "2026-08-07T12:00:00Z",
@@ -51,6 +53,7 @@ describe("direct video info upsert", () => {
         video_id TEXT PRIMARY KEY,
         channel_id TEXT,
         title TEXT,
+        title_original TEXT,
         description TEXT,
         thumbnail TEXT,
         published_at TEXT,
@@ -75,6 +78,7 @@ describe("direct video info upsert", () => {
     db.query(DIRECT_VIDEO_INFO_UPSERT_SQL).run(
       "live-radio",
       "channel",
+      "Live radio",
       "Live radio",
       "Broadcasting now",
       "live.jpg",
@@ -108,6 +112,7 @@ describe("direct video info upsert", () => {
         video_id TEXT PRIMARY KEY,
         channel_id TEXT,
         title TEXT,
+        title_original TEXT,
         description TEXT,
         thumbnail TEXT,
         published_at TEXT,
@@ -126,11 +131,119 @@ describe("direct video info upsert", () => {
     `);
 
     db.query(DIRECT_VIDEO_INFO_UPSERT_SQL).run(
-      "live-radio", "channel", "Live radio", "", "live.jpg", null, "live", 123, null,
+      "live-radio", "channel", "Live radio", "Live radio", "", "live.jpg", null, "live", 123, null,
       null, null
     );
 
     expect(db.query("SELECT live_status, external FROM videos WHERE video_id = 'live-radio'").get())
       .toEqual({ live_status: "live", external: 1 });
+  });
+});
+
+describe("a title this instance is showing in its own language", () => {
+  const library = () => {
+    const db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE videos (
+        video_id TEXT PRIMARY KEY,
+        channel_id TEXT,
+        title TEXT,
+        title_original TEXT,
+        description TEXT,
+        thumbnail TEXT,
+        published_at TEXT,
+        published_at_approximate INTEGER NOT NULL DEFAULT 0,
+        views INTEGER,
+        likes INTEGER,
+        members_only INTEGER NOT NULL DEFAULT 0,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        is_unavailable INTEGER NOT NULL DEFAULT 0,
+        availability_checked_at TEXT
+      );
+      INSERT INTO videos (video_id, channel_id, title, title_original)
+      VALUES ('shiitake', 'channel', 'Culture de champignons shiitakés', '椎茸の生産から');
+    `);
+    return db;
+  };
+  const feed = (db: Database, uploaderTitle: string) => db.query(RSS_VIDEO_UPSERT_SQL).run(
+    "shiitake", "channel", uploaderTitle, uploaderTitle, "", "", "", null, null,
+  );
+  const titleOf = (db: Database) =>
+    (db.query("SELECT title FROM videos WHERE video_id = 'shiitake'").get() as { title: string }).title;
+
+  /*
+   * The channel feed never translates. Left to write the title every time it
+   * ran, it put the Japanese one back within ten minutes of the video being
+   * listed in French — which is what this looked like from the sofa.
+   */
+  test("survives the feed saying what it said last time", () => {
+    const db = library();
+    feed(db, "椎茸の生産から");
+    expect(titleOf(db)).toBe("Culture de champignons shiitakés");
+  });
+
+  test("gives way when the uploader actually renames the video", () => {
+    const db = library();
+    feed(db, "椎茸の生産から（改訂版）");
+    expect(titleOf(db)).toBe("椎茸の生産から（改訂版）");
+  });
+
+  // Every row predates the column. Until something reads the watch page for
+  // one, the feed is the only title there is, and it says so.
+  test("is written for a row nothing has looked at yet", () => {
+    const db = library();
+    db.exec("UPDATE videos SET title_original = NULL");
+    feed(db, "椎茸の生産から");
+    expect(titleOf(db)).toBe("椎茸の生産から");
+  });
+});
+
+describe("a channel sync, which sees both titles at once", () => {
+  const library = (seed?: string) => {
+    const db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE videos (
+        video_id TEXT PRIMARY KEY,
+        channel_id TEXT,
+        title TEXT,
+        title_original TEXT,
+        description TEXT,
+        thumbnail TEXT,
+        published_at TEXT,
+        published_at_approximate INTEGER NOT NULL DEFAULT 0,
+        members_only INTEGER NOT NULL DEFAULT 0,
+        views INTEGER,
+        likes INTEGER,
+        duration TEXT,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        is_unavailable INTEGER NOT NULL DEFAULT 0,
+        availability_checked_at TEXT
+      );
+    `);
+    if (seed) db.exec(seed);
+    return db;
+  };
+  const sync = (db: Database, shown: string, uploader: string | null) =>
+    db.query(CHANNEL_SYNC_VIDEO_UPSERT_SQL).run(
+      "shiitake", "channel", shown, uploader, "", "", "", 1, 0, null, null, null,
+    );
+  const row = (db: Database) =>
+    db.query("SELECT title, title_original FROM videos WHERE video_id = 'shiitake'").get();
+
+  /*
+   * The page is read in the library's language and answers in it — this is the
+   * title YouTube itself shows a French reader. The feed's Japanese one is
+   * kept beside it rather than shown, and rather than thrown away.
+   */
+  test("shows the page's title and remembers the feed's", () => {
+    const db = library();
+    sync(db, "Culture de champignons shiitakés", "椎茸の生産から");
+    expect(row(db)).toEqual({ title: "Culture de champignons shiitakés", title_original: "椎茸の生産から" });
+  });
+
+  test("keeps what the uploader wrote when this pass was not told it", () => {
+    const db = library("INSERT INTO videos (video_id, channel_id, title, title_original) VALUES ('shiitake', 'channel', 'x', '椎茸の生産から')");
+    sync(db, "Culture de champignons shiitakés", null);
+    expect(row(db)).toEqual({ title: "Culture de champignons shiitakés", title_original: "椎茸の生産から" });
   });
 });
