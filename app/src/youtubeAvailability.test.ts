@@ -96,3 +96,32 @@ describe("the title oEmbed answers with", () => {
     expect(fetchVideoOEmbed("video", answering(null, 429))).rejects.toThrow("429");
   });
 });
+
+describe("a private video, whatever language the page answered in", () => {
+  /*
+   * The failure this prevents: unrecognised, a private video is not filed as
+   * private — it is returned as a failure to read a video, which is what the
+   * refusal quiet counts. Three of those and the instance stops looking up any
+   * video at all, so every video a reader opens reports that YouTube did not
+   * answer while nothing at all is wrong with the library.
+   */
+  test("is recognised in the four languages the pages are asked for", () => {
+    expect(isPrivateVideoError(new Error("Private video"))).toBe(true);
+    expect(isPrivateVideoError(new Error("Vidéo privée"))).toBe(true);
+    expect(isPrivateVideoError(new Error("Privates Video"))).toBe(true);
+    expect(isPrivateVideoError(new Error("Film prywatny"))).toBe(true);
+  });
+
+  // Exactly as it arrives from the watch page, which is where this failed.
+  test("is recognised inside the sentence the player response builds", () => {
+    expect(isPrivateVideoError(new Error("videoDetails missing (LOGIN_REQUIRED: Vidéo privée)"))).toBe(true);
+    expect(isPrivateVideoError(new Error(
+      "video info failed: html=videoDetails missing (LOGIN_REQUIRED: Vidéo privée); innertube=HTTP error! status: 400",
+    ))).toBe(true);
+  });
+
+  test("is not read into a video that is merely gone", () => {
+    expect(isPrivateVideoError(new Error("Vidéo non disponible"))).toBe(false);
+    expect(isPrivateVideoError(new Error("Sign in to confirm you're not a bot"))).toBe(false);
+  });
+});
