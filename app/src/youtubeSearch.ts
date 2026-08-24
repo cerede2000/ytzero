@@ -3,6 +3,7 @@ import { log } from "./logger";
 import { readYouTubeResponse } from "./youtubeRateLimit";
 import { sapisidFrom, sapisidHash } from "./youtubeInnerTube";
 import type { ChannelSearchResult, PublishedAgo, SearchResult } from "./youtube";
+import { readCount } from "./countText";
 import { parseCompactCount, type PanelLanguage } from "./relatedVideoText";
 
 interface YoutubeSearchDependencies {
@@ -18,38 +19,14 @@ interface YoutubeSearchDependencies {
 }
 
 /**
- * Parse an abbreviated or full view/subscriber count returned by YouTube.
- * Handles locale-specific formats: "4.7M", "4,7 M" (fr/de comma-as-decimal),
- * "4.700.000" (European dot-as-thousands), "4,700,000" (US comma-as-thousands),
- * and word suffixes "mln", "tys.", "Mio.", "Mrd.".
+ * Parse a view or subscriber count returned by YouTube.
+ *
+ * The reading itself is in `countText`, which knows every magnitude the four
+ * languages write and every way they group thousands. This name stays because
+ * it is what the rest of the file and its tests call.
  */
 export function parseAbbreviatedCount(text: string): number | null {
-  // Abbreviated: number with optional decimal part followed by a letter/word suffix.
-  // Accepts both comma ("4,7 M") and dot ("4.7M") as the decimal separator.
-  const abbr = text.match(/([\d]+(?:[.,][\d]+)?)\s*([KkMmBb]|mln\.?|tys\.?|Mio\.?|Mrd\.?)\b/);
-  if (abbr) {
-    const value = parseFloat(abbr[1].replace(",", "."));
-    if (!Number.isFinite(value)) return null;
-    const suffix = abbr[2].toLowerCase().replace(/\.$/, "");
-    const multiplierMap: Record<string, number> = {
-      k: 1e3, m: 1e6, b: 1e9,
-      mln: 1e6, tys: 1e3, mio: 1e6, mrd: 1e9,
-    };
-    const total = Math.round(value * (multiplierMap[suffix] ?? 1));
-    return total > 0 ? total : null;
-  }
-
-  // Full number with thousands separators: "4,700,000" or "4.700.000" or "12345".
-  const full = text.match(/\d[\d,.]*\d|\d/)?.[0];
-  if (!full) return null;
-  // European style "4.700.000" — groups of exactly three digits separated by dots.
-  if (/^\d{1,3}(?:\.\d{3})+$/.test(full)) {
-    const v = parseInt(full.replace(/\./g, ""), 10);
-    return v > 0 ? v : null;
-  }
-  // Standard style — strip commas/spaces used as thousands separators.
-  const v = parseInt(full.replace(/[, ]/g, ""), 10);
-  return Number.isFinite(v) && v > 0 ? v : null;
+  return readCount(text);
 }
 
 /**
