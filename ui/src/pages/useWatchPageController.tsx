@@ -1155,8 +1155,10 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     }
 
     // Decision/waiting/blocked panels have no player to drive. Audio mode swaps
-    // the iframe for the standalone <audio> proxy, so skip creating it entirely.
-    if (playerKind !== "youtube") return;
+    // the iframe for the standalone <audio> proxy, so skip creating it entirely
+    // — and a page that has given up on the video swaps it for a notice, which
+    // is the case the embed used to outlive. See shouldDriveYouTubePlayer.
+    if (!shouldDriveYouTubePlayer({ playerKind, membersOnlyNotice, videoUnavailable })) return;
 
     const wrap = ytWrapRef.current;
     if (!wrap) return;
@@ -1260,7 +1262,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       }
       while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
     };
-  }, [playerTargetId, membersOnlyNotice, playerKind, audioActive, requestYouTubePlayback, captionsDefaultOn, captionsDefaultLang, channelCaptionsOff, sharedStartSeconds]);
+  }, [playerTargetId, membersOnlyNotice, videoUnavailable, playerKind, audioActive, requestYouTubePlayback, captionsDefaultOn, captionsDefaultLang, channelCaptionsOff, sharedStartSeconds]);
 
   useYouTubeMediaSession({ audioActive, playerKind, playerRef, video, watchTogetherTransportLocked, onNext: canPlayNextVideo ? playNextVideo : undefined, onPrevious: canPlayPreviousVideo ? playPreviousVideo : undefined });
 
