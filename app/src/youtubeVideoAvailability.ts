@@ -16,9 +16,34 @@ export class DeletedVideoError extends Error {
   }
 }
 
+/**
+ * "This video is private", in the languages the pages are asked for.
+ *
+ * The same trap as the deleted wordings below, and the one that was left in
+ * it. A private video answers `LOGIN_REQUIRED: Vidéo privée` on an instance
+ * whose requests go out in French, which this did not recognise — so it was
+ * not filed as private but returned as a failure, and a failure to read a
+ * video is what the refusal quiet counts. Three of them and the instance
+ * stopped looking up any video at all: every video a reader opened said
+ * YouTube had not answered, on a library where nothing was wrong.
+ *
+ * Measured on the same private video, one request per language:
+ *
+ *     en  Private video
+ *     fr  Vidéo privée
+ *     de  Privates Video
+ *     pl  Film prywatny
+ */
+const PRIVATE_WORDINGS = [
+  /\bprivate video\b/i,
+  /vid(?:é|e)o priv(?:é|e)e/i,
+  /privates video/i,
+  /film prywatny/i,
+];
+
 export function isPrivateVideoError(error: unknown): boolean {
-  return error instanceof PrivateVideoError
-    || (error instanceof Error && /\bprivate video\b/i.test(error.message));
+  if (error instanceof PrivateVideoError) return true;
+  return error instanceof Error && PRIVATE_WORDINGS.some((wording) => wording.test(error.message));
 }
 
 /**
