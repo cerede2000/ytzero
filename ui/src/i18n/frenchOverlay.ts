@@ -21,6 +21,7 @@
 const FRENCH: Record<string, string> = {
   // ---------- downloads: automation rules ----------
   "at least ": "au moins ",
+  "Video bookmarks and notes": "Signets et notes de vidéos",
   "New download rule": "Nouvelle règle de téléchargement",
   "Loading automation": "Chargement de l'automatisation",
   "Create automation": "Créer une automatisation",
