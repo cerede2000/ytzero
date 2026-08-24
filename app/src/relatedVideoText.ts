@@ -1,3 +1,4 @@
+import { readCount } from "./countText";
 import type { PublishedAgo } from "./youtube";
 
 /**
@@ -41,10 +42,6 @@ interface Grammar {
   /** Captures the number and the unit token, in that order. */
   ago: RegExp;
   units: Record<string, PublishedAgo["unit"]>;
-  /** Longest suffix first, so "mo" is read before "m". */
-  magnitudes: Array<[string, number]>;
-  /** Whether a comma separates the decimals rather than the thousands. */
-  decimalComma: boolean;
 }
 
 const GRAMMARS: Record<PanelLanguage, Grammar> = {
@@ -61,8 +58,6 @@ const GRAMMARS: Record<PanelLanguage, Grammar> = {
       mo: "month", month: "month", months: "month",
       y: "year", year: "year", years: "year",
     },
-    magnitudes: [["b", 1e9], ["m", 1e6], ["k", 1e3]],
-    decimalComma: false,
   },
   /*
    * Each language carries both the short forms the suggestion panel writes and
@@ -85,8 +80,6 @@ const GRAMMARS: Record<PanelLanguage, Grammar> = {
       mois: "month",
       an: "year", ans: "year",
     },
-    magnitudes: [["md", 1e9], ["mrd", 1e9], ["m", 1e6], ["k", 1e3]],
-    decimalComma: true,
   },
   de: {
     views: /\s*Aufrufe?$/i,
@@ -100,8 +93,6 @@ const GRAMMARS: Record<PanelLanguage, Grammar> = {
       mon: "month", monat: "month", monaten: "month",
       j: "year", jahr: "year", jahre: "year", jahren: "year",
     },
-    magnitudes: [["mrd", 1e9], ["mio", 1e6], ["tsd", 1e3]],
-    decimalComma: true,
   },
   pl: {
     views: /\s*wyświetle(?:ń|nia|nie)$/i,
@@ -115,8 +106,6 @@ const GRAMMARS: Record<PanelLanguage, Grammar> = {
       mies: "month", "miesiąc": "month", "miesiące": "month", "miesięcy": "month",
       rok: "year", lata: "year", lat: "year",
     },
-    magnitudes: [["mld", 1e9], ["mln", 1e6], ["tys", 1e3]],
-    decimalComma: true,
   },
 };
 
@@ -159,22 +148,12 @@ export function parsePublishedTextAnyLanguage(text: string | undefined): Publish
 
 export function parseCompactCount(text: string | undefined, language: PanelLanguage = "en"): number | null {
   const grammar = GRAMMARS[language];
-  const trimmed = text?.trim().replace(grammar.views, "").replace(SPACES, "");
+  const trimmed = text?.trim().replace(grammar.views, "");
   if (!trimmed) return null;
-  const match = trimmed.match(/^([\d.,]+)([\p{L}]*)\.?$/u);
-  if (!match) return null;
-  const suffix = match[2].toLowerCase().replace(/\.$/, "");
-  const multiplier = suffix === ""
-    ? 1
-    : grammar.magnitudes.find(([name]) => name === suffix)?.[1];
-  if (multiplier === undefined) return null;
-  // "1,6" is one and six tenths in French and one thousand six hundred in
-  // English; the same two characters, opposite meanings.
-  const digits = grammar.decimalComma ? match[1].replace(/\./g, "").replace(",", ".") : match[1].replace(/,/g, "");
-  const value = parseFloat(digits);
-  if (!Number.isFinite(value)) return null;
-  const total = Math.round(value * multiplier);
-  return total > 0 ? total : null;
+  // `bare`, because this is also the test for whether a metadata part is the
+  // count at all: the date sits in the same list, and a date is a number with
+  // a word after it too.
+  return readCount(trimmed, { bare: true });
 }
 
 export function looksLikeCount(text: string, language: PanelLanguage): boolean {
