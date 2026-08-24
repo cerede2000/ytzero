@@ -71,8 +71,11 @@ const FRENCH: Record<string, string> = {
   "How long a watched file sticks around before removal.": "Combien de temps un fichier déjà vu est conservé avant suppression.",
   "Protect liked videos": "Protéger les vidéos aimées",
   "Liked videos are never auto-removed by retention or the storage cap.": "Les vidéos aimées ne sont jamais supprimées automatiquement par la rétention ou le plafond de stockage.",
-  "Storage cap (GB)": "Plafond de stockage (Go)",
-  "Above this the oldest unprotected downloads are removed first.": "Au-delà, les téléchargements non protégés les plus anciens sont supprimés en premier.",
+  "Storage cap": "Plafond de stockage",
+  "Keep downloads": "Conserver les téléchargements",
+  "Disables removal based on file age and watched status for this profile. The shared storage cap can still remove unprotected downloads.":
+    "Désactive la suppression selon l'âge du fichier et l'état de lecture pour ce profil. Le plafond de stockage partagé peut encore supprimer les téléchargements non protégés.",
+  "Above this the oldest unprotected downloads are removed first. Maximum: 128 TB.": "Au-delà, les téléchargements non protégés les plus anciens sont supprimés en premier. Maximum : 128 To.",
   "Stream while downloading (experimental)": "Lire pendant le téléchargement (expérimental)",
   "HIGHLY EXPERIMENTAL. Plays a not-yet-downloaded video through direct HLS while the normal download continues in the background. Seeking is immediately available across the whole video. Sources without compatible MP4 indexes fall back to on-demand ffmpeg processing. The completed download becomes available as a local file. H.264 only, so quality is capped at ~1080p.": "TRÈS EXPÉRIMENTAL. Lit une vidéo pas encore téléchargée en HLS direct pendant que le téléchargement normal se poursuit en arrière-plan. Le déplacement dans la vidéo est immédiatement possible sur toute sa durée. Les sources sans index MP4 compatible passent par un traitement ffmpeg à la demande. Une fois terminé, le téléchargement devient un fichier local. H.264 uniquement, donc la qualité plafonne autour de 1080p.",};
 
