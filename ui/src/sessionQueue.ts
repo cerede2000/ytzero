@@ -19,7 +19,7 @@ export interface SessionQueueEntry {
   duration: string | null;
 }
 
-export const SESSION_QUEUE_KEY = "ytzero.play-queue";
+const SESSION_QUEUE_KEY = "ytzero.play-queue";
 const CHANGE_EVENT = "session-queue";
 /** Enough for an evening; a bound is what keeps a runaway list out of storage. */
 export const SESSION_QUEUE_LIMIT = 200;
@@ -159,7 +159,7 @@ export function clearSessionQueue() {
   write([]);
 }
 
-export function isInSessionQueue(videoId: string): boolean {
+function isInSessionQueue(videoId: string): boolean {
   return readSessionQueue().some((entry) => entry.videoId === videoId);
 }
 

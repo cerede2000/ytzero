@@ -20,7 +20,7 @@ import { fetchVideoInfoViaYtdlp } from "./videoInfoViaYtdlp";
  * is only ever a fallback — the anonymous request is still what is tried first,
  * and a profile that wants no part of it simply has no jar.
  */
-export async function metadataCredentialProfile(): Promise<number | null> {
+async function metadataCredentialProfile(): Promise<number | null> {
   const users = await database.prepare("SELECT id FROM users ORDER BY id ASC").all() as { id: number }[];
   return users.find((user) => downloadCookiesConfigured(user.id))?.id ?? null;
 }

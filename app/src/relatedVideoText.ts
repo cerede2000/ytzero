@@ -17,7 +17,7 @@ import type { PublishedAgo } from "./youtube";
  * grammar that does not know the language does not merely lose the age, it
  * starts reading the age as the channel's name.
  */
-export const PANEL_LANGUAGES = ["en", "fr", "de", "pl"] as const;
+const PANEL_LANGUAGES = ["en", "fr", "de", "pl"] as const;
 export type PanelLanguage = (typeof PANEL_LANGUAGES)[number];
 
 export function panelLanguage(value: string | null | undefined): PanelLanguage {

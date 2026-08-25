@@ -95,7 +95,7 @@ const REAL_SUBTAG = /^([A-Za-z]{2}|[A-Za-z]{4}|\d{3})$/;
  * machine's name for it sat below, and worked. A genuine regional code
  * (`pt-BR`, `zh-Hans`) is a language of its own and is left alone.
  */
-export function askedLanguage(lang: string): string {
+function askedLanguage(lang: string): string {
   const [base, ...rest] = lang.split("-");
   if (!base || rest.length === 0) return lang;
   return rest.every((subtag) => REAL_SUBTAG.test(subtag)) ? lang : base;
@@ -173,7 +173,7 @@ export function subtitleLanguages(tracks: readonly SubtitleTrack[]): string[] {
   return [...new Set(tracks.map((track) => track.lang))];
 }
 
-export function createSubtitleTracks({
+function createSubtitleTracks({
   spawn = Bun.spawn,
   now = Date.now,
 }: { spawn?: typeof Bun.spawn; now?: () => number } = {}) {

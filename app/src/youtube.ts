@@ -1132,11 +1132,28 @@ export async function fetchVideoInfo(videoId: string, options: { force?: boolean
     const localised = localisedTitleFromInitialData(extractVariable(html, "ytInitialData"));
     if (localised) result = { ...result, title: localised };
   } catch (htmlError) {
-    if (isYouTubeRefusalError(htmlError)) throw youtubeRefusalGate.refused(htmlError);
+    /*
+     * Two things have to hear about a refusal, and only one of them is here.
+     *
+     * The gate backs this lookup off and lets one probe through later. The
+     * quiet is what the rest of the server reads — the cookie order, the
+     * subtitle fetch, the audio resolver, the refresher — to stop offering an
+     * anonymous attempt to an address that is turning callers away. Short
+     * -circuiting to the gate alone left the second one never armed, because
+     * the only place that arms it is the failure at the bottom of this ladder,
+     * and a refusal never reaches it.
+     */
+    if (isYouTubeRefusalError(htmlError)) {
+      videoInfoRefusalQuiet.note(htmlError);
+      throw youtubeRefusalGate.refused(htmlError);
+    }
     try {
       result = await fetchVideoInfoFromInnerTube(videoId);
     } catch (innerTubeError) {
-      if (isYouTubeRefusalError(innerTubeError)) throw youtubeRefusalGate.refused(innerTubeError);
+      if (isYouTubeRefusalError(innerTubeError)) {
+        videoInfoRefusalQuiet.note(innerTubeError);
+        throw youtubeRefusalGate.refused(innerTubeError);
+      }
       try {
         result = await fetchVideoInfoFromEmbed(videoId, options.userId);
       } catch (embedError) {
