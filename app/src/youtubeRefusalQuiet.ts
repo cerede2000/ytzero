@@ -1,4 +1,5 @@
 import { callerWasRefused } from "./cookieAttemptOrder";
+import { isYouTubeRefusalError, youtubeRefusalGate } from "./youtubeRateLimit";
 import { log } from "./logger";
 
 /**
@@ -40,83 +41,34 @@ export interface RefusalQuiet {
   clear(): void;
 }
 
-export function createRefusalQuiet({
-  now = Date.now,
-  quietMs = QUIET_MS,
-  maxQuietMs = MAX_QUIET_MS,
-  onChange = () => {},
-}: {
-  now?: () => number;
-  quietMs?: number;
-  maxQuietMs?: number;
-  /** Called only when the answer changes, so a log says it once. */
-  onChange?: (refusing: boolean) => void;
-} = {}): RefusalQuiet {
-  let refusedAt = 0;
-  let refusals = 0;
-  /** When one attempt was last let through to see whether the spell has lifted. */
-  let probedAt = 0;
-  /** Doubling per consecutive refusal: 90s, 3m, 6m, 12m, 24m, then capped. */
-  const window = () => Math.min(quietMs * 2 ** Math.max(0, refusals - 1), maxQuietMs);
-  /*
-   * Quiet, but never sealed.
-   *
-   * This used to hold until its window elapsed, and the window only ever grew:
-   * ninety seconds, then three minutes, six, twelve, twenty-four, thirty. It
-   * lifted early on a success — which could not happen, because while it held
-   * nothing was attempted, so nothing could succeed. A refusal lasting seconds
-   * therefore cost the best part of an hour, and there was no way out but to
-   * wait.
-   *
-   * So one attempt is let through every base interval. An address that has
-   * recovered is noticed within ninety seconds instead of at the end of a
-   * window that keeps doubling, and the cost is one lookup a minute and a half
-   * rather than every lookup asked for.
-   */
-  const quiet = () => {
-    if (refusedAt === 0 || now() - refusedAt >= window()) return false;
-    if (now() - probedAt >= quietMs) {
-      probedAt = now();
-      return false;
-    }
-    return true;
-  };
-  return {
-    quiet,
-    note(error: unknown): void {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!callerWasRefused(message)) return;
-      const was = refusedAt > 0 && now() - refusedAt < window();
-      refusals++;
-      // Below the threshold nothing is held: the refusal is remembered so a
-      // second one counts, and that is all.
-      if (refusals < REFUSALS_BEFORE_QUIET) return;
-      refusedAt = now();
-      // The next probe is due an interval from here, not immediately: arming
-      // and then letting the very next question through would hold nothing.
-      probedAt = refusedAt;
-      if (!was) onChange(true);
-    },
-    clear(): void {
-      const was = refusedAt > 0 && now() - refusedAt < window();
-      refusedAt = 0;
-      refusals = 0;
-      probedAt = 0;
-      if (was) onChange(false);
-    },
-  };
-}
-
 /**
- * Shared: the refusal is of the whole address, so it is not per video — and
- * saying so once is the whole point. Reporting every skipped lookup instead
- * turns one piece of news into a page of it.
+ * Whether YouTube is turning this address away, and the way to say that it is.
+ *
+ * The books are upstream's: `youtubeRefusalGate` counts the consecutive
+ * refusals, sets the delay, and lets one probe through when it has elapsed.
+ * This is the reading of them — because the gate is consulted by the one
+ * function that does the lookups, while the answer is needed by everything
+ * that decides *how* to ask: the cookie order, the subtitle fetch, the audio
+ * resolver, the refresher, the metadata backfill.
+ *
+ * Two machines used to keep those books separately, each with its own counter,
+ * its own backoff and its own log line for the same event.
  */
-export const videoInfoRefusalQuiet = createRefusalQuiet({
-  onChange: (refusing) => log.info(refusing ? "youtube.address_refused" : "youtube.address_accepted", {
-    detail: refusing ? "video lookups are being skipped for now" : "video lookups have resumed",
-  }),
-});
+export const videoInfoRefusalQuiet = {
+  /** True while the gate is holding this address off. */
+  quiet(): boolean {
+    return youtubeRefusalGate.nextRetryAt() > Date.now();
+  },
+  /** Report a failure; it counts only if it reads as a refusal of the caller. */
+  note(error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    if (callerWasRefused(message) || isYouTubeRefusalError(error)) youtubeRefusalGate.refused(error);
+  },
+  /** An answer got through: the address is talking to us again. */
+  clear(): void {
+    youtubeRefusalGate.answered();
+  },
+};
 
 /** Thrown instead of asking again while the refusal stands. */
 export class YouTubeRefusingError extends Error {
@@ -138,5 +90,8 @@ export class YouTubeRefusingError extends Error {
  */
 export function isYouTubeRefusal(error: unknown): boolean {
   if (error instanceof YouTubeRefusingError) return true;
+  // The gate throws its own when it is holding, and a caller that recognised
+  // only ours took the wrong branch every time the gate spoke first.
+  if (isYouTubeRefusalError(error)) return true;
   return callerWasRefused(error instanceof Error ? error.message : String(error));
 }
