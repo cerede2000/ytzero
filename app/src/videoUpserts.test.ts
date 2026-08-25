@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { CHANNEL_SYNC_VIDEO_UPSERT_SQL, DIRECT_VIDEO_INFO_UPSERT_SQL, RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
+import { CHANNEL_SYNC_VIDEO_UPSERT_SQL, DIRECT_VIDEO_INFO_UPSERT_SQL, localisedTitleUpdates, RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
 
 describe("RSS video upsert", () => {
   test("clears a stale members-only flag when an upload becomes public", () => {
@@ -245,5 +245,42 @@ describe("a channel sync, which sees both titles at once", () => {
     const db = library("INSERT INTO videos (video_id, channel_id, title, title_original) VALUES ('shiitake', 'channel', 'x', '椎茸の生産から')");
     sync(db, "Culture de champignons shiitakés", null);
     expect(row(db)).toEqual({ title: "Culture de champignons shiitakés", title_original: "椎茸の生産から" });
+  });
+});
+
+describe("the titles a channel page can correct", () => {
+  const page = [
+    { videoId: "shiitake", title: "Culture de champignons shiitakés" },
+    { videoId: "onduleur", title: "Fabrication d'énormes onduleurs" },
+  ];
+
+  /*
+   * The case that started this: a video published six hours ago, listed under
+   * the Japanese title the feed handed back, on a library kept in French —
+   * while the channel page had the French one all along.
+   */
+  test("are the ones the page spells differently", () => {
+    expect(localisedTitleUpdates(page, [
+      { video_id: "shiitake", title: "椎茸の生産から" },
+      { video_id: "onduleur", title: "Fabrication d'énormes onduleurs" },
+    ])).toEqual([{ videoId: "shiitake", title: "Culture de champignons shiitakés" }]);
+  });
+
+  test("are none when the row already says what the page says", () => {
+    expect(localisedTitleUpdates(page, [
+      { video_id: "shiitake", title: "Culture de champignons shiitakés" },
+      { video_id: "onduleur", title: "Fabrication d'énormes onduleurs" },
+    ])).toEqual([]);
+  });
+
+  // The page lists the most recent thirty; saying nothing about the rest is
+  // not an opinion about them.
+  test("never mention a video the page did not list", () => {
+    expect(localisedTitleUpdates(page, [{ video_id: "ancienne", title: "古い動画" }])).toEqual([]);
+  });
+
+  test("ignore an entry the page left without a title", () => {
+    expect(localisedTitleUpdates([{ videoId: "shiitake", title: "" }], [{ video_id: "shiitake", title: "椎茸の生産から" }]))
+      .toEqual([]);
   });
 });

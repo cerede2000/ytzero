@@ -17,7 +17,7 @@ import { manualScheduleIsDue, nextScheduleOccurrenceMs, parseManualRefreshSchedu
 import { liveStatusChanged, resolveActiveLivestreams, type StoredLiveStatus } from "./liveStatus";
 import { channelSyncJobIsRunning } from "./channelSyncRuntime";
 import { isYouTubeRateLimitError } from "./youtubeRateLimit";
-import { CHANNEL_SYNC_VIDEO_UPSERT_SQL, RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
+import { CHANNEL_SYNC_VIDEO_UPSERT_SQL, localisedTitleUpdates, RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
 import { syncChannelVideoAvailability } from "./videoAvailabilitySync";
 import { isYouTubeRefusal, videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 import { inferIsShortFromMetadata, shortCheckRetryInterval } from "./shortClassification";
@@ -419,6 +419,35 @@ export async function refreshChannel(channelId: string, userId?: number): Promis
       log.info("video.added", { source: "rss", channelId, videoId: v.videoId, title: v.title, publishedAt: v.publishedAt });
     }
   }
+  /*
+   * A video that has just arrived is listed under the title its uploader
+   * wrote, because that is all the feed carries. The channel page is read in
+   * the language this library is kept in and knows the title a reader here
+   * should see — so when something new came in, it is worth the one request
+   * that fetches it, and the titles of everything else the page lists come
+   * back with it.
+   *
+   * Only when something arrived: a channel that added nothing has nothing to
+   * relabel, and asking anyway would be a request every quarter of an hour per
+   * followed channel, for ever.
+   */
+  if (added > 0) {
+    try {
+      const listed = await fetchChannelVideos(channelId);
+      const rows = await database.prepare(
+        `SELECT video_id, title FROM videos WHERE channel_id = ? AND video_id IN (${feed.videos.map(() => "?").join(",") || "NULL"})`
+      ).all(channelId, ...feed.videos.map((video) => video.videoId)) as { video_id: string; title: string }[];
+      const relabel = database.prepare("UPDATE videos SET title = ? WHERE video_id = ?");
+      const updates = localisedTitleUpdates(listed, rows);
+      for (const update of updates) await relabel.run(update.title, update.videoId);
+      if (updates.length) log.info("channel.titles_localised", { channelId, relabelled: updates.length });
+    } catch (error) {
+      // The full sync reads the same page and will do it then: a title in the
+      // wrong language is worth one attempt, not a failed refresh.
+      log.warn("channel.title_localisation_failed", { channelId, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
   const availability = await syncChannelVideoAvailability(
     channelId,
     new Set(feed.videos.map((video) => video.videoId)),
