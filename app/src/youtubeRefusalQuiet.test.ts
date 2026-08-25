@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createRefusalQuiet, isYouTubeRefusal, YouTubeRefusingError } from "./youtubeRefusalQuiet";
+import { isYouTubeRefusalError } from "./youtubeRateLimit";
 
 const REFUSAL = new Error(
   "video info failed: html=videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you're not a bot); "
@@ -144,5 +145,47 @@ describe("a refusal that does not lift", () => {
     quiet.note(refusal);
     clock += 91_000;
     expect(quiet.quiet()).toBe(false);
+  });
+});
+
+describe("the two refusal detectors, side by side", () => {
+  const armed = (message: string) => {
+    const quiet = createRefusalQuiet();
+    // Twice: the first refusal is remembered so that a second one counts,
+    // which is the threshold this holds itself to.
+    quiet.note(new Error(message));
+    quiet.note(new Error(message));
+    return quiet.quiet();
+  };
+
+  /*
+   * They are armed from the same place now, so where they agree matters: a
+   * refusal the gate short-circuits on but the quiet never hears about is a
+   * refusal only half the server knows — the cookie order, the subtitles, the
+   * audio resolver and the refresher all read the quiet.
+   */
+  test("agree that being asked to prove you are not a robot is a refusal", () => {
+    for (const message of [
+      "videoDetails missing (LOGIN_REQUIRED: Sign in to confirm you're not a bot)",
+      "videoDetails missing (LOGIN_REQUIRED: Connectez-vous pour confirmer que vous n'êtes pas un robot)",
+    ]) {
+      expect(isYouTubeRefusalError(new Error(message))).toBe(true);
+      expect(armed(message)).toBe(true);
+    }
+  });
+
+  /*
+   * And they part company on purpose. A 429 is being asked to slow down, not
+   * being turned away for who you are — the gate waits it out, and the quiet
+   * stays silent because offering an account does not answer it.
+   */
+  test("part company on a rate limit, which credentials do not answer", () => {
+    expect(isYouTubeRefusalError(new Error("YouTube fetch failed (429)"))).toBe(true);
+    expect(armed("YouTube fetch failed (429)")).toBe(false);
+  });
+
+  test("and neither reads an ordinary failure as either", () => {
+    expect(isYouTubeRefusalError(new Error("YouTube fetch failed (503)"))).toBe(false);
+    expect(armed("YouTube fetch failed (503)")).toBe(false);
   });
 });

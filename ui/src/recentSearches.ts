@@ -70,10 +70,6 @@ export function forgetSearch(query: string, profileId = rememberedProfileId()): 
   try { store()?.setItem(key(profileId), JSON.stringify(next)); } catch { /* see above */ }
 }
 
-export function clearRecentSearches(profileId = rememberedProfileId()): void {
-  try { store()?.removeItem(key(profileId)); } catch { /* see above */ }
-}
-
 /**
  * The recent searches worth offering for what has been typed so far.
  *

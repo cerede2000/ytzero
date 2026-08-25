@@ -18,8 +18,8 @@ import { log } from "./logger";
  * makes, and it is idempotent: where the script has already run, this finds the
  * file and does nothing at all.
  */
-export const MANAGED_PATH = process.env.YTDLP_MANAGED_PATH ?? "/data/bin/yt-dlp";
-export const BOOTSTRAP_PATH = process.env.YTDLP_BOOTSTRAP_PATH ?? "/usr/local/bin/yt-dlp";
+const MANAGED_PATH = process.env.YTDLP_MANAGED_PATH ?? "/data/bin/yt-dlp";
+const BOOTSTRAP_PATH = process.env.YTDLP_BOOTSTRAP_PATH ?? "/usr/local/bin/yt-dlp";
 
 export type ProvisionVerdict = "copy" | "already-there" | "not-managed" | "no-bootstrap";
 
