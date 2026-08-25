@@ -23,10 +23,16 @@ const MEMORY_MS = 15 * 60_000;
  */
 export function callerWasRefused(stderr: string): boolean {
   const said = stderr.toLowerCase();
-  return said.includes("not a bot")
-    || said.includes("login_required")
-    || said.includes("sign in to confirm")
-    || said.includes("this content isn't available");
+  if (said.includes("not a bot") || said.includes("sign in to confirm") || said.includes("this content isn't available")) return true;
+  /*
+   * `LOGIN_REQUIRED` on its own is not enough, and reading it that way cost a
+   * whole instance its metadata: a private video answers `LOGIN_REQUIRED:
+   * Vidéo privée`, which is a fact about that video and says nothing about
+   * whether this address is being turned away. It has to be the sign-in demand
+   * to count.
+   */
+  return said.includes("login_required")
+    && /sign in|log in|connectez-vous|anmelden|zaloguj|not a bot|robot|bot\b/.test(said);
 }
 
 export interface CookieAttemptMemory {
