@@ -18,7 +18,7 @@ import { join } from "node:path";
  */
 
 /** Where the image installs the provider; the script is run from here. */
-export const DEFAULT_POT_PROVIDER_HOME = "/opt/bgutil-ytdlp-pot-provider/server";
+const DEFAULT_POT_PROVIDER_HOME = "/opt/bgutil-ytdlp-pot-provider/server";
 
 export interface PotProviderEnvironment {
   /** Directory holding the provider sources, or "" / "off" to skip it. */
@@ -57,10 +57,7 @@ export function potProviderArgs(environment: PotProviderEnvironment = {}): strin
 }
 
 /** Resolved once: the answer cannot change without restarting the process. */
-export const POT_PROVIDER_ARGS: string[] = potProviderArgs();
-
-/** Whether a provider is configured at all, for the runtime status panel. */
-export const potProviderConfigured = POT_PROVIDER_ARGS.length > 0;
+const POT_PROVIDER_ARGS: string[] = potProviderArgs();
 
 /**
  * The arguments every attempt carries, however it authenticates.
