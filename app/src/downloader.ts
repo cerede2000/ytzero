@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, rmdirSync,
 import { basename, dirname, join, resolve } from "node:path";
 import { database, databaseConfig } from "./database";
 import { DB_PATH, getSetting, setSetting } from "./db";
-import { downloadCookieAttempts, downloadFormat, isAnonymousAddressRefusal, recordDownloadAttempt, renderDownloadOutputTemplate } from "./downloadStrategy";
+import { downloadCookieAttempts, downloadFormat, renderDownloadOutputTemplate } from "./downloadStrategy";
 import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
 import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { log } from "./logger";
