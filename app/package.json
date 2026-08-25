@@ -15,9 +15,9 @@
     "@resvg/resvg-js": "^2.6.2",
     "@simplewebauthn/server": "^13.3.2",
     "fast-xml-parser": "^5.11.0",
-    "hono": "^4.13.3",
+    "hono": "^4.13.4",
     "innertube.js": "^1.1.5",
-    "openid-client": "^6.8.6",
+    "openid-client": "^6.8.7",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
