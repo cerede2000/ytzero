@@ -1,3 +1,19 @@
+export function audioHlsBufferConfig(live: boolean): {
+  backBufferLength: number;
+  lowLatencyMode: boolean;
+  maxBufferLength: number;
+  maxBufferSize: number;
+  maxMaxBufferLength: number;
+} {
+  return {
+    backBufferLength: 30,
+    lowLatencyMode: live,
+    maxBufferLength: live ? 30 : 240,
+    maxBufferSize: 8 * 1024 * 1024,
+    maxMaxBufferLength: live ? 60 : 240,
+  };
+}
+
 /**
  * Whether to go straight to the plain file instead of a playlist.
  *

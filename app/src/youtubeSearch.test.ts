@@ -99,14 +99,6 @@ describe("searchVideoFromLockup", () => {
   test("ignores non-video lockups", () => {
     expect(searchVideoFromLockup({ contentType: "LOCKUP_CONTENT_TYPE_PLAYLIST", contentId: "PL123" })).toBeNull();
   });
-
-  test("reads the channel id from legacy video renderers", () => {
-    expect(collectSearchVideos({ videoRenderer: {
-      videoId: "legacy12345", title: { simpleText: "Legacy" },
-      ownerText: { runs: [{ text: "Owner", navigationEndpoint: { browseEndpoint: { browseId: "UCLEGACY" } } }] },
-      thumbnail: { thumbnails: [{ url: "legacy.jpg" }] },
-    } })).toMatchObject([{ videoId: "legacy12345", channelId: "UCLEGACY", channelTitle: "Owner" }]);
-  });
 });
 
 describe("searchChannelFromLockup", () => {

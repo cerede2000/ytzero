@@ -75,14 +75,15 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
       "--print", "%(http_headers)j",
       ...potArgsFor(useCookies),
     ];
-    if (signal.aborted) return { source: null, anonymousRefused: false };
+    if (useCookies) args.push("--cookies", downloadCookiesFile(userId));
+    if (signal.aborted) return null;
 
     let process: ReturnType<typeof Bun.spawn>;
     try {
-      process = spawn([YTDLP, ...ytdlpAttemptArgs(args, useCookies, useCookies ? downloadCookiesFile(userId) : null)], { stdout: "pipe", stderr: "pipe" });
+      process = spawn([YTDLP, ...args], { stdout: "pipe", stderr: "pipe" });
     } catch {
       reportFailure("spawn_failed");
-      return { source: null, anonymousRefused: false };
+      return null;
     }
 
     let timedOut = false;
@@ -96,10 +97,10 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
         new Response(process.stderr as ReadableStream<Uint8Array>).text(),
         process.exited,
       ]);
-      if (signal.aborted) return { source: null, anonymousRefused: false };
+      if (signal.aborted) return null;
       if (timedOut) {
         reportFailure("timeout");
-        return { source: null, anonymousRefused: false };
+        return null;
       }
       if (exitCode !== 0) {
         // The last line yt-dlp printed is the one that names the problem, and
@@ -120,16 +121,16 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
       const httpHeaders = parseYtdlpHttpHeaders(lines[2] ?? "");
       if (!url || !httpHeaders) {
         reportFailure("missing_or_rejected_url");
-        return { source: null, anonymousRefused: false };
+        return null;
       }
       if (extension !== "m4a" && extension !== "mp4") {
         reportFailure("unsupported_extension");
-        return { source: null, anonymousRefused: false };
+        return null;
       }
       return { source: { url, mime: "audio/mp4", expiresAt: audioUrlExpiry(url), issuedAt: Date.now(), httpHeaders }, anonymousRefused: false };
     } catch {
       if (!signal.aborted) reportFailure("process_io_failed");
-      return { source: null, anonymousRefused: false };
+      return null;
     } finally {
       clearTimeout(timer);
       signal.removeEventListener("abort", onAbort);
@@ -158,7 +159,6 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
         userId, useCookies, resolved: Boolean(source), refused: refusal.refused,
       });
       if (source) {
-        recordDownloadAttempt(userId, useCookies, true, anonymousRefused);
         audioDiagnostic("info", "audio.source_resolved", {
           userId, videoId, attempts, usedCookies: useCookies, mime: source.mime, ms: Date.now() - startedAt,
         });

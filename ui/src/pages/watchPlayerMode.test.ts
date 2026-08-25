@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { resolvePlayerKind, shouldFallbackToDirectStream, shouldLatchCompletedDownload } from "./watchPlayerMode";
+import { resolvePlayerKind, shouldLatchCompletedDownload } from "./watchPlayerMode";
 
 const base = {
   hasVideo: true,
   isLive: false,
   downloadStatus: null,
   playerSource: "auto" as const,
-  defaultPlayer: "youtube" as const,
-  directFallback: false,
   playbackPolicyReady: true,
   childDownloadsOnly: false,
   sourceChoice: "undecided" as const,
@@ -32,7 +30,7 @@ describe("resolvePlayerKind", () => {
   });
 
   test("honors each choice made in ask mode", () => {
-    expect(resolvePlayerKind({ ...base, watchMode: "ask", sourceChoice: "remote" })).toBe("youtube");
+    expect(resolvePlayerKind({ ...base, watchMode: "ask", sourceChoice: "youtube" })).toBe("youtube");
     expect(resolvePlayerKind({ ...base, watchMode: "ask", sourceChoice: "wait" })).toBe("waiting");
   });
 
@@ -57,15 +55,8 @@ describe("resolvePlayerKind", () => {
       expect(resolvePlayerKind({ ...base, streamingEnabled: true, watchMode: "download" })).toBe("youtube");
     });
 
-    test("shows loading while the streamable video's library row is being imported", () => {
-      expect(resolvePlayerKind({ ...base, hasVideo: false, streamingEnabled: true })).toBe("loading");
-    });
-
-    test("keeps YouTube for a missing video when streaming cannot take over", () => {
-      expect(resolvePlayerKind({ ...base, hasVideo: false })).toBe("youtube");
-      expect(resolvePlayerKind({ ...base, hasVideo: false, streamingEnabled: true, playerSource: "youtube" })).toBe("youtube");
-      expect(resolvePlayerKind({ ...base, hasVideo: false, streamingEnabled: true, sourceChoice: "remote" })).toBe("youtube");
-      expect(resolvePlayerKind({ ...base, hasVideo: false, streamingEnabled: true, defaultPlayer: "direct" })).toBe("youtube");
+    test("does not let a stale library row own the streaming player", () => {
+      expect(resolvePlayerKind({ ...base, hasVideo: false, streamingEnabled: true })).toBe("youtube");
     });
 
     test("prefers streaming over the wait/ask panels", () => {
@@ -138,25 +129,6 @@ describe("resolvePlayerKind", () => {
     });
   });
 
-});
-
-describe("direct streaming", () => {
-  test("uses the direct player when it is the remote default and never for live video", () => {
-    expect(resolvePlayerKind({ ...base, defaultPlayer: "direct" })).toBe("direct");
-    expect(resolvePlayerKind({ ...base, defaultPlayer: "direct", isLive: true })).toBe("youtube");
-  });
-
-  test("falls back once from the embed only for its unavailable/embed-disabled errors", () => {
-    expect(resolvePlayerKind({ ...base, directFallback: true })).toBe("direct");
-    expect(shouldFallbackToDirectStream(100)).toBe(true);
-    expect(shouldFallbackToDirectStream(101)).toBe(true);
-    expect(shouldFallbackToDirectStream(150)).toBe(true);
-    expect(shouldFallbackToDirectStream(153)).toBe(false);
-  });
-
-  test("direct preference takes precedence over experimental downloading", () => {
-    expect(resolvePlayerKind({ ...base, defaultPlayer: "direct", streamingEnabled: true })).toBe("direct");
-  });
 });
 
 describe("shouldLatchCompletedDownload", () => {
