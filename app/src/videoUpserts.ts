@@ -101,3 +101,27 @@ export const CHANNEL_SYNC_VIDEO_UPSERT_SQL = `
       is_unavailable = 0,
       availability_checked_at = datetime('now')
   `;
+
+/**
+ * Which of a channel's videos are listed under a title nobody translated.
+ *
+ * A video arrives through the feed, and the feed hands back what the uploader
+ * wrote — always, in whatever language that is. The channel page is read in
+ * the language this library is kept in and answers in it, so it is the one
+ * that knows the title a reader here should see. Nothing brought the two
+ * together until the channel's next full sync, which on a household following
+ * seventy channels is three days after the video was published.
+ *
+ * So this is the pairing: what the page says, against what the row holds.
+ * Videos the page does not list are not mentioned — it shows the most recent
+ * thirty, and silence about the rest is not an opinion about them.
+ */
+export function localisedTitleUpdates(
+  scraped: readonly { videoId: string; title: string }[],
+  stored: readonly { video_id: string; title: string }[],
+): { videoId: string; title: string }[] {
+  const held = new Map(stored.map((row) => [row.video_id, row.title]));
+  return scraped
+    .filter((video) => video.title && held.has(video.videoId) && held.get(video.videoId) !== video.title)
+    .map((video) => ({ videoId: video.videoId, title: video.title }));
+}
