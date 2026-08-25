@@ -1,10 +1,6 @@
 export type WatchSourceMode = "youtube" | "ask" | "download";
-export type SourceChoice = "undecided" | "remote" | "wait";
-export type PlayerKind = "loading" | "local" | "youtube" | "direct" | "blocked" | "choice" | "waiting" | "stream";
-
-export function shouldFallbackToDirectStream(errorCode: number | null): boolean {
-  return errorCode === 100 || errorCode === 101 || errorCode === 150;
-}
+export type SourceChoice = "undecided" | "youtube" | "wait";
+export type PlayerKind = "loading" | "local" | "youtube" | "blocked" | "choice" | "waiting" | "stream";
 
 export function shouldLatchCompletedDownload(
   playerKind: PlayerKind,
@@ -23,8 +19,6 @@ export function resolvePlayerKind(input: {
   downloadStatus: string | null;
   localMediaSource?: "download" | "tubearchivist" | null;
   playerSource: "auto" | "youtube";
-  defaultPlayer: "youtube" | "direct";
-  directFallback: boolean;
   playbackPolicyReady: boolean;
   childDownloadsOnly: boolean;
   sourceChoice: SourceChoice;
@@ -63,10 +57,6 @@ export function resolvePlayerKind(input: {
   // seeks natively and perfectly (the streaming path hands off to it here).
   if (input.hasVideo && (input.downloadStatus === "done" || input.localMediaSource === "tubearchivist") && input.playerSource === "auto") return "local";
   if (!input.playbackPolicyReady) return "loading";
-  // An external video is being imported. Do not mount the YouTube iframe in
-  // the short gap before its library row arrives: it can only claim that the
-  // video is unavailable, while streaming will take over as soon as it does.
-  if (!input.hasVideo && streamEligible) return "loading";
   if (input.hasVideo && input.childDownloadsOnly) return "blocked";
   // A video with no muxed/progressive format routes here (sourceChoice "wait") to
   // download-and-play; checked first so it works whichever default is set.
@@ -82,6 +72,5 @@ export function resolvePlayerKind(input: {
   }
   if (input.hasVideo && input.watchMode === "download" && input.sourceChoice !== "youtube") return "waiting";
   if (input.hasVideo && input.watchMode === "ask" && input.sourceChoice === "undecided") return "choice";
-  if (input.hasVideo && !remoteForcedToYouTube && (input.directFallback || (wantsRemote && input.defaultPlayer === "direct"))) return "direct";
   return "youtube";
 }

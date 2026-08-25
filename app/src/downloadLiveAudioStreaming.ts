@@ -97,10 +97,11 @@ export function createDownloadLiveAudioStreaming(dependencies: DownloadLiveAudio
       "--get-url",
       ...potArgsFor(useCookies),
     ];
+    if (useCookies) args.push("--cookies", downloadCookiesFile(userId));
     if (signal.aborted) return null;
     let process: ReturnType<typeof Bun.spawn>;
     try {
-      process = spawn([YTDLP, ...ytdlpAttemptArgs(args, useCookies, useCookies ? downloadCookiesFile(userId) : null)], { stdout: "pipe", stderr: "pipe" });
+      process = spawn([YTDLP, ...args], { stdout: "pipe", stderr: "pipe" });
     } catch {
       return null;
     }

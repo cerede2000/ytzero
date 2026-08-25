@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from "react";
-import { shouldFallbackFromHlsJs, shouldFallbackFromNativeHls, shouldStartProgressive } from "../audioMediaSourcePolicy";
+import { audioHlsBufferConfig, shouldFallbackFromHlsJs, shouldFallbackFromNativeHls, shouldStartProgressive } from "../audioMediaSourcePolicy";
 import { useMediaRelease } from "./useMediaRelease";
 
 export function useAudioMediaSource({
@@ -12,7 +12,7 @@ export function useAudioMediaSource({
   audioRef: RefObject<HTMLAudioElement | null>;
   live: boolean;
   onFatalError: () => void;
-  playlistSrc?: string;
+  playlistSrc: string;
   progressiveSrc?: string;
 }): void {
   useMediaRelease(audioRef);
@@ -72,7 +72,14 @@ export function useAudioMediaSource({
       audio.src = playlistSrc;
       audio.load();
       tryPlay();
-      return cleanup;
+      return () => {
+        cancelled = true;
+        audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+        audio.removeEventListener("error", onMediaError);
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      };
     }
 
     void import("hls.js").then(({ default: Hls }) => {
@@ -81,19 +88,7 @@ export function useAudioMediaSource({
         if (!attachProgressive()) fatal();
         return;
       }
-      const instance = new Hls({
-        backBufferLength: 30,
-        lowLatencyMode: live,
-        // A recording can be read as far ahead as it likes; a broadcast cannot
-        // go past its own edge. Four minutes of audio is a few megabytes and
-        // covers a tunnel, a lift, a dead spot on a train line — the moments
-        // where thirty seconds runs out and the music stops. A listener who
-        // seeks away wastes what was fetched, which is why this is measured in
-        // minutes rather than in the ten it could be.
-        maxBufferLength: live ? 30 : 60,
-        maxBufferSize: live ? 8 * 1024 * 1024 : 24 * 1024 * 1024,
-        maxMaxBufferLength: live ? 60 : 240,
-      });
+      const instance = new Hls(audioHlsBufferConfig(live));
       hls = instance;
       source = "hls-js";
       instance.loadSource(playlistSrc);
@@ -125,6 +120,14 @@ export function useAudioMediaSource({
       if (!cancelled && !attachProgressive()) fatal();
     });
 
-    return cleanup;
+    return () => {
+      cancelled = true;
+      hls?.destroy();
+      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("error", onMediaError);
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    };
   }, [audioRef, live, onFatalError, playlistSrc, progressiveSrc]);
 }

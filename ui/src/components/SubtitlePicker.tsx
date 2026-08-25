@@ -83,13 +83,13 @@ export default function SubtitlePicker({
           <Menu>
             {preferred.map((language) => (
               <MenuItem
-                key={language.lang}
-                selected={selectedLanguage === language.lang}
+                key={language}
+                selected={selectedLanguage === language}
                 disabled={loadingLanguage != null}
-                onClick={() => select(language.lang)}
-                suffix={status(language.lang)}
+                onClick={() => select(language)}
+                suffix={status(language)}
               >
-                {language.label}
+                {subtitleLanguageLabel(language)}
               </MenuItem>
             ))}
             {preferred.length > 0 && remaining.length > 0 && <MenuSeparator />}

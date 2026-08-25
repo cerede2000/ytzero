@@ -109,8 +109,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   // configured player (rendered as a centred button in the control bar).
   onExitStreaming?: () => void;
   exitStreamingLabel?: string;
-  onDownload?: () => void;
-  downloadLabel?: string;
 }>(function LocalPlayer({
   src,
   poster,
@@ -147,8 +145,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   onControlsVisibleChange,
   onExitStreaming,
   exitStreamingLabel,
-  onDownload,
-  downloadLabel,
 }, ref) {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -188,7 +184,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   // ---------- subtitles ----------
   const trackRef = useRef<HTMLTrackElement>(null);
   const [subs, setSubs] = useState<VideoSubtitle[]>([]);
-  const [availableSubs, setAvailableSubs] = useState<AvailableSubtitle[]>([]);
   const [subLang, setSubLang] = useState<string | null>(null);
   const [subLoading, setSubLoading] = useState<string | null>(null);
   const [subError, setSubError] = useState<string | null>(null);
@@ -218,7 +213,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
     api.videoSubtitles(videoId).then((r) => {
       if (cancelled) return;
       setSubs(r.subtitles);
-      setAvailableSubs(r.available);
       if (!ccDefaultOn || !ccDefaultLang) return;
       if (r.subtitles.some((subtitle) => subtitle.lang === ccDefaultLang)) {
         setSubLoading(ccDefaultLang);
@@ -275,10 +269,9 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
       void pickSubLang(null);
       return;
     }
-    const preferred = availableSubs.some((subtitle) => subtitle.lang === ccDefaultLang) ? ccDefaultLang
-      : subs[0]?.lang ?? availableSubs[0]?.lang ?? null;
+    const preferred = subs.find((sub) => sub.lang === ccDefaultLang)?.lang ?? subs[0]?.lang ?? ccDefaultLang ?? null;
     if (preferred) void pickSubLang(preferred);
-  }, [availableSubs, ccDefaultLang, pickSubLang, subLang, subs]);
+  }, [ccDefaultLang, pickSubLang, subLang, subs]);
   const changeSubtitleSize = (direction: -1 | 1) => {
     const next = Math.min(48, Math.max(12, subStyle.size + direction * 2));
     if (next !== subStyle.size) onSubtitleSizeChange?.(next);
@@ -830,7 +823,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
             kind="subtitles"
             src={activeSub.url}
             srcLang={activeSub.lang}
-            label={activeSub.label ?? subtitleLanguageLabel(activeSub.lang)}
+            label={subtitleLanguageLabel(activeSub.lang)}
             default
             onLoad={() => { setSubLoading((loading) => loading === activeSub.lang ? null : loading); setSubError(null); }}
             onError={() => { setSubLoading((loading) => loading === activeSub.lang ? null : loading); setSubError(activeSub.lang); }}

@@ -48,15 +48,21 @@ const lineLimits: Record<string, number> = {
   "ui/src/app-shell/sidebarVisibility.ts": 30,
   "ui/src/app-shell/useAppPreferences.ts": 107,
 =======
-  "ui/src/AppRoutes.tsx": 99,
->>>>>>> 19d0a58 (Split searching from watching, and put their suggestions beside the picture)
-=======
   "ui/src/AppRoutes.tsx": 101,
 >>>>>>> 887d8ef (Give the channel link somewhere to go)
 =======
   "ui/src/App.tsx": 12,
   "ui/src/AppRoutes.tsx": 103,
 >>>>>>> 1f4aba1 (Settle onto upstream's release)
+=======
+  "app/src/routes/userPlaylistRoutes.ts": 195,
+  "app/src/routes/videoActionRoutes.ts": 199,
+  "app/src/routes/videoRoutes.ts": 569,
+  "app/src/videoRoutesSupport.ts": 136,
+  "app/src/routeCache.ts": 11,
+  "ui/src/App.tsx": 12,
+  "ui/src/AppRoutes.tsx": 105,
+>>>>>>> f5275e6 (Settle onto upstream's release, where ten issues came back at once)
   "ui/src/app-shell/AppBootstrap.tsx": 17,
   "ui/src/app-shell/AppShell.tsx": 104,
   "ui/src/app-shell/AppSidebar.tsx": 109,
