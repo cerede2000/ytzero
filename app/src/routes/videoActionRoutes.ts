@@ -10,8 +10,6 @@ import { cancelAutoDownloadIfUnwanted } from "../downloader";
 import { videoExistsStmt } from "../videoRoutesSupport";
 import { savePlaybackContext } from "./playbackRoutes";
 import { completeVideo } from "../videoCompletion";
-import { childLocalOnly } from "../childTime";
-import { ensureOnDemandVideo, OnDemandVideoImportError } from "../onDemandVideoImport";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;

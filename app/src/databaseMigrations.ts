@@ -448,6 +448,41 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
       { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_bookmarks_video ON bookmarks(video_id)" },
     ],
   },
+  {
+    version: 14,
+    name: "shorts-classification-retry",
+    /*
+     * Upstream's, arriving after this fork had already used the number it was
+     * written with. The name is what its own bookkeeping keys on, and it keeps
+     * that; the number is the next free one here, because a version already
+     * recorded in a database cannot come back under another name.
+     */
+    schemaHashes: {
+      "app/src/schema.sql": "14d373d90d40e6b2e37828dcbf7bbf11d39e630f6473afa566df1a7566885b2f",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+      "app/src/dailymotionSchema.sql": "6e43314a30a4f5038dfd3cc2f44df69dc48090be8c68be4315090846259cdc7a",
+      "app/src/invidiousSchema.sql": "4f77a9670470989f8822b8cc02cc36e073fa57edb20cd81804bf2af4ca3a415b",
+    },
+    sqlite: [
+      // These legacy catalog columns predate cross-database migrations. Keep
+      // the retry index safe when upgrading an older PostgreSQL/SQLite schema.
+      { kind: "add-column", table: "videos", column: "is_short", definition: "INTEGER" },
+      { kind: "add-column", table: "videos", column: "is_private", definition: "INTEGER NOT NULL DEFAULT 0" },
+      { kind: "add-column", table: "videos", column: "short_check_attempts", definition: "INTEGER NOT NULL DEFAULT 0" },
+      { kind: "add-column", table: "videos", column: "short_check_attempted_at", definition: "TEXT" },
+      { kind: "add-column", table: "videos", column: "short_check_next_attempt_at", definition: "TEXT" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_videos_shorts_retry ON videos(is_short, is_private, is_unavailable, short_check_next_attempt_at)" },
+    ],
+    postgres: [
+      { kind: "add-column", table: "videos", column: "is_short", definition: "INTEGER" },
+      { kind: "add-column", table: "videos", column: "is_private", definition: "INTEGER NOT NULL DEFAULT 0" },
+      { kind: "add-column", table: "videos", column: "short_check_attempts", definition: "INTEGER NOT NULL DEFAULT 0" },
+      { kind: "add-column", table: "videos", column: "short_check_attempted_at", definition: "TEXT" },
+      { kind: "add-column", table: "videos", column: "short_check_next_attempt_at", definition: "TEXT" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_videos_shorts_retry ON videos(is_short, is_private, is_unavailable, short_check_next_attempt_at)" },
+    ],
+  },
 ];
 
 function quoteIdentifier(identifier: string): string {

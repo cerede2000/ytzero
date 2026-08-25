@@ -1,38 +1,6 @@
 import type { PlayerKind } from "./watchPlayerMode";
-import { api } from "../api";
 
-const AUDIO_PLAYER_KINDS = new Set<PlayerKind>(["stream", "local", "direct", "waiting", "choice", "youtube"]);
-
-export interface WatchAudioSources {
-  playlistSrc?: string;
-  progressiveSrc?: string;
-  retryRemoteSource: boolean;
-}
-
-/** Prefer an already authorized local file over resolving another YouTube source. */
-export function resolveWatchAudioSources({
-  videoId,
-  liveStatus,
-  downloadStatus,
-  localMediaSource,
-}: {
-  videoId: string;
-  liveStatus: string;
-  downloadStatus: string | null | undefined;
-  localMediaSource?: "download" | "tubearchivist" | null;
-}): WatchAudioSources {
-  if (liveStatus === "live") {
-    return { playlistSrc: api.liveAudioUrl(videoId), retryRemoteSource: true };
-  }
-  if (downloadStatus === "done" || localMediaSource === "download") {
-    return { progressiveSrc: api.streamUrl(videoId), retryRemoteSource: false };
-  }
-  return {
-    playlistSrc: api.audioHlsUrl(videoId),
-    progressiveSrc: api.audioUrl(videoId),
-    retryRemoteSource: true,
-  };
-}
+const AUDIO_PLAYER_KINDS = new Set<PlayerKind>(["stream", "local", "waiting", "choice", "youtube"]);
 
 export function canUseWatchAudioMode({
   childProfile,

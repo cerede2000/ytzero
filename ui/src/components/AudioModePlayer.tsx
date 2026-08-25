@@ -3,7 +3,6 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent a
 import { LoaderCircle, Pause, Play, RefreshCw, Volume2, VolumeX } from "lucide-react";
 import { api } from "../api";
 import { audioStallStep, bufferedSecondsAhead, initialAudioStallState } from "../audioStallWatch";
-import { installInitialAudioPlaybackUnlock } from "../audioPlaybackUnlock";
 import { useI18n } from "../i18n";
 import { mediaPlaybackState } from "../mediaSessionState";
 import { img } from "../img";
@@ -59,9 +58,8 @@ function storedVolume(): number {
  * visible transport reuses the LocalPlayer control language.
  */
 const AudioModePlayer = forwardRef<WatchPlayerHandle, {
-  playlistSrc?: string;
+  playlistSrc: string;
   progressiveSrc?: string;
-  retryRemoteSource: boolean;
   videoId: string;
   live?: boolean;
   title?: string;
@@ -77,7 +75,6 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
 }>(function AudioModePlayer({
   playlistSrc,
   progressiveSrc,
-  retryRemoteSource,
   videoId,
   live = false,
   title,
@@ -93,13 +90,11 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
 }, ref) {
   const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement>(null);
-  const playButtonRef = useRef<HTMLButtonElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const volumeControlRef = useRef<HTMLDivElement>(null);
   const ignoreNextVolumeBlurRef = useRef(false);
   const startedAtRef = useRef(startSeconds);
   const endedRef = useRef(false);
-  const playbackStartedRef = useRef(false);
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [playing, setPlaying] = useState(false);
@@ -116,7 +111,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [retryAttempts, setRetryAttempts] = useState(0);
   const [sourceRevision, setSourceRevision] = useState(0);
-  const retryPlaylistSrc = playlistSrc && sourceRevision > 0
+  const retryPlaylistSrc = sourceRevision > 0
     ? `${playlistSrc}${playlistSrc.includes("?") ? "&" : "?"}retry=${sourceRevision}`
     : playlistSrc;
   const retryProgressiveSrc = progressiveSrc && sourceRevision > 0
@@ -127,16 +122,6 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     setBuffering(false);
     setPlaying(false);
   }, []);
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || status === "error") return;
-    return installInitialAudioPlaybackUnlock({
-      audio,
-      eventTarget: document,
-      hasPlayed: () => playbackStartedRef.current,
-      isExcludedTarget: (target) => target instanceof Node && Boolean(playButtonRef.current?.contains(target)),
-    });
-  }, [status]);
   useAudioMediaSource({
     audioRef,
     live,
@@ -378,10 +363,6 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
     setPlaying(false);
     endedRef.current = false;
     setRetryAttempts(attempt);
-    if (!retryRemoteSource) {
-      setSourceRevision((revision) => revision + 1);
-      return;
-    }
     try {
       const result = await api.retryAudio(videoId);
       if (result.live !== live) return onReload?.();
@@ -659,7 +640,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
           </div>
           {status !== "error" && (
             <div className="audio-mode-player" aria-label={title}>
-              <button ref={playButtonRef} className="lp-btn audio-mode-play" onClick={togglePlay} aria-label={playing ? t("playerPause") : t("playerPlay")} disabled={status !== "ready"}>
+              <button className="lp-btn audio-mode-play" onClick={togglePlay} aria-label={playing ? t("playerPause") : t("playerPlay")} disabled={status !== "ready"}>
                 {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
               </button>
               {live ? (

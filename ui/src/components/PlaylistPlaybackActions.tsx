@@ -1,9 +1,22 @@
 import { Headphones, Play, SkipForward } from "lucide-react";
 import type { Video } from "../api";
-import { setProfileAudioMode } from "../audioModePreference";
+import { rememberProfileAudioMode } from "../audioModePreference";
+import { rememberedProfileId } from "../profilePreference";
 import { useI18n } from "../i18n";
 import { playlistContinueTarget } from "../playlistPlayback";
 import { MenuItem, SplitButton } from "./ui";
+
+/**
+ * Start a playlist entry, remembering how the reader chose to start it.
+ *
+ * Exported because the remembering is the interesting half and it is worth
+ * testing on its own: the choice made here is what the watch page reads as it
+ * opens, and what the entries after this one inherit.
+ */
+export function playPlaylistVideo(video: Video, audioOnly: boolean, onPlay: (video: Video, audio: boolean) => void): void {
+  rememberProfileAudioMode(rememberedProfileId(), audioOnly);
+  onPlay(video, audioOnly);
+}
 
 export default function PlaylistPlaybackActions({ videos, disabled = false, onPlay }: {
   videos: readonly Video[];
@@ -23,8 +36,7 @@ export default function PlaylistPlaybackActions({ videos, disabled = false, onPl
     // Written for the videos that follow, and stated to the navigation for
     // this one: the preference is keyed on the profile this browser remembers
     // being, and a browser that was never told has nowhere to keep it.
-    setProfileAudioMode(audio);
-    onPlay(video, audio);
+    playPlaylistVideo(video, audio, onPlay);
   };
 
   return <>

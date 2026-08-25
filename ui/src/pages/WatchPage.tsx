@@ -64,7 +64,6 @@ import WatchPlayerModeToggle from "../components/watch/WatchPlayerModeToggle";
 import WatchStreamUpgrade from "../components/watch/WatchStreamUpgrade";
 import WatchRestrictedPlayer from "../components/watch/WatchRestrictedPlayer";
 import { colonDurationToSeconds, formatWatchTime } from "./watchRuntime";
-import { resolveWatchAudioSources } from "./watchAudioMode";
 import { useWatchPageController } from "./useWatchPageController";
 import WatchPlayerFeedback from "./WatchPlayerFeedback";
 import { useProfileAudioMode } from "../audioModePreference";
@@ -133,7 +132,6 @@ export default function WatchPage() {
     downloadsEnabled,
     dismissUpNextVideo,
     exitStreaming,
-    exitDirectStream,
     goToUpNextVideo,
     handleEnded,
     id,
@@ -276,12 +274,7 @@ export default function WatchPage() {
             >
               {audioActive && video ? (
                 <Suspense fallback={null}>
-                  <AudioModePlayer {...resolveWatchAudioSources({
-                    videoId: video.video_id,
-                    liveStatus: video.live_status,
-                    downloadStatus: video.download_status,
-                    localMediaSource: video.local_media_source,
-                  })}
+                  <AudioModePlayer
                     key={`${video.video_id}-${video.live_status}-audio-${sharedStartSeconds}`}
                     ref={playerRef}
                     // A downloaded video plays its own file here too: the
@@ -303,7 +296,7 @@ export default function WatchPage() {
                     onNext={canPlayNextVideo ? playNextVideo : undefined} onPrevious={canPlayPreviousVideo ? playPreviousVideo : undefined}
                   />
                 </Suspense>
-              ) : (membersOnlyNotice || (privateVideoNotice && playerKind !== "direct")) && video ? (
+              ) : (privateVideoNotice || membersOnlyNotice) && video ? (
                 <WatchRestrictedPlayer
                   kind={privateVideoNotice ? "private" : "members"}
                   thumbnailUrl={img(video.thumbnail)}
@@ -349,11 +342,11 @@ export default function WatchPage() {
                   }}
                   onSubtitleSizeChange={changeSubtitleSize}
                 />
-              ) : (playerKind === "local" || playerKind === "direct") && video ? (
+              ) : playerKind === "local" && video ? (
                 <LocalPlayer
                   key={`${video.video_id}-player-${sharedStartSeconds}`}
                   ref={playerRef}
-                  src={playerKind === "direct" ? api.directStreamUrl(video.video_id) : api.streamUrl(video.video_id)}
+                  src={api.streamUrl(video.video_id)}
                   poster={img(video.thumbnail)}
                   autoplay={!watchTogetherRoomId}
                   transportLocked={watchTogetherTransportLocked}
@@ -383,9 +376,6 @@ export default function WatchPage() {
                     bg: Number(settings?.player_sub_bg ?? 75),
                   }}
                   onSubtitleSizeChange={changeSubtitleSize}
-                  onError={playerKind === "direct" ? exitDirectStream : undefined}
-                  onDownload={playerKind === "direct" && downloadsEnabled && downloadStatus !== "queued" && downloadStatus !== "downloading" ? requestDownload : undefined}
-                  downloadLabel={t("downloadLocally")}
                 />
               ) : videoUnavailable ? (
                 <div className="wp-panel" style={{ backgroundImage: `url(${panelBackdrop(video?.thumbnail, id)})` }}>

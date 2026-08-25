@@ -255,5 +255,5 @@ async function fetchSearchSuggestions(query: string, language = "en", limit = SU
   return data.slice(0, take);
 }
 
-  return { fetchSearchSuggestions, searchChannelFromLockup, searchDeeper, searchVideoFromLockup, searchYouTube };
+  return { collectSearchVideos, fetchSearchSuggestions, searchChannelFromLockup, searchDeeper, searchVideoFromLockup, searchYouTube };
 }

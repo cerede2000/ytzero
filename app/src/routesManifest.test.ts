@@ -39,7 +39,8 @@ describe("HTTP route manifest", () => {
     const liveAudioRoute = "GET /videos/:id/audio-live/:resource";
     const vodAudioRoute = "GET /videos/:id/audio/index.m3u8";
     const retryAudioRoute = "POST /videos/:id/audio/retry";
-    const directStreamRoute = "GET /videos/:id/direct-stream";
+    // Ours, where upstream names its own: the same feature, one implementation.
+    const directStreamRoute = "GET /videos/:id/videostream";
     const ytdlpConfigRoute = "PUT /downloads/ytdlp/config";
     const ytdlpUpdateRoute = "POST /downloads/ytdlp/update";
     const importVideoRoute = "POST /videos/:id/import";

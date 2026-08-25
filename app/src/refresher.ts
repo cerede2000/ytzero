@@ -1276,6 +1276,10 @@ export async function backfillImportedVideos(limit = 15) {
   if (rows.length === 0) return;
 
   let enriched = 0;
+  // What the batch got through, and what it deliberately left: a halt is not
+  // the same event as a failure, and reporting them as one hides both.
+  let checked = 0;
+  let skipped = 0;
   const budget = lookupBudget();
   for (let i = 0; i < rows.length; i++) {
     const videoId = rows[i].video_id;
@@ -1304,7 +1308,7 @@ export async function backfillImportedVideos(limit = 15) {
       );
       enriched++;
     } catch (e) {
-      if (isYouTubeRefusalError(e)) {
+      if (isYouTubeRefusal(e)) {
         skipped = rows.length - i - 1;
         log.info("import.enrich_halted", { checked, skipped });
         break;

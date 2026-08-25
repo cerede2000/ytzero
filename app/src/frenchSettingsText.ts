@@ -71,6 +71,11 @@ const FRENCH: Record<string, string> = {
   "How long a watched file sticks around before removal.": "Combien de temps un fichier déjà vu est conservé avant suppression.",
   "Protect liked videos": "Protéger les vidéos aimées",
   "Liked videos are never auto-removed by retention or the storage cap.": "Les vidéos aimées ne sont jamais supprimées automatiquement par la rétention ou le plafond de stockage.",
+  "Default player": "Lecteur par défaut",
+  "YouTube uses the embedded player. Direct stream plays a progressive MP4 without saving it; it is usually limited to 360p or 720p.":
+    "YouTube utilise le lecteur intégré. Le flux direct lit un MP4 progressif sans l'enregistrer ; il plafonne généralement à 360p ou 720p.",
+  "YouTube embed": "Lecteur intégré YouTube",
+  "Direct stream": "Flux direct",
   "Storage cap": "Plafond de stockage",
   "Keep downloads": "Conserver les téléchargements",
   "Disables removal based on file age and watched status for this profile. The shared storage cap can still remove unprotected downloads.":

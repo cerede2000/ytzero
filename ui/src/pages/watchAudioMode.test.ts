@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { canUseWatchAudioMode, ownedWatchPosition, resolveWatchAudioSources, resolveWatchPlaybackStart, resolveWatchStartSeconds } from "./watchAudioMode";
+import { canUseWatchAudioMode, ownedWatchPosition, resolveWatchPlaybackStart, resolveWatchStartSeconds } from "./watchAudioMode";
 
 const available = {
   childProfile: false,
@@ -12,39 +12,6 @@ const available = {
 };
 
 describe("watch audio mode", () => {
-  test("prefers a completed local download without resolving remote audio", () => {
-    expect(resolveWatchAudioSources({
-      videoId: "downloaded", liveStatus: "none", downloadStatus: "done", localMediaSource: "download",
-    })).toEqual({ progressiveSrc: "/api/videos/downloaded/stream", retryRemoteSource: false });
-    expect(resolveWatchAudioSources({
-      videoId: "legacy-download", liveStatus: "none", downloadStatus: "done",
-    })).toEqual({ progressiveSrc: "/api/videos/legacy-download/stream", retryRemoteSource: false });
-  });
-
-  test("keeps remote VOD and live audio sources for videos without a local file", () => {
-    expect(resolveWatchAudioSources({
-      videoId: "vod", liveStatus: "none", downloadStatus: null,
-    })).toEqual({
-      playlistSrc: "/api/videos/vod/audio/index.m3u8",
-      progressiveSrc: "/api/videos/vod/audio",
-      retryRemoteSource: true,
-    });
-    expect(resolveWatchAudioSources({
-      videoId: "live", liveStatus: "live", downloadStatus: "done", localMediaSource: "download",
-    })).toEqual({ playlistSrc: "/api/videos/live/audio-live/index.m3u8", retryRemoteSource: true });
-  });
-
-  test("does not treat incomplete downloads as local audio", () => {
-    for (const downloadStatus of ["queued", "downloading", "error"] as const) {
-      expect(resolveWatchAudioSources({ videoId: downloadStatus, liveStatus: "none", downloadStatus }))
-        .toEqual({
-          playlistSrc: `/api/videos/${downloadStatus}/audio/index.m3u8`,
-          progressiveSrc: `/api/videos/${downloadStatus}/audio`,
-          retryRemoteSource: true,
-        });
-    }
-  });
-
   test("is limited to playable solo videos", () => {
     expect(canUseWatchAudioMode(available)).toBe(true);
     expect(canUseWatchAudioMode({ ...available, childProfile: true })).toBe(false);
