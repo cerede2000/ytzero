@@ -101,9 +101,11 @@ Example layout:
 ```text
 manifest.json
 instance/settings.json
+instance/access-control.json
 instance/channels.jsonl
 profiles/index.json
 profiles/<profile-uuid>/settings.json
+profiles/<profile-uuid>/access-control.json
 profiles/<profile-uuid>/downloads.json
 profiles/<profile-uuid>/subscriptions.jsonl
 profiles/<profile-uuid>/followed-playlists.jsonl
@@ -187,7 +189,10 @@ below.
   it overrides this portable value at runtime and the saved value remains
   dormant for a future start without `TZ`. The environment override itself is
   never exported or restored.
-  The administrator-only profile permission areas are portable configuration.
+  Access-control groups, their granted capability keys and the configured
+  default group are portable instance configuration in the versioned
+  `instance.access-control` section. They use stable group UUIDs. Administrator
+  grants remain local and are never exported.
   Enabling Child Lock and its PIN remain local and are never exported.
 - `user_settings`: registered settings for selected profiles.
   The interface language is portable per-profile presentation configuration. It
@@ -248,7 +253,12 @@ below.
   `profile.playlists` schema v2. Older schema v1 archives restore membership in
   their serialized order, while existing target membership remains unchanged
   during a merge.
-- `profile_admin_only_areas` is portable instance configuration. Its versioned document uses schema v3; restore normalizes legacy `settings` access into separate appearance, feed, navigation, and playback permissions. On a fresh instance, channel subscriptions, followed YouTube playlists, tags, feed filters, and personal playlists are delegated to every profile; changing this default never rewrites an explicitly stored policy.
+- A profile's assigned access-control group and explicit allow/deny overrides
+  are portable configuration in `profile.access-control`. Merge updates only
+  selected mapped profiles; replace clears just their overrides and assignment.
+  Older archives carrying `profile_admin_only_areas` are converted to a
+  migration group during restore. An archive without an access-control section
+  never clears the destination policy during merge.
   This includes the player screenshot format, quality, and filename template;
   they are portable presentation preferences and contain no captured image data.
   It also includes YT Zero Enhance enablement, replacement-control preference,

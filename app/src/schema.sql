@@ -258,6 +258,42 @@ CREATE TABLE IF NOT EXISTS users (
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Profile access control. Groups are portable configuration; direct rows are
+-- explicit profile-level allow/deny overrides over the assigned base group.
+CREATE TABLE IF NOT EXISTS permission_groups (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  portable_uuid TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  is_system     INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS permission_group_permissions (
+  group_id   INTEGER NOT NULL REFERENCES permission_groups(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL,
+  allowed    INTEGER NOT NULL DEFAULT 1 CHECK (allowed IN (0,1)),
+  PRIMARY KEY (group_id, permission)
+);
+
+CREATE TABLE IF NOT EXISTS profile_permission_groups (
+  user_id  INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  group_id INTEGER NOT NULL REFERENCES permission_groups(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS profile_permission_overrides (
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL,
+  allowed    INTEGER NOT NULL CHECK (allowed IN (0,1)),
+  PRIMARY KEY (user_id, permission)
+);
+
+CREATE TABLE IF NOT EXISTS permission_policy (
+  singleton        INTEGER PRIMARY KEY CHECK (singleton = 1),
+  default_group_id INTEGER NOT NULL REFERENCES permission_groups(id) ON DELETE RESTRICT,
+  revision         INTEGER NOT NULL DEFAULT 1
+);
+
 -- A profile's subscriptions. followed = 1 (subscribed) / 0 (unfollowed/hidden).
 CREATE TABLE IF NOT EXISTS user_channels (
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -18,6 +18,7 @@ export * from "./ScrollArea";
 export * from "./RevealList";
 export * from "./HorizontalDragScroll";
 export * from "./Settings";
+export * from "./PermissionMatrix";
 export * from "./SettingsNav";
 export * from "./ShortcutInput";
 export { default as SteppedSlider } from "./SteppedSlider";

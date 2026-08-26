@@ -3,7 +3,8 @@ import { publishAppEvent } from "../appEvents";
 import { database } from "../database";
 import { getSetting, getUserSetting, GLOBAL_SETTING_KEYS, SETTING_DEFAULTS, setSetting, setUserSetting } from "../db";
 import { normalizeVideoCardSetting, validateVideoCardSettings } from "../videoCardActions";
-import { isProfilePermissionArea, serializeAdminOnlyAreas, type ProfilePermissionArea } from "../profilePermissions";
+import { PROFILE_PERMISSION_AREAS, isProfilePermissionArea, type ProfilePermissionArea } from "../profilePermissions";
+import { accessControlSnapshot, effectivePermissions, groupMemberCount, updateGroupPermissions, updateProfileAccess } from "../accessControl";
 import { computeShowFrom, SCHEDULE_BUCKETS } from "../scheduleTime";
 import { configuredTimeZone, isValidTimeZone, timeZoneIsEnvironmentLocked } from "../timeZone";
 import { normalizeKeyboardShortcutSetting } from "../keyboardShortcutSettings";
@@ -13,12 +14,12 @@ type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; pro
 type Api = Hono<ApiEnvironment>; type ApiContext = Context<ApiEnvironment>;
 
 interface SettingsRouteAccess {
-  adminOnlyAreas: () => ProfilePermissionArea[];
   childLockStatus: (context: ApiContext) => unknown;
   clearChildLockSession: (context: ApiContext) => void;
   currentUserId: (context: ApiContext) => number;
   hashChildLockPin: (pin: string) => Promise<string>;
   isAdmin: (context: ApiContext) => boolean;
+  isPrimaryUser: (context: ApiContext) => boolean;
   isChildLockEnabled: () => boolean;
   isSixDigitPin: (pin: unknown) => pin is string;
   setChildLockSession: (context: ApiContext) => void;
@@ -27,12 +28,12 @@ interface SettingsRouteAccess {
 
 export function registerSettingsRoutes(api: Api, access: SettingsRouteAccess): void {
   const {
-    adminOnlyAreas,
     childLockStatus,
     clearChildLockSession,
     currentUserId,
     hashChildLockPin,
     isAdmin,
+    isPrimaryUser,
     isChildLockEnabled,
     isSixDigitPin,
     setChildLockSession,
@@ -45,19 +46,84 @@ api.get("/child-lock", (c) => {
   return c.json({ child_lock: childLockStatus(c) });
 });
 
-api.get("/profile-permissions", (c) => {
-  return c.json({ permissions: { admin_only_areas: adminOnlyAreas() } });
+api.get("/profile-permissions", async (c) => {
+  return c.json({ permissions: await effectivePermissions(currentUserId(c), isAdmin(c)) });
 });
 
-api.put("/profile-permissions", async (c) => {
-  if (!isAdmin(c)) return c.json({ error: "only an admin can manage profile permissions" }, 403);
+api.get("/access-control", async (c) => {
+  if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
+  const snapshot = await accessControlSnapshot();
+  const profiles = await database.prepare("SELECT id,name,avatar_color,is_child,is_admin FROM users ORDER BY sort_order,id").all() as Array<{ id: number; name: string; avatar_color: string; is_child: number; is_admin: number }>;
+  return c.json({
+    ...snapshot,
+    permissions: PROFILE_PERMISSION_AREAS,
+    profiles: await Promise.all(profiles.map(async (profile) => ({
+      ...profile,
+      is_child: profile.is_child === 1,
+      is_admin: profile.is_admin === 1,
+      access: await effectivePermissions(profile.id, profile.id === currentUserId(c) && isAdmin(c)),
+    }))),
+  });
+});
+
+api.put("/access-control/groups/:id", async (c) => {
+  if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
+  const groupId = Number(c.req.param("id"));
   const body = await c.req.json().catch(() => ({}));
-  if (!Array.isArray(body.admin_only_areas) || body.admin_only_areas.some((area: unknown) => !isProfilePermissionArea(area))) {
-    return c.json({ error: "invalid admin-only areas" }, 400);
+  if (!Number.isSafeInteger(groupId) || !Array.isArray(body.permissions) || body.permissions.some((permission: unknown) => !isProfilePermissionArea(permission))) return c.json({ error: "invalid permission group" }, 400);
+  const exists = await database.prepare("SELECT id FROM permission_groups WHERE id=?").get(groupId);
+  if (!exists) return c.json({ error: "not found" }, 404);
+  await updateGroupPermissions(groupId, [...new Set(body.permissions as ProfilePermissionArea[])]);
+  await database.prepare("UPDATE permission_policy SET revision=revision+1 WHERE singleton=1").run();
+  return c.json(await accessControlSnapshot());
+});
+
+api.post("/access-control/groups", async (c) => {
+  if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name || !Array.isArray(body.permissions) || body.permissions.some((permission: unknown) => !isProfilePermissionArea(permission))) return c.json({ error: "invalid permission group" }, 400);
+  const group = await database.prepare("INSERT INTO permission_groups(portable_uuid,name,is_system) VALUES(?,?,0) RETURNING id").get(crypto.randomUUID(), name) as { id: number };
+  await updateGroupPermissions(group.id, [...new Set(body.permissions as ProfilePermissionArea[])]);
+  await database.prepare("UPDATE permission_policy SET revision=revision+1 WHERE singleton=1").run();
+  return c.json(await accessControlSnapshot(), 201);
+});
+
+api.put("/access-control/default-group", async (c) => {
+  if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const groupId = Number(body.group_id);
+  if (!Number.isSafeInteger(groupId) || !await database.prepare("SELECT id FROM permission_groups WHERE id=?").get(groupId)) return c.json({ error: "invalid group" }, 400);
+  await database.prepare("UPDATE permission_policy SET default_group_id=?,revision=revision+1 WHERE singleton=1").run(groupId);
+  return c.json(await accessControlSnapshot());
+});
+
+api.put("/access-control/profiles/:id", async (c) => {
+  if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
+  const userId = Number(c.req.param("id"));
+  const body = await c.req.json().catch(() => ({}));
+  const groupId = Number(body.group_id);
+  if (!Number.isSafeInteger(userId) || !Number.isSafeInteger(groupId) || !await database.prepare("SELECT id FROM users WHERE id=?").get(userId) || !await database.prepare("SELECT id FROM permission_groups WHERE id=?").get(groupId)) return c.json({ error: "invalid profile access" }, 400);
+  const overrides = body.overrides && typeof body.overrides === "object" && !Array.isArray(body.overrides) ? body.overrides as Record<string, unknown> : {};
+  if (Object.entries(overrides).some(([permission, value]) => !isProfilePermissionArea(permission) || (value !== "allow" && value !== "deny"))) return c.json({ error: "invalid override" }, 400);
+  await updateProfileAccess(userId, groupId, overrides as Partial<Record<ProfilePermissionArea, "allow" | "deny">>);
+  await database.prepare("UPDATE permission_policy SET revision=revision+1 WHERE singleton=1").run();
+  return c.json({ access: await effectivePermissions(userId) });
+});
+
+api.delete("/access-control/groups/:id", async (c) => {
+  if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
+  const groupId = Number(c.req.param("id"));
+  const replacementId = Number(c.req.query("replacement_group_id"));
+  const snapshot = await accessControlSnapshot();
+  if (!Number.isSafeInteger(groupId) || groupId === snapshot.default_group_id) return c.json({ error: "default group cannot be deleted" }, 409);
+  if (await groupMemberCount(groupId) > 0) {
+    if (!Number.isSafeInteger(replacementId) || !await database.prepare("SELECT id FROM permission_groups WHERE id=?").get(replacementId)) return c.json({ error: "replacement group required" }, 409);
+    await database.prepare("UPDATE profile_permission_groups SET group_id=? WHERE group_id=?").run(replacementId, groupId);
   }
-  const areas = [...new Set(body.admin_only_areas as ProfilePermissionArea[])];
-  await setSetting("profile_admin_only_areas", serializeAdminOnlyAreas(areas));
-  return c.json({ permissions: { admin_only_areas: adminOnlyAreas() } });
+  await database.prepare("DELETE FROM permission_groups WHERE id=?").run(groupId);
+  await database.prepare("UPDATE permission_policy SET revision=revision+1 WHERE singleton=1").run();
+  return c.json(await accessControlSnapshot());
 });
 
 api.post("/child-lock/enable", async (c) => {
@@ -128,6 +194,8 @@ api.put("/settings", async (c) => {
   const uid = currentUserId(c);
   const primary = isAdmin(c);
   const body = await c.req.json();
+  if (!body || typeof body !== "object" || Array.isArray(body)) return c.json({ error: "settings must be an object" }, 400);
+  if (Object.keys(body).some((key) => !(key in SETTING_DEFAULTS))) return c.json({ error: "unknown setting" }, 400);
   if ("language" in body && !isLanguage(body.language)) return c.json({ error: "unsupported interface language" }, 400);
   if ("timezone" in body && timeZoneIsEnvironmentLocked()) return c.json({ error: "timezone is controlled by the TZ environment variable" }, 409);
   if ("timezone" in body && !isValidTimeZone(body.timezone)) return c.json({ error: "invalid timezone" }, 400);

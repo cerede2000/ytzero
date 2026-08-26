@@ -15,6 +15,7 @@ import { getSetting, getUserSetting, setSetting, setUserSetting } from "../db";
 import { invalidateAudioSources, removeDownload, removeDownloadCookies } from "../downloader";
 import { log } from "../logger";
 import { generateTemporaryPassword, uniqueProfileUsername } from "../profileCredentials";
+import { assignDefaultPermissionGroup } from "../accessControl";
 import {
   commitStagedProfileAvatar,
   optimizeProfileAvatar,
@@ -192,6 +193,7 @@ api.post("/profiles", async (c) => {
   const row = await database
     .prepare("INSERT INTO users (name, avatar_color, pin_hash, oidc_subject, is_child, sort_order, portable_uuid) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *")
     .get(name.trim(), avatar_color || "#7c5cff", pinHash, identity || null, is_child ? 1 : 0, nextOrder, crypto.randomUUID()) as UserRow;
+  await assignDefaultPermissionGroup(row.id);
   let temporaryCredentials: { username: string; password: string } | null = null;
   if (authMethod() === "per_profile") {
     const existing = await database.prepare("SELECT username FROM users WHERE id != ? AND username IS NOT NULL").all(row.id) as Array<{ username: string }>;

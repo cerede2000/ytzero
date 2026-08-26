@@ -55,24 +55,9 @@ const SETTINGS_AREAS: { id: Tab; primaryOnly?: boolean }[] = [
 ];
 
 const DISPLAY_PERMISSION_AREAS: ProfilePermissionArea[] = ["appearance", "feed", "navigation", "playback"];
-const DEFAULT_ADMIN_ONLY_AREAS: ProfilePermissionArea[] = ["channels", "followed_playlists", "imports", ...DISPLAY_PERMISSION_AREAS, "plugins", "profiles"];
 const GITHUB_RELEASES_URL = "https://github.com/Pelski/ytzero/releases";
 const PIN_PROTECTED_PERMISSION_AREAS = new Set<ProfilePermissionArea>(["channels", "followed_playlists", "imports", ...DISPLAY_PERMISSION_AREAS, "plugins", "profiles"]);
 
-const PROFILE_PERMISSION_OPTIONS: { id: ProfilePermissionArea; labelKey: I18nKey; hintKey: I18nKey }[] = [
-  { id: "channels", labelKey: "profilePermissionChannels", hintKey: "profilePermissionChannelsHint" },
-  { id: "followed_playlists", labelKey: "profilePermissionFollowedPlaylists", hintKey: "profilePermissionFollowedPlaylistsHint" },
-  { id: "imports", labelKey: "profilePermissionImports", hintKey: "profilePermissionImportsHint" },
-  { id: "tags", labelKey: "profilePermissionTags", hintKey: "profilePermissionTagsHint" },
-  { id: "filters", labelKey: "profilePermissionFilters", hintKey: "profilePermissionFiltersHint" },
-  { id: "playlists", labelKey: "profilePermissionPlaylists", hintKey: "profilePermissionPlaylistsHint" },
-  { id: "appearance", labelKey: "profilePermissionAppearance", hintKey: "profilePermissionAppearanceHint" },
-  { id: "feed", labelKey: "profilePermissionFeed", hintKey: "profilePermissionFeedHint" },
-  { id: "navigation", labelKey: "profilePermissionNavigation", hintKey: "profilePermissionNavigationHint" },
-  { id: "playback", labelKey: "profilePermissionPlayback", hintKey: "profilePermissionPlaybackHint" },
-  { id: "plugins", labelKey: "profilePermissionPlugins", hintKey: "profilePermissionPluginsHint" },
-  { id: "profiles", labelKey: "profilePermissionProfiles", hintKey: "profilePermissionProfilesHint" },
-];
 
 function permissionAreaForTab(tab: Tab): ProfilePermissionArea | null {
   if (tab === "channels" || tab === "tags" || tab === "playlists" || tab === "plugins" || tab === "profiles") return tab;
@@ -214,7 +199,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
   const [deArrowThumbnailsEnabled, setDeArrowThumbnailsEnabled] = useState(false);
   const [childWatchingMonitorEnabled, setChildWatchingMonitorEnabled] = useState(true);
   const [childLock, setChildLock] = useState<ChildLockStatus>({ enabled: false, locked: false });
-  const [profilePermissions, setProfilePermissions] = useState<ProfilePermissions>({ admin_only_areas: DEFAULT_ADMIN_ONLY_AREAS });
+  const [profilePermissions, setProfilePermissions] = useState<ProfilePermissions>({ profile_id: 0, group_id: 0, overrides: {}, effective: [], admin_only_areas: [] });
   const [unlockPin, setUnlockPin] = useState("");
   const [enablePin, setEnablePin] = useState("");
   const [enablePinConfirm, setEnablePinConfirm] = useState("");
@@ -913,20 +898,6 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     showToast(t("settingsLocked"));
   };
 
-  const toggleAdminOnlyArea = async (area: ProfilePermissionArea, adminOnly: boolean) => {
-    const previous = profilePermissions;
-    const adminOnlyAreas = adminOnly
-      ? [...new Set([...profilePermissions.admin_only_areas, area])]
-      : profilePermissions.admin_only_areas.filter((item) => item !== area);
-    setProfilePermissions({ admin_only_areas: adminOnlyAreas });
-    try {
-      const result = await api.updateProfilePermissions(adminOnlyAreas);
-      setProfilePermissions(result.permissions);
-    } catch (error) {
-      setProfilePermissions(previous);
-      showToast(`${t("error")}: ${error instanceof Error ? error.message : error}`);
-    }
-  };
 
   const addChannel = async () => {
     if (!channelUrl.trim() || addingChannel) return;
@@ -1056,7 +1027,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
         return title.includes(normalizedChannelQuery) || channelId.includes(normalizedChannelQuery);
       })
     : channels;
-  const canManageArea = (area: ProfilePermissionArea) => isPrimary || !profilePermissions.admin_only_areas.includes(area);
+  const canManageArea = (area: ProfilePermissionArea) => isPrimary || profilePermissions.effective.includes(area);
   const channelSubTabOptions: { value: "list" | "playlists" | "filters"; label: string; count: number }[] = [
     ...(canManageArea("channels") ? [{ value: "list" as const, label: t("channels"), count: channels.length }] : []),
     ...(canManageArea("followed_playlists") ? [{ value: "playlists" as const, label: t("followedPlaylists"), count: followedPlaylists.length }] : []),
@@ -1091,7 +1062,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
       && (tabItem.id !== "auth" || canManageAdministrators)
       && hasVisibleChannelSection
       && hasVisibleDisplaySection
-      && (tabItem.id === "channels" || isPrimary || permissionArea == null || !profilePermissions.admin_only_areas.includes(permissionArea) || (tabItem.id === "profiles" && activeAuthMethod === "per_profile"));
+      && (tabItem.id === "channels" || isPrimary || permissionArea == null || profilePermissions.effective.includes(permissionArea) || (tabItem.id === "profiles" && activeAuthMethod === "per_profile"));
   });
   const tabIsVisible = (candidate: Tab) => visibleAreas.some((tabItem) => tabItem.id === candidate);
   const currentSettingsView = tab === "channels"
@@ -1149,7 +1120,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     if (!visibleAreas.some((tabItem) => tabItem.id === tab)) {
       setTab(visibleAreas[0]?.id ?? "tags");
     }
-  }, [settingsReady, isChildProfile, isPrimary, canManageAdministrators, profilePermissions.admin_only_areas, tab]);
+  }, [settingsReady, isChildProfile, isPrimary, canManageAdministrators, profilePermissions.effective, tab]);
 
   useEffect(() => {
     if (!settingsReady || tab !== "channels" || channelSubTabOptions.some((option) => option.value === channelSubTab)) return;
@@ -1355,7 +1326,6 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     tags,
     timeZone,
     timeZoneLocked,
-    toggleAdminOnlyArea,
     toggleChannelFollow, toggleChannelPostsTab,
     toggleChannelTag,
     toggleFeedAutoplay,

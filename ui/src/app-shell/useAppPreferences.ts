@@ -7,6 +7,10 @@ import { queueSettingWrite } from "../settingsWriteQueue";
 import { applyVideoCardSize } from "../videoCardSize";
 import { applyWatchedStyle, parseWatchedStyle } from "../watchedStyle";
 const DEFAULT_PROFILE_PERMISSIONS: ProfilePermissions = {
+  profile_id: 0,
+  group_id: 0,
+  overrides: {},
+  effective: ["channels", "followed_playlists", "tags", "filters", "playlists"],
   admin_only_areas: ["imports", "appearance", "feed", "navigation", "playback", "plugins", "profiles"],
 };
 export function useAppPreferences() {

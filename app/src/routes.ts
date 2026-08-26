@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { database } from "./database";
-import { getSetting } from "./db";
+import { getSetting, GLOBAL_SETTING_KEYS } from "./db";
 import { parseOpml, parseTakeoutCsv } from "./youtube";
 import { getCachedImage } from "./imgcache";
 import { isAllowedRemoteImageUrl, shouldExposeImageCacheMiss } from "./imageCachePolicy";
@@ -9,7 +9,8 @@ import { log } from "./logger";
 import { registerRequestDiagnostics } from "./requestDiagnostics";
 import { isChildUser } from "./childTime";
 import { beginMutation, maintenanceStatus } from "./maintenance";
-import { isProfilePermissionArea, parseAdminOnlyAreas, permissionAreaForMutation, permissionAreasForSettings, serializeAdminOnlyAreas, settingsMutationRequiresAdmin, type ProfilePermissionArea } from "./profilePermissions";
+import { permissionAreaForMutation, permissionAreasForSettings, PIN_PROTECTED_PERMISSION_AREAS, type ProfilePermissionArea } from "./profilePermissions";
+import { ensureAccessControl, hasPermission } from "./accessControl";
 import {
   authMethod,
   AUTH_SESSION_COOKIE,
@@ -49,6 +50,7 @@ import {
 } from "./videoRoutesSupport";
 export { importTakeoutHistory } from "./routes/importRoutes";
 await migrateDownloadsFromPlugin();
+await ensureAccessControl();
 export const api = new Hono<{ Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } }>();
 registerRequestDiagnostics(api);
 
@@ -56,17 +58,6 @@ registerRequestDiagnostics(api);
 
 const CHILD_LOCK_SESSION_COOKIE = "ytzero_child_lock";
 const CHILD_LOCK_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-const CHILD_LOCK_PIN_PROTECTED_AREAS = new Set<ProfilePermissionArea>([
-  "channels",
-  "followed_playlists",
-  "imports",
-  "appearance",
-  "feed",
-  "navigation",
-  "playback",
-  "plugins",
-  "profiles",
-]);
 const childLockSessions = new Map<string, number>();
 
 function parseCookies(header: string | undefined) {
@@ -117,10 +108,6 @@ function childLockStatus(c: any) {
     // other profiles and never hides settings from the primary/admin profile.
     locked: enabled && !isAdmin(c) && !hasChildLockSession(c),
   };
-}
-
-function adminOnlyAreas(): ProfilePermissionArea[] {
-  return parseAdminOnlyAreas(getSetting("profile_admin_only_areas"));
 }
 
 async function verifyChildLockPin(pin: string) {
@@ -311,7 +298,7 @@ api.use("*", async (c, next) => {
   const method = c.req.method.toUpperCase();
   const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
   const settingsBody = isMutation && path === "/settings" ? await c.req.json().catch(() => null) : null;
-  if (!isAdmin(c) && settingsBody != null && settingsMutationRequiresAdmin(settingsBody)) {
+  if (!isAdmin(c) && settingsBody != null && Object.keys(settingsBody).some((key) => GLOBAL_SETTING_KEYS.has(key) || key === "update_check_interval")) {
     return c.json({ error: "admin only" }, 403);
   }
   const areas = !isMutation
@@ -319,12 +306,12 @@ api.use("*", async (c, next) => {
     : path === "/settings"
       ? permissionAreasForSettings(settingsBody)
       : [permissionAreaForMutation(path)].filter((area): area is ProfilePermissionArea => area != null);
-  if (!isAdmin(c) && areas.some((area) => adminOnlyAreas().includes(area))) {
+  if (!isAdmin(c) && (await Promise.all(areas.map((area) => hasPermission(currentUserId(c), area)))).some((allowed) => !allowed)) {
     return c.json({ error: "admin only" }, 403);
   }
   // Child Lock keeps its original role: a temporary PIN gate for shared
   // settings. Personal tags and playlists remain usable while it is locked.
-  const isPinProtected = areas.some((area) => CHILD_LOCK_PIN_PROTECTED_AREAS.has(area));
+  const isPinProtected = areas.some((area) => PIN_PROTECTED_PERMISSION_AREAS.has(area));
   if (isPinProtected && !isAdmin(c) && !hasChildLockSession(c)) {
     return c.json({ error: "settings locked" }, 423);
   }
@@ -421,12 +408,12 @@ api.get("/img", async (c) => {
 });
 
 registerSettingsRoutes(api, {
-  adminOnlyAreas,
   childLockStatus,
   clearChildLockSession,
   currentUserId,
   hashChildLockPin,
   isAdmin,
+  isPrimaryUser,
   isChildLockEnabled,
   isSixDigitPin,
   setChildLockSession,

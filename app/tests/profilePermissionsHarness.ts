@@ -29,7 +29,9 @@ const unlockResponse = await request(secondary.id, "/child-lock/unlock", "POST",
 const unlockCookie = (unlockResponse.headers.get("set-cookie") ?? "").split(";", 1)[0];
 const restrictedAfterPin = await request(secondary.id, "/settings", "PUT", { show_shorts: "1" }, unlockCookie);
 
-const policyResponse = await request(1, "/profile-permissions", "PUT", { admin_only_areas: ["filters", "playlists", "followed_playlists", "playback"] });
+const snapshot = await (await request(1, "/access-control")).json() as any;
+const secondaryAccess = snapshot.profiles.find((profile: any) => profile.id === secondary.id).access;
+const policyResponse = await request(1, `/access-control/profiles/${secondary.id}`, "PUT", { group_id: secondaryAccess.group_id, overrides: { filters: "deny", playlists: "deny", followed_playlists: "deny", playback: "deny" } });
 const policy = await policyResponse.json() as any;
 const pinLockedSettings = await request(secondary.id, "/settings", "PUT", { show_shorts: "0" });
 const delegatedSettings = await request(secondary.id, "/settings", "PUT", { show_shorts: "0" }, unlockCookie);
@@ -38,7 +40,7 @@ const restrictedPlaylist = await request(secondary.id, "/playlists", "POST", { n
 const restrictedFollowedPlaylist = await request(secondary.id, "/channel-playlists/PLblocked/follow", "PUT", { followed: true }, unlockCookie);
 const restrictedFilter = await request(secondary.id, "/filter-rules", "POST", { pattern: "blocked", match_type: "contains", field: "title", action: "reject" }, unlockCookie);
 const delegatedProfile = await request(secondary.id, `/profiles/${secondary.id}`, "PATCH", { name: "Renamed" }, unlockCookie);
-const forbiddenPolicy = await request(secondary.id, "/profile-permissions", "PUT", { admin_only_areas: [] }, unlockCookie);
+const forbiddenPolicy = await request(secondary.id, "/access-control/profiles/1", "PUT", { group_id: secondaryAccess.group_id }, unlockCookie);
 
 const forbiddenLogs = await request(secondary.id, "/logs");
 const forbiddenExternal = await request(secondary.id, "/external");
@@ -63,7 +65,7 @@ console.log("RESULT " + JSON.stringify({
   unlockStatus: unlockResponse.status,
   restrictedAfterPinStatus: restrictedAfterPin.status,
   policyStatus: policyResponse.status,
-  policyAreas: policy.permissions.admin_only_areas,
+  policyAreas: policy.access.admin_only_areas,
   pinLockedSettingsStatus: pinLockedSettings.status,
   delegatedSettingsStatus: delegatedSettings.status,
   restrictedPlaybackStatus: restrictedPlayback.status,

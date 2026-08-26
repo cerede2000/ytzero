@@ -64,6 +64,7 @@ import {
   type Profile,
   type ProfilePermissionArea,
   type ProfilePermissions,
+  type AccessControlSnapshot,
   type RecommendationsRequest,
   type RecommendationsResponse,
   type RestoreAnalysis,
@@ -375,8 +376,11 @@ export const api = {
     http("/settings", { method: "PUT", body: JSON.stringify(s) }),
   childLock: () => sharedGet<{ child_lock: ChildLockStatus }>("child-lock", "/child-lock"),
   profilePermissions: () => sharedGet<{ permissions: ProfilePermissions }>("profile-permissions", "/profile-permissions"),
-  updateProfilePermissions: (adminOnlyAreas: ProfilePermissionArea[]) =>
-    http<{ permissions: ProfilePermissions }>("/profile-permissions", { method: "PUT", body: JSON.stringify({ admin_only_areas: adminOnlyAreas }) }),
+  accessControl: () => http<AccessControlSnapshot>("/access-control"),
+  createPermissionGroup: (name: string, permissions: ProfilePermissionArea[]) => http<AccessControlSnapshot>("/access-control/groups", { method: "POST", body: JSON.stringify({ name, permissions }) }),
+  updatePermissionGroup: (id: number, permissions: ProfilePermissionArea[]) => http<AccessControlSnapshot>(`/access-control/groups/${id}`, { method: "PUT", body: JSON.stringify({ permissions }) }),
+  setDefaultPermissionGroup: (groupId: number) => http<AccessControlSnapshot>("/access-control/default-group", { method: "PUT", body: JSON.stringify({ group_id: groupId }) }),
+  updateProfileAccess: (id: number, groupId: number, overrides: Partial<Record<ProfilePermissionArea, "allow" | "deny">>) => http<{ access: ProfilePermissions }>(`/access-control/profiles/${id}`, { method: "PUT", body: JSON.stringify({ group_id: groupId, overrides }) }),
   enableChildLock: (pin: string) =>
     http<{ child_lock: ChildLockStatus }>("/child-lock/enable", { method: "POST", body: JSON.stringify({ pin }) }),
   unlockChildLock: (pin: string) =>

@@ -27,8 +27,8 @@ describe("cross-database schema migrations", () => {
     await database.exec("CREATE TABLE videos (video_id TEXT PRIMARY KEY)");
     await database.exec("INSERT INTO user_playlist_videos VALUES (1, 'later', '2026-01-02'), (1, 'earlier', '2026-01-01')");
 
-    expect(await applyDatabaseMigrations(database)).toBe(100);
-    expect(await applyDatabaseMigrations(database)).toBe(100);
+    expect(await applyDatabaseMigrations(database)).toBe(101);
+    expect(await applyDatabaseMigrations(database)).toBe(101);
 
     const columns = await database.prepare('PRAGMA table_info("user_channels")').all<{ name: string }>();
     expect(columns.some((column) => column.name === "shorts_feed_visibility")).toBe(true);
@@ -48,6 +48,10 @@ describe("cross-database schema migrations", () => {
       .toEqual({ count: 1 });
     expect(await database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='tube_archivist_items'").get<{ count: number }>())
       .toEqual({ count: 1 });
+    for (const table of ["permission_groups", "permission_group_permissions", "profile_permission_groups", "profile_permission_overrides", "permission_policy"]) {
+      expect(await database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name=?").get<{ count: number }>(table))
+        .toEqual({ count: 1 });
+    }
     await database.close();
   });
 });

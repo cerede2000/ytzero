@@ -31,6 +31,7 @@ import { FollowedPlaylistSettingsList } from "../components/settings/FollowedPla
 import { scheduleSettingWrite } from "../settingsWriteQueue";
 import ProfilesSettings, { ProfilePasswordSettings } from "../components/settings/ProfileSettings";
 import { ChannelOwnership, FilterRuleGroups, PlaylistSettingsItem, PluginMultiselect, RuleRow, SidebarNavEditor, TagRow } from "../components/settings/SettingsEditors";
+import ProfileAccessSettings from "../components/settings/ProfileAccessSettings";
 import { ChangelogNote, LogLine, SettingsLoadingState } from "../components/settings/SettingsSupport";
 import { SettingsSearch } from "../components/settings/SettingsSearch";
 import ChannelSettingsDialog, { hasCustomChannelSettings } from "../components/settings/ChannelSettingsDialog";
@@ -63,24 +64,9 @@ const SETTINGS_AREAS: { id: Tab; primaryOnly?: boolean }[] = [
 ];
 
 const DISPLAY_PERMISSION_AREAS: ProfilePermissionArea[] = ["appearance", "feed", "navigation", "playback"];
-const DEFAULT_ADMIN_ONLY_AREAS: ProfilePermissionArea[] = ["imports", ...DISPLAY_PERMISSION_AREAS, "plugins", "profiles"];
 const GITHUB_RELEASES_URL = "https://github.com/Pelski/ytzero/releases";
 const PIN_PROTECTED_PERMISSION_AREAS = new Set<ProfilePermissionArea>(["channels", "followed_playlists", "imports", ...DISPLAY_PERMISSION_AREAS, "plugins", "profiles"]);
 
-const PROFILE_PERMISSION_OPTIONS: { id: ProfilePermissionArea; labelKey: I18nKey; hintKey: I18nKey }[] = [
-  { id: "channels", labelKey: "profilePermissionChannels", hintKey: "profilePermissionChannelsHint" },
-  { id: "followed_playlists", labelKey: "profilePermissionFollowedPlaylists", hintKey: "profilePermissionFollowedPlaylistsHint" },
-  { id: "imports", labelKey: "profilePermissionImports", hintKey: "profilePermissionImportsHint" },
-  { id: "tags", labelKey: "profilePermissionTags", hintKey: "profilePermissionTagsHint" },
-  { id: "filters", labelKey: "profilePermissionFilters", hintKey: "profilePermissionFiltersHint" },
-  { id: "playlists", labelKey: "profilePermissionPlaylists", hintKey: "profilePermissionPlaylistsHint" },
-  { id: "appearance", labelKey: "profilePermissionAppearance", hintKey: "profilePermissionAppearanceHint" },
-  { id: "feed", labelKey: "profilePermissionFeed", hintKey: "profilePermissionFeedHint" },
-  { id: "navigation", labelKey: "profilePermissionNavigation", hintKey: "profilePermissionNavigationHint" },
-  { id: "playback", labelKey: "profilePermissionPlayback", hintKey: "profilePermissionPlaybackHint" },
-  { id: "plugins", labelKey: "profilePermissionPlugins", hintKey: "profilePermissionPluginsHint" },
-  { id: "profiles", labelKey: "profilePermissionProfiles", hintKey: "profilePermissionProfilesHint" },
-];
 
 function permissionAreaForTab(tab: Tab): ProfilePermissionArea | null {
   if (tab === "channels" || tab === "tags" || tab === "playlists" || tab === "plugins" || tab === "profiles") return tab;
@@ -292,7 +278,6 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
     tagSubTab,
     tags,
     timeZone,
-    toggleAdminOnlyArea,
     toggleChannelFollow,
     toggleChannelTag,
     toggleFeedAutoplay,
@@ -468,26 +453,7 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
 
           </SettingsSection>}
 
-          {isPrimary && canManageArea("profiles") && (
-            <SettingsSection
-              title={t("profilePermissionsTitle")}
-              description={t("profilePermissionsHint")}
-            >
-              {PROFILE_PERMISSION_OPTIONS.map((option) => (
-                <SettingRow
-                  key={option.id}
-                  label={t(option.labelKey)}
-                  description={t(option.hintKey)}
-                >
-                  <Switch
-                    checked={profilePermissions.admin_only_areas.includes(option.id)}
-                    ariaLabel={t(option.labelKey)}
-                    onCheckedChange={(checked) => void toggleAdminOnlyArea(option.id, checked)}
-                  />
-                </SettingRow>
-              ))}
-            </SettingsSection>
-          )}
+          {isPrimary && <ProfileAccessSettings showToast={showToast} />}
 
           {isPrimary && canManageArea("profiles") && <ChannelOwnership showToast={showToast} />}
         </>

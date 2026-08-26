@@ -9,6 +9,7 @@ import {
   setPluginSettings,
 } from "../plugins";
 import { registerTubeArchivistRoutes } from "./tubeArchivistRoutes";
+import { hasPermission } from "../accessControl";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
@@ -31,6 +32,7 @@ api.get("/plugins", async (c) => {
 });
 
 api.put("/plugins/:id", async (c) => {
+  if (!isAdmin(c)) return c.json({ error: "admin only" }, 403);
   const { enabled } = await c.req.json() as { enabled?: boolean };
   try {
     const pluginId = c.req.param("id");
@@ -54,6 +56,7 @@ api.put("/plugins/:id/settings", async (c) => {
   try {
     const uid = currentUserId(c);
     const body = await c.req.json();
+    if (!isAdmin(c) && !await hasPermission(uid, "plugins")) return c.json({ error: "permission denied" }, 403);
     if (!isAdmin(c) && body && typeof body === "object" && Object.keys(body).some((key) => pluginAdminSettingKeys(c.req.param("id")).has(key))) {
       return c.json({ error: "administrator setting" }, 403);
     }
@@ -66,7 +69,7 @@ api.put("/plugins/:id/settings", async (c) => {
 api.post("/plugins/:id/reset", async (c) => {
   try {
     const uid = currentUserId(c);
-    if (c.req.param("id") === "social" && !isAdmin(c)) return c.json({ error: "admin only" }, 403);
+    if (!isAdmin(c)) return c.json({ error: "admin only" }, 403);
     return c.json(await resetPluginState(uid, c.req.param("id"), getUserSetting(uid, "language")));
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 404);

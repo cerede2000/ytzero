@@ -23,6 +23,7 @@ import type {
 import * as oidc from "openid-client";
 import { getSetting } from "./db";
 import { database } from "./database";
+import { assignDefaultPermissionGroup } from "./accessControl";
 import {
   environmentAuthMethod,
   environmentAuthPasswordConfigured,
@@ -429,6 +430,7 @@ export async function oidcCallback(
         .prepare("INSERT INTO users (name, avatar_color, oidc_subject, sort_order, portable_uuid) VALUES (?, ?, ?, ?, ?) RETURNING id")
         .get<{ id: number }>(name, "#7c5cff", claimValue, nextOrder, crypto.randomUUID());
       if (!created) throw new Error("profile creation did not return an id");
+      await assignDefaultPermissionGroup(created.id);
       row = created;
     } else {
       throw new Error("no profile mapped to this identity");

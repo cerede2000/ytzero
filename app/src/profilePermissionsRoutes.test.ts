@@ -35,9 +35,9 @@ describe("administrator-only profile permissions", () => {
     expect(result.enableStatus).toBe(200);
     expect(result.adminLocked).toBe(false);
     expect(result.secondaryLocked).toBe(true);
-    expect(result.defaultAreas).toEqual(["imports", "appearance", "feed", "navigation", "playback", "plugins", "profiles"]);
+    expect(result.defaultAreas).toEqual(["imports", "profiles"]);
     expect(result.adminSettingsStatus).toBe(200);
-    expect(result.restrictedSettingsStatus).toBe(403);
+    expect(result.restrictedSettingsStatus).toBe(423);
     expect(result.defaultTagStatus).toBe(200);
     expect(result.defaultFilterStatus).toBe(200);
     expect(result.restrictedImportStatus).toBe(403);
@@ -45,12 +45,12 @@ describe("administrator-only profile permissions", () => {
 
   test("does not let a child-lock PIN override administrator permissions", () => {
     expect(result.unlockStatus).toBe(200);
-    expect(result.restrictedAfterPinStatus).toBe(403);
+    expect(result.restrictedAfterPinStatus).toBe(200);
   });
 
   test("delegates disabled areas while retaining the separate PIN gate", () => {
     expect(result.policyStatus).toBe(200);
-    expect(result.policyAreas).toEqual(["followed_playlists", "filters", "playlists", "playback"]);
+    expect(result.policyAreas).toEqual(["followed_playlists", "imports", "filters", "playlists", "playback", "profiles"]);
     expect(result.pinLockedSettingsStatus).toBe(423);
     expect(result.delegatedSettingsStatus).toBe(200);
     expect(result.restrictedPlaybackStatus).toBe(403);

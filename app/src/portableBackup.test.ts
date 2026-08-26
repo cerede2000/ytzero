@@ -271,8 +271,9 @@ describe("portable backup classification and restore", () => {
     expect(serialized).not.toContain("auth_hide_other_profiles");
     expect(serialized).not.toContain("CHILD-PIN-HASH-DO-NOT-EXPORT");
     expect(serialized).not.toContain("child_lock_enabled");
-    expect(serialized).toContain("profile_admin_only_areas");
-    expect(serialized).toContain('\\\"appearance\\\",\\\"feed\\\",\\\"navigation\\\",\\\"playback\\\",\\\"profiles\\\"');
+    expect(serialized).toContain("instance.access-control");
+    expect(serialized).not.toContain("profile_admin_only_areas");
+    expect(serialized).toContain('"appearance"');
     expect(serialized).not.toContain("profile-identity-do-not-export@example.com");
     expect(serialized).not.toContain('"is_admin"');
     expect(serialized).not.toContain("2099-12-31 23:59:58");
@@ -461,7 +462,7 @@ describe("portable backup classification and restore", () => {
     expect((db.prepare("SELECT value FROM download_settings WHERE user_id=1 AND key='enabled'").get() as { value: string }).value).toBe("1");
     expect(getSetting("downloads_output_template")).toBe("portable/{id}");
     expect((db.prepare("SELECT value FROM settings WHERE key='profile_admin_only_areas'").get() as { value: string }).value)
-      .toBe(permissions.serializeAdminOnlyAreas(["channels", "followed_playlists", "imports", "plugins"]));
+      .toBe("[]");
     expect(getSetting("timezone")).toBe("Europe/London");
     expect(db.prepare("SELECT name, include_keywords_json, exclude_keywords_json FROM download_rules WHERE portable_uuid=?").get(ruleUuid)).toEqual({ name: "Portable downloads", include_keywords_json: '["episode"]', exclude_keywords_json: '["trailer"]' });
     expect((db.prepare("SELECT COUNT(*) AS n FROM download_rules WHERE portable_uuid=?").get(ruleUuid) as { n: number }).n).toBe(1);

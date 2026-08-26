@@ -647,7 +647,37 @@ export interface ChildLockStatus {
 }
 
 export interface ProfilePermissions {
+  profile_id: number;
+  group_id: number;
+  overrides: Partial<Record<ProfilePermissionArea, "allow" | "deny">>;
+  effective: ProfilePermissionArea[];
+  /** Compatibility projection; new code uses `effective`. */
   admin_only_areas: ProfilePermissionArea[];
+}
+
+export interface PermissionGroup {
+  id: number;
+  portable_uuid: string;
+  name: string;
+  is_system: boolean;
+  permissions: ProfilePermissionArea[];
+}
+
+export interface AccessControlProfile {
+  id: number;
+  name: string;
+  avatar_color: string;
+  is_child: boolean;
+  is_admin: boolean;
+  access: ProfilePermissions;
+}
+
+export interface AccessControlSnapshot {
+  revision: number;
+  default_group_id: number;
+  permissions: ProfilePermissionArea[];
+  groups: PermissionGroup[];
+  profiles: AccessControlProfile[];
 }
 
 export interface Profile {

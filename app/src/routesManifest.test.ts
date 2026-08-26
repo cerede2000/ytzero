@@ -45,7 +45,11 @@ describe("HTTP route manifest", () => {
     const importVideoRoute = "POST /videos/:id/import";
     const sessionPlaylistRoute = "POST /playlists/from-session-queue";
     const clearVideoBookmarksRoute = "DELETE /videos/:id/bookmark";
-    expect(routes).toHaveLength(239);
+    const accessControlRoutes = [
+      "GET /access-control", "PUT /access-control/groups/:id", "POST /access-control/groups",
+      "PUT /access-control/default-group", "PUT /access-control/profiles/:id", "DELETE /access-control/groups/:id",
+    ];
+    expect(routes).toHaveLength(244);
     expect(routes).toContain(transcriptRoute);
     expect(routes).toContain(playbackAdjacentRoute);
     expect(routes).toContain(liveAudioRoute);
@@ -57,11 +61,12 @@ describe("HTTP route manifest", () => {
     expect(routes).toContain(importVideoRoute);
     expect(routes).toContain(sessionPlaylistRoute);
     expect(routes).toContain(clearVideoBookmarksRoute);
+    for (const route of accessControlRoutes) expect(routes).toContain(route);
     expect(routes).toContain("GET /plugins/tubearchivist/config");
     expect(routes).toContain("POST /plugins/tubearchivist/sync");
-    const legacyRoutes = routes.filter((route) => route !== transcriptRoute && route !== playbackAdjacentRoute && route !== liveAudioRoute && route !== vodAudioRoute && route !== retryAudioRoute && route !== directStreamRoute && route !== ytdlpConfigRoute && route !== ytdlpUpdateRoute && route !== importVideoRoute && route !== sessionPlaylistRoute && route !== clearVideoBookmarksRoute);
+    const legacyRoutes = routes.filter((route) => route !== transcriptRoute && route !== playbackAdjacentRoute && route !== liveAudioRoute && route !== vodAudioRoute && route !== retryAudioRoute && route !== directStreamRoute && route !== ytdlpConfigRoute && route !== ytdlpUpdateRoute && route !== importVideoRoute && route !== sessionPlaylistRoute && route !== clearVideoBookmarksRoute && !accessControlRoutes.includes(route));
     expect(createHash("sha256").update(legacyRoutes.join("\n")).digest("hex"))
-      .toBe("ce5fbc6491fcbf33a9cb036f81c4f3978b4620a795e1b56c26c0317362a8c975");
+      .toBe("80c5a76e8b9e73067474352689dee5912762cbd8933feb23ceb68592f592158b");
   });
 
   test("does not register duplicate method/path pairs", () => {
