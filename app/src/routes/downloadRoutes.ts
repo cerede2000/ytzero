@@ -7,7 +7,7 @@ import { log } from "../logger";
 import { childLocalOnly, isChildUser } from "../childTime";
 import { cookieHealth, currentCookieHealth, forgetCookieHealth } from "../youtubeCookieHealth";
 import { DOWNLOADS_ADMIN_SETTING_KEYS, downloadCookiesConfigured, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
-import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, getVideoResponse, hasHlsSession, invalidateAudioSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
+import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, getDirectVideoResponse, hasHlsSession, invalidateAudioSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
 import { createDownloadRule, deleteDownloadRule, DownloadRuleValidationError, listDownloadRules, previewDownloadRule, updateDownloadRule, type DownloadRuleInput } from "../downloadRules";
 import { availableSubtitlesForVideo, normalizeSubtitleLanguage, subtitleStreamForVideo } from "../subtitleAvailability";
 import { subtitleLanguageLabel } from "../subtitleLanguages";
@@ -372,13 +372,13 @@ registerAudioRoutes(api, currentUserId);
 // is far more reliable than the transcoding stream, at the cost of quality
 // (progressive tops out around 720p); the full-quality file comes from a real
 // download.
-api.get("/videos/:id/videostream", async (c) => {
+api.get("/videos/:id/direct-stream", async (c) => {
   const uid = currentUserId(c);
   if (await isChildUser(uid)) return c.json({ error: "not allowed" }, 403);
   if (!await profileDownloadsEnabled(uid)) return c.json({ error: "downloads disabled" }, 409);
   const id = c.req.param("id");
   if (!await videoExistsStmt.get(id)) return c.json({ error: "not found" }, 404);
-  const res = await getVideoResponse(uid, id, c.req.header("range") ?? null, c.req.raw.signal);
+  const res = await getDirectVideoResponse(uid, id, c.req.header("range") ?? null, c.req.raw.signal);
   return res ?? c.json({ error: "video unavailable" }, 502);
 });
 

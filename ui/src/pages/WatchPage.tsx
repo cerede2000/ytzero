@@ -313,7 +313,7 @@ export default function WatchPage() {
                   onError={exitStreaming} onExitStreaming={watchTogetherTransportLocked ? undefined : exitStreaming}
                   exitStreamingLabel={t("watchExitStreaming")}
                   onControlsVisibleChange={setPlayerControlsVisible}
-                  src={api.videoStreamUrl(video.video_id)}
+                  src={api.directStreamUrl(video.video_id)}
                   poster={img(video.thumbnail)}
                   autoplay={!watchTogetherRoomId}
                   transportLocked={watchTogetherTransportLocked}

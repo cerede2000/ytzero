@@ -46,9 +46,9 @@ describe("HTTP route manifest", () => {
       "POST /playlists/from-session-queue",
       "DELETE /videos/:id/bookmark",
     ];
-    // Ours, where upstream names its own: the same feature, two implementations
-    // — its direct-stream stack is not in this tree.
-    const directStreamRoute = "GET /videos/:id/videostream";
+    // Upstream's path and upstream's name, over our own implementation of it:
+    // the seam is its, so only the body of the thing is ours to rebase.
+    const directStreamRoute = "GET /videos/:id/direct-stream";
     const ytdlpConfigRoute = "PUT /downloads/ytdlp/config";
     const ytdlpUpdateRoute = "POST /downloads/ytdlp/update";
     const importVideoRoute = "POST /videos/:id/import";
