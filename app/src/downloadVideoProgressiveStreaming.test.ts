@@ -53,7 +53,7 @@ describe("progressive direct video stream", () => {
     expect(first?.headers.get("content-range")).toBe("bytes 0-63/64");
     expect(requests).toEqual([`bytes=0-${8 * 1024 * 1024 - 1}`]);
 
-    const response = await video.getVideoResponse(1, "abc", "bytes=0-63");
+    const response = await video.getDirectVideoResponse(1, "abc", "bytes=0-63");
 
     expect(response?.status).toBe(206);
     expect(asks).toBe(3);
@@ -77,7 +77,7 @@ describe("progressive direct video stream", () => {
       fetchImpl: (async () => chunk(64)) as unknown as typeof fetch,
     });
 
-    const response = await video.getVideoResponse(1, "refused-video", "bytes=0-63");
+    const response = await video.getDirectVideoResponse(1, "refused-video", "bytes=0-63");
 
     expect(attempts).toEqual([false, true]);
     expect(response?.status).toBe(206);
@@ -95,7 +95,7 @@ describe("progressive direct video stream", () => {
       }) as unknown as typeof fetch,
     });
 
-    const response = await video.getVideoResponse(1, "redirected", "bytes=0-63");
+    const response = await video.getDirectVideoResponse(1, "redirected", "bytes=0-63");
 
     expect(response?.status).toBe(206);
     expect(asked[1]).toContain("/moved");
@@ -111,8 +111,8 @@ describe("progressive direct video stream", () => {
       fetchImpl: (async (input: unknown) => { asked.push(String(input)); return chunk(64); }) as unknown as typeof fetch,
     });
 
-    video.primeVideoSource(1, "primed", { url: url("early"), mime: "video/mp4", expiresAt: Date.now() + 60_000 });
-    const response = await video.getVideoResponse(1, "primed", "bytes=0-63");
+    video.primeDirectVideoSource(1, "primed", { url: url("early"), mime: "video/mp4", expiresAt: Date.now() + 60_000 });
+    const response = await video.getDirectVideoResponse(1, "primed", "bytes=0-63");
 
     expect(response?.status).toBe(206);
     expect(resolutions).toBe(0);
@@ -127,8 +127,8 @@ describe("progressive direct video stream", () => {
       fetchImpl: (async () => chunk(64)) as unknown as typeof fetch,
     });
 
-    video.primeVideoSource(1, "shared", { url: url("first"), mime: "video/mp4", expiresAt: Date.now() + 60_000 });
-    await video.getVideoResponse(2, "shared", "bytes=0-63");
+    video.primeDirectVideoSource(1, "shared", { url: url("first"), mime: "video/mp4", expiresAt: Date.now() + 60_000 });
+    await video.getDirectVideoResponse(2, "shared", "bytes=0-63");
 
     expect(resolutions).toBe(1);
   });
@@ -149,7 +149,7 @@ describe("progressive direct video stream", () => {
       fetchImpl: (async () => granted) as unknown as typeof fetch,
     });
 
-    expect(await video.getVideoResponse(1, "abc", "bytes=0-63")).toBeNull();
+    expect(await video.getDirectVideoResponse(1, "abc", "bytes=0-63")).toBeNull();
   });
 
   test("refuses to proxy a host that is not YouTube's media edge", async () => {
@@ -158,7 +158,7 @@ describe("progressive direct video stream", () => {
       fetchImpl: (async () => chunk(64)) as unknown as typeof fetch,
     });
 
-    expect(await video.getVideoResponse(1, "elsewhere", "bytes=0-63")).toBeNull();
+    expect(await video.getDirectVideoResponse(1, "elsewhere", "bytes=0-63")).toBeNull();
   });
 
   test("uses yt-dlp headers for every range request", async () => {
