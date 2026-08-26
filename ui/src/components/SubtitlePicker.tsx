@@ -11,9 +11,6 @@ interface SubtitlePickerProps {
   preferredLanguages: string[];
   loadingLanguage: string | null;
   errorLanguage: string | null;
-  /** Asked once when the menu opens: which languages does this video have? */
-  discovering?: boolean;
-  onOpen?: () => void;
   onSelect: (language: string | null) => void;
   onToggle: () => void;
 }
@@ -25,8 +22,6 @@ export default function SubtitlePicker({
   preferredLanguages,
   loadingLanguage,
   errorLanguage,
-  discovering = false,
-  onOpen,
   onSelect,
   onToggle,
 }: SubtitlePickerProps) {
@@ -62,7 +57,7 @@ export default function SubtitlePicker({
     <div className="lp-sub-menu-wrap">
       <FloatingPopover
         open={open}
-        onOpenChange={(next) => { setOpen(next); if (next) onOpen?.(); }}
+        onOpenChange={setOpen}
         align="end"
         className="lp-sub-menu"
         trigger={
@@ -83,13 +78,13 @@ export default function SubtitlePicker({
           <Menu>
             {preferred.map((language) => (
               <MenuItem
-                key={language}
-                selected={selectedLanguage === language}
+                key={language.lang}
+                selected={selectedLanguage === language.lang}
                 disabled={loadingLanguage != null}
-                onClick={() => select(language)}
-                suffix={status(language)}
+                onClick={() => select(language.lang)}
+                suffix={status(language.lang)}
               >
-                {subtitleLanguageLabel(language)}
+                {language.label}
               </MenuItem>
             ))}
             {preferred.length > 0 && remaining.length > 0 && <MenuSeparator />}
@@ -102,10 +97,8 @@ export default function SubtitlePicker({
             >
                 {language.label}
               </MenuItem>
-            )}
-            {!discovering && subtitles.length === 0 && (
-              <MenuItem disabled>{t("subtitlesNone")}</MenuItem>
-            )}
+            ))}
+            {available.length === 0 && <MenuItem disabled>{t("subtitlesNoneAvailable")}</MenuItem>}
           </Menu>
           </ScrollArea>
       </FloatingPopover>

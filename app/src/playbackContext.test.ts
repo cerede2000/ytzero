@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parsePlaybackContext, type PlaybackContext } from "./playbackContext";
+import { parsePlaybackContext, type PlaybackContext, SESSION_PLAY_QUEUE_MAX_ITEMS } from "./playbackContext";
 import { persistsPlaybackContext } from "./routes/playbackRoutes";
 
 describe("persisted playback context", () => {
@@ -39,11 +39,18 @@ describe("persisted playback context", () => {
     expect(parsePlaybackContext({ version: 1, kind: "session", ids: ["dQw4w9WgXcQ", "dQw4w9WgXcQ"] }))
       .toEqual({ version: 1, kind: "session", ids: ["dQw4w9WgXcQ"] });
     expect(parsePlaybackContext({ version: 1, kind: "session", ids: ["' OR 1=1 --", 42, null] })).toBeNull();
-    expect(parsePlaybackContext({ version: 1, kind: "session", ids: [] })).toBeNull();
+    // An empty queue parses: it is a list that happens to name nothing, and
+    // the adjacency it is asked for simply has no answer.
+    expect(parsePlaybackContext({ version: 1, kind: "session", ids: [] }))
+      .toEqual({ version: 1, kind: "session", ids: [] });
     expect(parsePlaybackContext({ version: 1, kind: "session" })).toBeNull();
-    const many = parsePlaybackContext({ version: 1, kind: "session", ids: Array.from({ length: 300 }, (_, index) => `v${String(index).padStart(10, "0")}`) });
-    expect(many).toMatchObject({ kind: "session" });
-    expect((many as { ids: string[] }).ids).toHaveLength(200);
+    // The cap is a refusal, not a truncation: a list longer than a browser can
+    // build did not come from one, and playing its first hundred entries would
+    // be answering something nobody asked for.
+    const ids = (count: number) => Array.from({ length: count }, (_, index) => `v${String(index).padStart(10, "0")}`);
+    expect(parsePlaybackContext({ version: 1, kind: "session", ids: ids(SESSION_PLAY_QUEUE_MAX_ITEMS) }))
+      .toMatchObject({ kind: "session" });
+    expect(parsePlaybackContext({ version: 1, kind: "session", ids: ids(SESSION_PLAY_QUEUE_MAX_ITEMS + 1) })).toBeNull();
   });
 
   test("rejects unversioned, oversized and snapshot contexts", () => {

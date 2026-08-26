@@ -72,6 +72,15 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
   onReload?: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  /**
+   * The entries either side, when they are known.
+   *
+   * With them the element can move on where it stands — the lock screen keeps
+   * playing while the page is hidden, which navigating away would end.
+   */
+  nextTrack?: NeighbouringTrack | null;
+  previousTrack?: NeighbouringTrack | null;
+  onTrackAdvanced?: (videoId: string) => void;
 }>(function AudioModePlayer({
   playlistSrc,
   progressiveSrc,
@@ -87,6 +96,9 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
   onReload,
   onNext,
   onPrevious,
+  nextTrack,
+  previousTrack,
+  onTrackAdvanced,
 }, ref) {
   const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -472,16 +484,16 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
       // Once the element has moved on by itself, what it can reach is what was
       // resolved for where it now is — the page's own neighbours belong to an
       // entry that finished a while ago.
-      const canGoNext = advancedRef.current ? Boolean(nextTrack) : Boolean(onNextTrack || nextTrack);
-      const canGoBack = advancedRef.current ? Boolean(previousTrack) : Boolean(onPreviousTrack || previousTrack);
+      const canGoNext = advancedRef.current ? Boolean(nextTrack) : Boolean(onNext || nextTrack);
+      const canGoBack = advancedRef.current ? Boolean(previousTrack) : Boolean(onPrevious || previousTrack);
       const throughList = canGoNext || canGoBack;
       setHandler("nexttrack", canGoNext ? () => {
         if (document.hidden && nextTrack && switchToTrack(nextTrack)) return;
-        onNextTrack?.();
+        onNext?.();
       } : null);
       setHandler("previoustrack", canGoBack ? () => {
         if (document.hidden && previousTrack && switchToTrack(previousTrack)) return;
-        onPreviousTrack?.();
+        onPrevious?.();
       } : null);
       setHandler("seekbackward", throughList ? null : () => { if (audio) setAudioPosition(audio.currentTime - 10); });
       setHandler("seekforward", throughList ? null : () => { if (audio) setAudioPosition(audio.currentTime + 10); });

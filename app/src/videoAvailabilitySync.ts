@@ -2,6 +2,7 @@ import { database } from "./database";
 import { log } from "./logger";
 import {
   fetchVideoInfo,
+  fetchVideoOEmbedAvailability,
   fetchVideoOEmbed,
   isDeletedVideoError,
   isPrivateVideoError,

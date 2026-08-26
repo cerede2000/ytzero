@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { api, type Video } from "../api";
 import type { PlaybackQueueContext } from "../playbackQueue";
+import { isContinuousPlaylistQueue } from "../playlistPlayback";
 import { sessionPlayQueueItems } from "../sessionPlayQueue";
 
 type Direction = "oldest" | "newest";
@@ -66,19 +67,10 @@ export function useUpNextQueue({ currentVideoId, direction, navigate, queue }: {
     navigate(`/watch/${prefetched.video_id}`, queueState());
   }, [navigate, prefetched, queueState]);
 
-  /**
-   * The entry before this one. Nothing is prefetched for it: going back is a
-   * deliberate act, rare enough to pay for its own lookup, and at the top of a
-   * list there is simply nothing to go back to.
-   */
-  const playPrevious = useCallback(() => {
-    if (preceding) navigate(`/watch/${preceding.video_id}`, queueState());
-  }, [navigate, preceding, queueState]);
-
   const playPrevious = useCallback(() => {
     if (!previous) return;
-    navigate(`/watch/${previous.video_id}`, queue ? { state: { playbackQueue: queue } } : undefined);
-  }, [navigate, previous, queue]);
+    navigate(`/watch/${previous.video_id}`, queueState());
+  }, [navigate, previous, queueState]);
 
   const play = useCallback(() => {
     if (!video) return;

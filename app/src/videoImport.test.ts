@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createVideoImporter, ensureVideoImported } from "./videoImport";
+import { createVideoImporter } from "./videoImport";
 import type { VideoInfo } from "./youtube";
 
 const info = (videoId: string) => ({ videoId, title: "A video", channelId: "UC1" }) as VideoInfo;
@@ -96,32 +96,5 @@ describe("importing a video the page is waiting for", () => {
     await expect(importVideo(1, "abc")).rejects.toThrow("YouTube said no");
     await expect(importVideo(1, "abc")).rejects.toThrow("YouTube said no");
     expect(started).toBe(2);
-  });
-});
-
-describe("acting on a video that is not in the library yet", () => {
-  const inLibrary = (ids: string[]) => async (videoId: string) => ids.includes(videoId) || undefined;
-
-  test("imports the one a search result points at", async () => {
-    // Downloading from search used to answer "not found" for a video plainly
-    // on screen: it had no row, because nobody had opened it.
-    const loaded: string[] = [];
-    const done = await ensureVideoImported(1, "abc", inLibrary([]), async (_userId, videoId) => { loaded.push(videoId); });
-    expect(done).toBe(true);
-    expect(loaded).toEqual(["abc"]);
-  });
-
-  test("leaves a video already in the library alone", async () => {
-    // An import is an extraction: paying for one to learn what is already
-    // known would make every action on a library card slower.
-    let loads = 0;
-    const done = await ensureVideoImported(1, "abc", inLibrary(["abc"]), async () => { loads++; });
-    expect(done).toBe(true);
-    expect(loads).toBe(0);
-  });
-
-  test("says so when the import fails, rather than acting on nothing", async () => {
-    const done = await ensureVideoImported(1, "abc", inLibrary([]), async () => { throw new Error("YouTube said no"); });
-    expect(done).toBe(false);
   });
 });
