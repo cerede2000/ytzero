@@ -5,7 +5,7 @@ import { database } from "../../database";
 import { log } from "../../logger";
 import { SEARCH_PROVIDERS } from "../../searchProviderCatalog";
 import { searchAcrossProviders } from "../../searchProviders";
-import { ensureVideoImported } from "../../videoImport";
+import { ensureOnDemandVideo } from "../../onDemandVideoImport";
 import { fetchSearchSuggestions } from "../../youtube";
 import { fetchVideoComments } from "../../youtubeComments";
 import { accountProfile, browsingProfile, unauthorized } from "./clientAuth";
@@ -141,7 +141,9 @@ export function registerCatalogRoutes(app: Hono): void {
     // A video reached from search is not in the library yet. Importing it is
     // what the web interface does when the same video is opened there, so
     // history and progress land in the same place whichever one played it.
-    await ensureVideoImported(userId, videoId);
+    // The import can fail — a video that has gone private, YouTube refusing —
+    // and the row check below is what answers for it.
+    await ensureOnDemandVideo(videoId).catch(() => {});
     const row = await database
       .prepare(`SELECT ${VIDEO_COLUMNS} ${FROM_VIDEOS} WHERE v.video_id = ?`)
       .get(videoId) as DetailRow | null;

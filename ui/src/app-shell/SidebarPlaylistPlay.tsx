@@ -71,8 +71,8 @@ export default function SidebarPlaylistPlay({ playlist }: { playlist: UserPlayli
       <button
         type="button"
         className="sidebar-playlist-play-btn"
-        title={t("playlistPlayAllAudio")}
-        aria-label={`${playlist.name} — ${t("playlistPlayAllAudio")}`}
+        title={t("playlistPlayAllAudioOnly")}
+        aria-label={`${playlist.name} — ${t("playlistPlayAllAudioOnly")}`}
         disabled={starting}
         onClick={() => start(true)}
       >

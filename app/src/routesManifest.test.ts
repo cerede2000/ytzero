@@ -39,7 +39,15 @@ describe("HTTP route manifest", () => {
     const liveAudioRoute = "GET /videos/:id/audio-live/:resource";
     const vodAudioRoute = "GET /videos/:id/audio/index.m3u8";
     const retryAudioRoute = "POST /videos/:id/audio/retry";
-    // Ours, where upstream names its own: the same feature, one implementation.
+    // Named by upstream in its own manifest, so they are held out of the hash
+    // the way it holds them out: what is left is its list, unchanged.
+    const upstreamNamedRoutes = [
+      "POST /videos/:id/import",
+      "POST /playlists/from-session-queue",
+      "DELETE /videos/:id/bookmark",
+    ];
+    // Ours, where upstream names its own: the same feature, two implementations
+    // — its direct-stream stack is not in this tree.
     const directStreamRoute = "GET /videos/:id/videostream";
     const ytdlpConfigRoute = "PUT /downloads/ytdlp/config";
     const ytdlpUpdateRoute = "POST /downloads/ytdlp/update";

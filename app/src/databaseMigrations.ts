@@ -483,6 +483,28 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
       { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_videos_shorts_retry ON videos(is_short, is_private, is_unavailable, short_check_next_attempt_at)" },
     ],
   },
+  {
+    version: 100,
+    name: "bookmarks-per-video",
+    schemaHashes: {
+      "app/src/schema.sql": "12df87aa9603815bf6917c518829129e2876a388c6603f4db2b1f2469416bcf7",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+      "app/src/dailymotionSchema.sql": "6e43314a30a4f5038dfd3cc2f44df69dc48090be8c68be4315090846259cdc7a",
+      "app/src/invidiousSchema.sql": "4f77a9670470989f8822b8cc02cc36e073fa57edb20cd81804bf2af4ca3a415b",
+    },
+    sqlite: [
+      { kind: "sql", statement: "CREATE TABLE bookmarks_multi (id INTEGER PRIMARY KEY AUTOINCREMENT, portable_uuid TEXT NOT NULL UNIQUE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, video_id TEXT NOT NULL REFERENCES videos(video_id) ON DELETE CASCADE, position_seconds REAL NOT NULL DEFAULT 0 CHECK (position_seconds >= 0), description TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))" },
+      { kind: "sql", statement: "INSERT INTO bookmarks_multi SELECT id, portable_uuid, user_id, video_id, position_seconds, description, created_at, updated_at FROM bookmarks" },
+      { kind: "sql", statement: "DROP TABLE bookmarks" },
+      { kind: "sql", statement: "ALTER TABLE bookmarks_multi RENAME TO bookmarks" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_bookmarks_user_updated ON bookmarks(user_id, updated_at DESC, id DESC)" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_bookmarks_video ON bookmarks(video_id)" },
+    ],
+    postgres: [
+      { kind: "sql", statement: "ALTER TABLE bookmarks DROP CONSTRAINT IF EXISTS bookmarks_user_id_video_id_key" },
+    ],
+  },
 ];
 
 function quoteIdentifier(identifier: string): string {

@@ -58,7 +58,7 @@ export default function PlaylistPlaybackActions({ videos, disabled = false, onPl
       leadingIcon={<Play />}
       menuLabel={t("playlistPlayModes")}
       onClick={() => start(first, false)}
-      menu={<MenuItem icon={<Headphones />} onClick={() => start(first, true)}>{t("playlistPlayAllAudio")}</MenuItem>}
+      menu={<MenuItem icon={<Headphones />} onClick={() => start(first, true)}>{t("playlistPlayAllAudioOnly")}</MenuItem>}
     >
       {t("playlistPlayAll")}
     </SplitButton>

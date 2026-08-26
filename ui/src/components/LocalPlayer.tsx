@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { Camera, Clapperboard, LoaderCircle, Maximize, Minimize, MonitorPlay, Pause, PictureInPicture2, Play, Volume2, VolumeX } from "lucide-react";
-import type { SponsorSegment, VideoChapter, VideoSubtitle } from "../api";
+import type { AvailableSubtitle, SponsorSegment, VideoChapter, VideoSubtitle } from "../api";
 import { api, SB_CATEGORIES } from "../api";
 import { subtitleLanguageLabel } from "../subtitleLanguages";
 import { useI18n } from "../i18n";
@@ -169,10 +169,12 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   // ---------- subtitles ----------
   const trackRef = useRef<HTMLTrackElement>(null);
   const [subs, setSubs] = useState<VideoSubtitle[]>([]);
+  const [availableSubs, setAvailableSubs] = useState<AvailableSubtitle[]>([]);
   const [subLang, setSubLang] = useState<string | null>(null);
   const [subLoading, setSubLoading] = useState<string | null>(null);
   const [subError, setSubError] = useState<string | null>(null);
   const [cueLines, setCueLines] = useState<string[]>([]);
+
 
   // The server returns local, archive, or proxied WebVTT tracks ready for use.
   useEffect(() => {
@@ -848,8 +850,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
             preferredLanguages={preferredSubtitleLanguages}
             loadingLanguage={subLoading}
             errorLanguage={subError}
-            discovering={subDiscovering}
-            onOpen={discoverSubtitles}
             onSelect={pickSubLang}
             onToggle={toggleSubtitles}
           />

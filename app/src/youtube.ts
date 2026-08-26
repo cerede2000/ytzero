@@ -6,7 +6,8 @@ import { isYouTubeRateLimitError, isYouTubeRefusalError, readYouTubeResponse, yo
 import { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError } from "./youtubeVideoAvailability";
 import { videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQuiet";
 import { relatedVideosFromWatchPage, type RelatedVideo } from "./relatedVideos";
-import { acceptLanguage, type PanelLanguage } from "./relatedVideoText";
+import { acceptLanguage, parseCompactCount, parsePublishedTextAnyLanguage, type PanelLanguage } from "./relatedVideoText";
+import { libraryLanguage } from "./libraryLanguage";
 import { inferIsShortFromMetadata } from "./shortClassification";
 import { resolveYouTubeLanguage, youtubeRequestHeaders, youtubeRssHeaders, type ResolvedYouTubeLanguage } from "./youtubeRequestLanguage";
 export { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError, videoOEmbedAvailabilityFromStatus } from "./youtubeVideoAvailability";

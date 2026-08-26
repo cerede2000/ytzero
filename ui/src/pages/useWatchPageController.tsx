@@ -18,11 +18,10 @@ import { DEFAULT_SCREENSHOT_FILENAME_TEMPLATE, parsePlayerScreenshotFormat } fro
 import { dispatchEnhanceEvent, ENHANCE_BRIDGE_EVENTS, ENHANCE_BRIDGE_VERSION, parseEnhanceEventDetail, parseEnhancePlayerEvent, resolveEnhanceContentType, sendPlayerCommand, type EnhancePlayerState } from "../enhanceBridge";
 import { subscribeServerEvent } from "../serverEvents";
 import { isPlaybackQueueContext, type PlaybackQueueContext } from "../playbackQueue";
+import { withSuggestions } from "../relatedPanel";
 import { sessionPlayQueueContext, useSessionPlayQueue } from "../sessionPlayQueue";
 import { effectivePlaybackQueue } from "../sessionPlayQueuePlayback";
 import { isContinuousPlaylistQueue, playbackEndAction } from "../playlistPlayback";
-import { useSessionQueue } from "../sessionQueue";
-import { effectivePlaybackQueue } from "../watchQueueTakeover";
 import type { NeighbouringTrack as Track } from "../components/AudioModePlayer";
 import { restoreSidebarVisibility } from "../app-shell/sidebarVisibility";
 import { canAutoArchiveVideo, isMissingVideoError, loadYouTubeApi, resolveShareTimestamp, resolveWatchPlayerTarget } from "./watchRuntime";
@@ -252,7 +251,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     play: goToUpNextVideo,
     playPrefetched: playNextQueueVideo,
     playPrevious: playPreviousQueueVideo,
-    preceding: precedingQueueVideo,
+    previous: precedingQueueVideo,
     prefetched: prefetchedQueueVideo,
     show: showUpNextVideo,
     skip: skipUpNextVideo,
@@ -635,7 +634,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
    */
   const trackAt = (entry: { videoId: string; title: string; channelTitle: string; thumbnail: string } | undefined) =>
     entry ? { videoId: entry.videoId, title: entry.title, channelTitle: entry.channelTitle, thumbnail: entry.thumbnail } : null;
-  const queueTrack = (entry: Video | null | undefined) =>
+  const queueTrack = (entry: Pick<Video, "video_id" | "title" | "channel_title" | "thumbnail"> | null | undefined) =>
     entry ? { videoId: entry.video_id, title: entry.title, channelTitle: entry.channel_title, thumbnail: entry.thumbnail } : null;
   /**
    * Once the element has moved on by itself, the page is describing the entry
@@ -653,7 +652,11 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     // behind it is asked for by name; a feed has only its two sides.
     const backward = queueIsPlaylist ? "previous" : forward === "newest" ? "oldest" : "newest";
     const neighbour = async (step: "newest" | "oldest" | "previous"): Promise<Track | null> => {
-      const adjacent = await api.playbackAdjacent(advancedVideoId, step, playbackQueue).catch(() => null);
+      // "previous" is not a direction but a request for the entry behind, so
+      // it travels beside the direction the list already runs in.
+      const adjacent = await api
+        .playbackAdjacent(advancedVideoId, step === "previous" ? forward : step, playbackQueue, step === "previous" ? "previous" : "next")
+        .catch(() => null);
       if (!adjacent?.video_id) return null;
       const found = await api.video(adjacent.video_id).catch(() => null);
       return queueTrack(found?.video);
@@ -934,6 +937,38 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     if (nextPlaylistPath) navigate(nextPlaylistPath, { state: { fromStart: true } });
     else playNextQueueVideo();
   }, [navigate, nextPlaylistPath, playNextQueueVideo, watchTogetherRoomId]);
+
+  const pendingAdvanceRef = useRef<string | null>(null);
+  const handleTrackAdvanced = useCallback((videoId: string) => {
+    pendingAdvanceRef.current = videoId;
+    setAdvancedVideoId(videoId);
+  }, []);
+  useEffect(() => {
+    const realign = () => {
+      const pending = pendingAdvanceRef.current;
+      if (!pending || document.hidden) return;
+      // Catching the page up rebuilds the element, and a new element does not
+      // simply carry on: iOS wants a gesture before it will play, so what the
+      // listener gets for opening the app is silence. Nothing here is worth
+      // that — wait until playback has stopped of its own accord. Until then
+      // the panel names the entry the element is really on.
+      if (playerRef.current?.getPlayerState?.() === 1) return;
+      pendingAdvanceRef.current = null;
+      setAdvancedVideoId(null);
+      const startAt = Number(playerRef.current?.getCurrentTime?.());
+      // The page is about to build a second element on the same track. Silence
+      // the one that carried playback here first: on iOS a media element goes
+      // on sounding for a while after it is dropped from the page, and two of
+      // them a fraction of a second apart is what that sounds like.
+      try { playerRef.current?.pauseVideo?.(); } catch {}
+      navigate(`/watch/${pending}`, {
+        replace: true,
+        state: { playbackQueue, startAt: Number.isFinite(startAt) && startAt > 0 ? startAt : undefined },
+      });
+    };
+    document.addEventListener("visibilitychange", realign);
+    return () => document.removeEventListener("visibilitychange", realign);
+  }, [navigate, playbackQueue, playerRef]);
   const playPreviousVideo = useCallback(() => {
     if (watchTogetherRoomId) return;
     if (previousPlaylistPath) navigate(previousPlaylistPath);

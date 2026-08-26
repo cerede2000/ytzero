@@ -37,7 +37,6 @@ import { videoCardSwipeEnabled } from "../videoCardSwipeRuntime";
 import { useAppliedVideoCardActionConfig, type VideoCardActionConfig, type VideoCardActionId } from "../videoCardActionConfig";
 import { otherPlaybackModeIsAudioOnly, playVideoInOtherPlaybackMode } from "../videoCardPlaybackMode";
 import { claimVideoCardPreview, readVideoCardPreviewMode, releaseVideoCardPreview } from "../videoCardPreview";
-import { addToSessionQueue, entryFromVideo, removeFromSessionQueue, useInSessionQueue } from "../sessionQueue";
 import "./VideoGrid.css";
 import "./VideoCard.css";
 import "./VideoCardActionsBar.css";
@@ -240,7 +239,6 @@ export function VideoCard({
   const [thumbnailPainted, setThumbnailPainted] = useState(false);
   const [previewActive, setPreviewActive] = useState(false);
   const canDownloadLocally = video.live_status !== "live" && video.live_status !== "upcoming";
-  const queued = useInSessionQueue(video.video_id);
   const publishedTime = formatTimeAgo(video.published_at, language);
   const foundTime = formatTimeAgo(video.found_at ? `${video.found_at.replace(" ", "T")}Z` : null, language);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -340,20 +338,6 @@ export function VideoCard({
       .catch(() => setDownloadStatus(video.download_status ?? null));
   };
 
-  /**
-   * Put this video in the session queue, or take it back out.
-   *
-   * The list is the tab's own, so the card answers immediately. A video that
-   * is not in the library yet is imported behind that: the queue plays through
-   * rows, and one deliberate act is the right moment to pay for one.
-   */
-  const toggleInPlayQueue = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (queued) { removeFromSessionQueue(video.video_id); return; }
-    addToSessionQueue(entryFromVideo(video));
-    if (!inLibrary) api.videoInfo(video.video_id).catch(() => {});
-  };
 
   const cancelLocalDownload = (e: MouseEvent) => {
     e.stopPropagation();
@@ -603,15 +587,6 @@ export function VideoCard({
             }
           }}
         />;
-      case "queue":
-        return <Tooltip key={id} text={queued ? t("removeFromPlayQueue") : t("addToPlayQueue")} portal>
-          <button
-            className={`action-btn${queued ? " active" : ""}`}
-            aria-pressed={queued}
-            aria-label={queued ? t("removeFromPlayQueue") : t("addToPlayQueue")}
-            onClick={toggleInPlayQueue}
-          >{queued ? <ListX /> : <ListPlus />}</button>
-        </Tooltip>;
       case "download":
         if (video.is_private === 1 || !canDownloadLocally) return null;
         if (video.downloads_enabled && (downloadStatus === "queued" || downloadStatus === "downloading")) {
