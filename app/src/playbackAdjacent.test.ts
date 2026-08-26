@@ -21,21 +21,26 @@ describe("playback context adjacency", () => {
       expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", kind, "newest")).toBe("c");
       expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", kind, "oldest")).toBe("c");
     }
-    expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "session", "newest", "previous")).toBe("a");
     expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "history", "oldest")).toBe("a");
     // A queue someone assembled in a tab is a list like the others: it runs
     // to the end rather than stepping backwards into what came before.
     expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "session", "oldest")).toBe("c");
-    expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "session", "previous")).toBe("a");
+    expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "session", "newest", "previous")).toBe("a");
     expect(adjacentFromPlaybackOrder(["a", "b", "c"], "c", "session", "newest")).toBeNull();
   });
 
   test("hands back the entry before when it is asked for by name", () => {
-    for (const kind of ["user-playlist", "channel-playlist", "history"] as const) {
-      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", kind, "previous")).toBe("a");
-      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "a", kind, "previous")).toBeNull();
-      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "missing", kind, "previous")).toBeNull();
+    // A list has an order of its own, so the entry before is asked for by name
+    // whichever way the feed preference happens to point.
+    for (const kind of ["user-playlist", "channel-playlist", "session"] as const) {
+      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", kind, "newest", "previous")).toBe("a");
+      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "a", kind, "newest", "previous")).toBeNull();
+      expect(adjacentFromPlaybackOrder(["a", "b", "c"], "missing", kind, "newest", "previous")).toBeNull();
     }
+    // A history is walked by direction alone: going back is the other way, and
+    // naming it changes nothing.
+    expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "history", "oldest")).toBe("a");
+    expect(adjacentFromPlaybackOrder(["a", "b", "c"], "b", "history", "newest", "previous")).toBe("c");
   });
 
   test("recreates the sectioned Watch later order without snapshots", () => {

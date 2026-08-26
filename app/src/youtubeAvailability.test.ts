@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DeletedVideoError,
   classifyIsShort,
+  fetchVideoOEmbedAvailability,
   fetchVideoOEmbed,
   isDeletedVideoError,
   isPrivateVideoError,

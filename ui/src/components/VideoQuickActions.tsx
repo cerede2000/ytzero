@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Archive, ArrowDownToLine, Eye, EyeOff, ListPlus, ListX } from "lucide-react";
 import { api, type Video } from "../api";
 import { useI18n } from "../i18n";
-import { addToSessionQueue, entryFromVideo, removeFromSessionQueue, useInSessionQueue } from "../sessionQueue";
+import { SessionPlayQueueAction } from "./SessionPlayQueueAction";
 import Tooltip from "./Tooltip";
 import { useAppliedVideoCardActionConfig, type VideoCardActionId } from "../videoCardActionConfig";
 
@@ -26,7 +26,6 @@ import { useAppliedVideoCardActionConfig, type VideoCardActionId } from "../vide
 export default function VideoQuickActions({ video, onChanged }: { video: Video; onChanged?: () => void }) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const queued = useInSessionQueue(video.video_id);
   const [downloadStatus, setDownloadStatus] = useState<string | null>(video.download_status ?? null);
   const [state, setState] = useState<{ archived: boolean; watched: boolean }>({
     archived: video.status === "archived",
@@ -55,15 +54,6 @@ export default function VideoQuickActions({ video, onChanged }: { video: Video; 
     }
   };
 
-  const toggleQueue = (event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (queued) { removeFromSessionQueue(video.video_id); return; }
-    addToSessionQueue(entryFromVideo(video));
-    // A suggestion is a title and a thumbnail until somebody acts on it. Queuing
-    // is acting on it, so the import starts now rather than when it is reached.
-    if (video.in_library !== 1) api.videoInfo(video.video_id).catch(() => {});
-  };
 
   const download = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -82,14 +72,7 @@ export default function VideoQuickActions({ video, onChanged }: { video: Video; 
 
   return (
     <div className="related-quick-actions">
-      {shown.has("queue") && <Tooltip text={queued ? t("removeFromPlayQueue") : t("addToPlayQueue")}>
-        <button
-          className={`action-btn${queued ? " active" : ""}`}
-          aria-pressed={queued}
-          aria-label={queued ? t("removeFromPlayQueue") : t("addToPlayQueue")}
-          onClick={toggleQueue}
-        >{queued ? <ListX /> : <ListPlus />}</button>
-      </Tooltip>}
+      {shown.has("sessionQueue") && <SessionPlayQueueAction video={video} compact />}
       {downloadable && shown.has("download") && (
         <Tooltip text={video.downloads_enabled ? t("downloadLocally") : t("enableDownloadsFeature")}>
           <button

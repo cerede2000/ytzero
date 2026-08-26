@@ -3,7 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, Play, RefreshCw } from "lucide-react";
 import type { ProfilePermissions } from "../api";
 import { emit, subscribe } from "../events";
-import PlayQueueMenu from "../components/PlayQueueMenu";
 import ProfileMenu from "../components/ProfileMenu";
 import AppSearchBox from "./AppSearchBox";
 import { toggleSidebar } from "./sidebarVisibility";
@@ -132,7 +131,7 @@ export default function AppTopBar({
       </Link>
       <span className="topbar-refresh-progress" aria-hidden="true" />
       <AppSearchBox />
-      {!isChildProfile && <PlayQueueMenu />}
+      {!isChildProfile && <SessionPlayQueueMenu />}
       <ProfileMenu
         isAdmin={isAdmin}
         isChildProfile={isChildProfile}

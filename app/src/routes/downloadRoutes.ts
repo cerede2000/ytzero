@@ -13,6 +13,7 @@ import { subtitleLanguageLabel } from "../subtitleLanguages";
 import { fetchSubtitleUpstream, proxySubtitleResponse } from "../subtitleUpstream";
 import { configuredTimeZone } from "../timeZone";
 import { tubeArchivistResource, tubeArchivistSubtitleList, tubeArchivistSubtitleResponse } from "../tubeArchivist";
+import { ensureOnDemandVideo, OnDemandVideoImportError } from "../onDemandVideoImport";
 import { validYouTubeVideoId } from "../youtubeComments";
 import { registerAudioRoutes } from "./audioRoutes";
 import { registerYtdlpUpdateRoutes } from "./ytdlpUpdateRoutes";
@@ -426,7 +427,7 @@ async function subtitleList(videoId: string) {
 }
 
 async function subtitlePreferences(userId: number, videoId: string): Promise<string[]> {
-  const settings = await dlSettings(userId);
+  const { settings } = await downloadSettings(userId);
   const row = await database.prepare(`
     SELECT uc.caption_mode, uc.caption_language
     FROM videos v LEFT JOIN user_channels uc ON uc.channel_id=v.channel_id AND uc.user_id=?

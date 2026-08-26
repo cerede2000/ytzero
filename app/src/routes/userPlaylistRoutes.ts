@@ -11,7 +11,6 @@ import { sortFetchedPlaylistVideos } from "../playlistVideoOrder";
 import { fetchPlaylistVideos } from "../youtube";
 import { importPlaylistVideos } from "../refresher";
 import { videoExistsStmt, type VideoRow } from "../videoRoutesSupport";
-import { ensureVideoImported } from "../videoImport";
 import { downloadableUserPlaylistVideoIds, sortUserPlaylistRows, type UserPlaylistSortable } from "../userPlaylistSort";
 import { shortsUiVisibilitySql } from "../feedQuery";
 import { ensureOnDemandVideo, OnDemandVideoImportError } from "../onDemandVideoImport";

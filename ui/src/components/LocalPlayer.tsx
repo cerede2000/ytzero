@@ -184,10 +184,12 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   // ---------- subtitles ----------
   const trackRef = useRef<HTMLTrackElement>(null);
   const [subs, setSubs] = useState<VideoSubtitle[]>([]);
+  const [availableSubs, setAvailableSubs] = useState<AvailableSubtitle[]>([]);
   const [subLang, setSubLang] = useState<string | null>(null);
   const [subLoading, setSubLoading] = useState<string | null>(null);
   const [subError, setSubError] = useState<string | null>(null);
   const [cueLines, setCueLines] = useState<string[]>([]);
+
 
   // The server returns local, archive, or proxied WebVTT tracks ready for use.
   useEffect(() => {
@@ -932,8 +934,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
             preferredLanguages={preferredSubtitleLanguages}
             loadingLanguage={subLoading}
             errorLanguage={subError}
-            discovering={subDiscovering}
-            onOpen={discoverSubtitles}
             onSelect={pickSubLang}
             onToggle={toggleSubtitles}
           />
