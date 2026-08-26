@@ -1146,7 +1146,7 @@ const {
   getAudioHeadResponse,
   getAudioResponse,
   getAudioVodPlaylist,
-  getVideoResponse,
+  getDirectVideoResponse,
   getHlsPlaylist,
   getHlsResource,
   getHlsSegment,
@@ -1155,7 +1155,7 @@ const {
   getLiveAudioResource,
   isSegmentName,
   invalidateAudioSources, primeAudioSource, retryAudioSource,
-  primeVideoSource,
+  primeDirectVideoSource,
   liveStreamEnabled,
   resetHlsScratch,
 } = createDownloadStreaming({

@@ -396,13 +396,13 @@ registerAudioRoutes(api, currentUserId);
 // is far more reliable than the transcoding stream, at the cost of quality
 // (progressive tops out around 720p); the full-quality file comes from a real
 // download.
-api.get("/videos/:id/videostream", async (c) => {
+api.get("/videos/:id/direct-stream", async (c) => {
   const uid = currentUserId(c);
   if (await isChildUser(uid)) return c.json({ error: "not allowed" }, 403);
   if (!await profileDownloadsEnabled(uid)) return c.json({ error: "downloads disabled" }, 409);
   const id = c.req.param("id");
   if (!await videoExistsStmt.get(id)) return c.json({ error: "not found" }, 404);
-  const res = await getVideoResponse(uid, id, c.req.header("range") ?? null, c.req.raw.signal);
+  const res = await getDirectVideoResponse(uid, id, c.req.header("range") ?? null, c.req.raw.signal);
   return res ?? c.json({ error: "video unavailable" }, 502);
 });
 

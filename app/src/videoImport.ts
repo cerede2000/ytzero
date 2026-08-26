@@ -1,7 +1,7 @@
 import type { AudioSource } from "./audioSourceResolver";
 import { childHidesLive } from "./childTime";
 import { database } from "./database";
-import { primeAudioSource, primeVideoSource } from "./downloader";
+import { primeAudioSource, primeDirectVideoSource } from "./downloader";
 import { getUserSetting } from "./db";
 import { log } from "./logger";
 import { panelLanguage } from "./relatedVideoText";
@@ -69,7 +69,7 @@ async function fetchVideoInfoForImport(userId: number, videoId: string, related:
     // They are primed for whoever is watching: the tracks are the video's, not
     // the account's, whichever account got them handed over.
     if (audio.source) primeAudioSource(userId, videoId, audio.source);
-    if (video.source) primeVideoSource(userId, videoId, video.source);
+    if (video.source) primeDirectVideoSource(userId, videoId, video.source);
     return viaYtdlp;
   }
 }
