@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseAbbreviatedCount } from "./youtubeSearch";
+import { parseAbbreviatedCount, searchClient } from "./youtubeSearch";
 import { searchChannelFromLockup, searchVideoFromLockup } from "./youtube";
 import { configureLibraryLanguageProvider } from "./libraryLanguage";
 
@@ -144,3 +144,22 @@ describe("a results page fetched in French", () => {
   });
 });
 
+describe("the client a search continuation is asked as", () => {
+  test("asks in the language the library is kept in", () => {
+    // Measured on FGZ6pKOaeJA, a French video whose channel also publishes an
+    // English title: asked with hl=en the search API answers "Why did FACEL
+    // VEGA disappear? (The French tragedy)", and with hl=fr "Pourquoi FACEL
+    // VEGA a-t-elle disparu ? (Le gâchis français)". The first page of results
+    // is an HTML page that answers to Accept-Language, so a hard-coded "en"
+    // here renamed the same video halfway down the list.
+    expect(searchClient("2.20260101", "fr").hl).toBe("fr");
+    expect(searchClient("2.20260101", "de").hl).toBe("de");
+    expect(searchClient("2.20260101", "en").hl).toBe("en");
+  });
+
+  test("leaves the region alone", () => {
+    // gl ranks results rather than translating them: moving it with the
+    // language would quietly reorder every search.
+    expect(searchClient("2.20260101", "fr").gl).toBe("US");
+  });
+});

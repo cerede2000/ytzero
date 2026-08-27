@@ -41,6 +41,23 @@ export function walkKey(query: string, reader: number | null): string {
   return `${reader ?? "personne"}\u0000${query}`;
 }
 
+/**
+ * The client a continuation is asked as.
+ *
+ * `hl` is the language of the answer, not a preference: YouTube hands back the
+ * title in the language asked for, and a video that carries a translated title
+ * has two. Asked in English, a French video comes back as its English title —
+ * on page two of a search only, because the first page is an HTML page that
+ * answers to Accept-Language instead. The two must name the same language or
+ * the same video is called two different things as the reader scrolls.
+ *
+ * `gl` stays where it is: it ranks results by region rather than translating
+ * them, and moving it would quietly reorder every search.
+ */
+export function searchClient(clientVersion: string, language: PanelLanguage) {
+  return { clientName: "WEB", clientVersion, hl: language, gl: "US" };
+}
+
 export function createYoutubeSearch(dependencies: YoutubeSearchDependencies) {
   const {
     requestHeaders,
