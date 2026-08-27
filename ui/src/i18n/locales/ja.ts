@@ -1547,6 +1547,7 @@ export const ja: Locale = {
     "cardPlay": "再生",
     "cardPlayAudio": "音声で再生",
     "playlistReorderHint": "ドラッグして並べ替え",
+    "cardPlayOther": "もう一方のモードで再生",
   },
   buckets: {
     "today": "今日更新",

@@ -510,7 +510,7 @@ export function SidebarNavEditor({ value, onChange, excludedKeys = new Set<strin
 
 const VIDEO_CARD_ACTION_ITEMS: Record<VideoCardActionId, { labelKey: I18nKey; icon: typeof Clock }> = {
   schedule: { labelKey: "watchLater", icon: Clock },
-  play: { labelKey: "cardPlay", icon: Play },
+  play: { labelKey: "cardPlayOther", icon: Headphones },
   sessionQueue: { labelKey: "sessionQueueAdd", icon: ListPlus },
   playlist: { labelKey: "addToPlaylist", icon: BookmarkPlus },
   download: { labelKey: "downloadLocally", icon: ArrowDownToLine },
