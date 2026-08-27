@@ -35,6 +35,22 @@ describe("video card action configuration", () => {
     ]);
   });
 
+  test("takes the configuration the browser actually sends", () => {
+    // The two sides used to keep their own list of names. They drifted — the
+    // browser renamed the queue action and the server went on refusing the new
+    // name — and because this validates the whole settings body, one unknown
+    // name failed the entire save rather than that one field.
+    const asked = { version: 1, actions: [{ id: "schedule", hidden: true }, { id: "play", hidden: false }, { id: "sessionQueue", hidden: false }] };
+    expect(parseVideoCardActionConfig(asked)).not.toBeNull();
+    expect(validateVideoCardSettings({ video_card_action_buttons: JSON.stringify(asked) })).toBeNull();
+  });
+
+  test("lets scheduling be put away, and keeps undo and delete", () => {
+    const config = parseVideoCardActionConfig({ version: 1, actions: [{ id: "schedule", hidden: true }, { id: "restore", hidden: true }] });
+    expect(config?.actions.find((action) => action.id === "schedule")?.hidden).toBe(true);
+    expect(config?.actions.find((action) => action.id === "restore")?.hidden).toBe(false);
+  });
+
   test("rejects duplicate or unknown action identifiers", () => {
     expect(parseVideoCardActionConfig({ version: 1, actions: [{ id: "playlist", hidden: false }, { id: "playlist", hidden: true }] })).toBeNull();
     expect(parseVideoCardActionConfig({ version: 1, actions: [{ id: "surprise", hidden: false }] })).toBeNull();

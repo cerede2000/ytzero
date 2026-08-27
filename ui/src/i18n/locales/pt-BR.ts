@@ -1544,6 +1544,9 @@ export const ptBR: Locale = {
     "watchUnavailableRetry": "Tentar novamente",
     "searchEverySource": "Todas as fontes",
     "searchExternalResults": "Resultados",
+    "cardPlay": "Reproduzir",
+    "cardPlayAudio": "Ouvir",
+    "playlistReorderHint": "Arraste para reordenar",
   },
   buckets: {
     "today": "Hoje",

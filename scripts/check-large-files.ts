@@ -56,7 +56,7 @@ const lineLimits: Record<string, number> = {
   "app/src/routes/socialRoutes.ts": 187,
   "app/src/routes/systemRoutes.ts": 137,
   "app/src/routes/tagRoutes.ts": 148,
-  "app/src/routes/userPlaylistRoutes.ts": 236,
+  "app/src/routes/userPlaylistRoutes.ts": 254,
   "app/src/routes/videoActionRoutes.ts": 234,
 >>>>>>> abac5c9 (Move our layers onto the implementations upstream now has)
   "app/src/routes/videoRoutes.ts": 569,

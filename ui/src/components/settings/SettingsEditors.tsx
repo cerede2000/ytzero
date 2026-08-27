@@ -5,7 +5,7 @@ import { api, type Channel, type FilterRule, type Profile, type Rule, type Tag, 
 import { emit } from "../../events";
 import { formatVideoCount, useI18n, type I18nKey } from "../../i18n";
 import { NAV_ITEMS, normalizeNav, type NavConfigEntry } from "../../nav";
-import { LOCKED_VIDEO_CARD_ACTION_IDS, type VideoCardActionConfig, type VideoCardActionId } from "../../videoCardActionConfig";
+import { LOCKED_VIDEO_CARD_ACTION_IDS, PINNED_VIDEO_CARD_ACTION_IDS, type VideoCardActionConfig, type VideoCardActionId } from "../../videoCardActionConfig";
 import type { VideoCardActionsMode } from "../../videoCardActions";
 import ChannelSearchPicker from "../ChannelSearchPicker";
 import { PlaylistIconPicker } from "../PlaylistIcon";
@@ -510,6 +510,7 @@ export function SidebarNavEditor({ value, onChange, excludedKeys = new Set<strin
 
 const VIDEO_CARD_ACTION_ITEMS: Record<VideoCardActionId, { labelKey: I18nKey; icon: typeof Clock }> = {
   schedule: { labelKey: "watchLater", icon: Clock },
+  play: { labelKey: "cardPlay", icon: Play },
   sessionQueue: { labelKey: "sessionQueueAdd", icon: ListPlus },
   playlist: { labelKey: "addToPlaylist", icon: BookmarkPlus },
   download: { labelKey: "downloadLocally", icon: ArrowDownToLine },
@@ -597,6 +598,9 @@ export function VideoCardActionEditor({ value, mode, onChange }: { value: VideoC
   const setActiveDrag = (next: typeof pointerDrag) => { pointerDragRef.current = next; setPointerDrag(next); };
   const beginPointerDrag = (event: ReactPointerEvent<HTMLButtonElement>, id: VideoCardActionId, source: "preview" | "tray") => {
     if (event.button !== 0) return;
+    // Scheduling owns a row rather than a slot in one, so it is not dragged
+    // between the others — but it can be put away like anything else.
+    if (PINNED_VIDEO_CARD_ACTION_IDS.has(id)) return;
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -671,7 +675,7 @@ export function VideoCardActionEditor({ value, mode, onChange }: { value: VideoC
     <div ref={trayRef} className={`video-card-action-tray${dragId ? " is-active" : ""}`}>
       <div className="video-card-action-tray__title">{t("videoCardActionsLabel")}</div>
       <div className="video-card-action-tray__items">
-        {value.actions.filter((action) => action.id !== "schedule").map((action) => {
+        {value.actions.map((action) => {
           const item = VIDEO_CARD_ACTION_ITEMS[action.id];
           const Icon = item.icon;
           return <button

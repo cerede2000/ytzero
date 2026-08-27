@@ -213,7 +213,7 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
   >
     <Menu>
       {downloadMenuItem}
-      {!editing && <MenuItem icon={<Edit3 />} onClick={() => { setActionsOpen(false); setEditing(true); }}>{t("edit")}</MenuItem>}
+      {!editing && <MenuItem icon={<Edit3 />} onClick={() => { setActionsOpen(false); startEditing(); }}>{t("edit")}</MenuItem>}
       {(downloadMenuItem !== null || !editing) && <MenuSeparator />}
       <Popconfirm
         triggerClassName="ui-menu__popover-trigger"
@@ -265,15 +265,27 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
       ) : videos.length === 0 ? (
         <EmptyState art={<EmptyArt scene="playlistEmpty" />} title={t("playlistIsEmpty")} description={t("playlistIsEmptyHint")} />
       ) : (
-        <div className="video-grid video-grid--sm">
-          {videos.map((v) => (
-            <VideoCard
+        <div className={`video-grid video-grid--sm${reorderable ? " video-grid--reordering" : ""}`}>
+          {videos.map((v, index) => (
+            <div
               key={v.video_id}
-              video={v}
-              onPlay={playPlaylistVideo}
-              onChanged={load}
-              onRemoveFromPlaylist={(videoId) => api.removeVideoFromUserPlaylist(playlist.id, videoId)}
-            />
+              className={`playlist-video${reorderable ? " playlist-video--reorderable" : ""}${carriedVideoId === v.video_id ? " is-carried" : ""}`}
+              data-playlist-index={reorderable ? index : undefined}
+            >
+              {reorderable && <button
+                type="button"
+                className="playlist-video__grip"
+                aria-label={t("playlistReorderHint")}
+                title={t("playlistReorderHint")}
+                onPointerDown={(event) => { event.preventDefault(); setCarriedVideoId(v.video_id); }}
+              ><GripVertical size={16} /></button>}
+              <VideoCard
+                video={v}
+                onPlay={playPlaylistVideo}
+                onChanged={load}
+                onRemoveFromPlaylist={(videoId) => api.removeVideoFromUserPlaylist(playlist.id, videoId)}
+              />
+            </div>
           ))}
         </div>
       )}
