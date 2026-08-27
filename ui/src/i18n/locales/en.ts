@@ -1445,6 +1445,7 @@ export const en = {
     cardPlay: "Play",
     cardPlayAudio: "Listen",
     playlistReorderHint: "Drag to reorder",
+    cardPlayOther: "Play in the other mode",
   },
   buckets: {
     today: "Today",

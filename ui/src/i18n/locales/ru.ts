@@ -1532,6 +1532,7 @@ export const ru: Locale = {
     "cardPlay": "Смотреть",
     "cardPlayAudio": "Слушать",
     "playlistReorderHint": "Перетащите, чтобы изменить порядок",
+    "cardPlayOther": "Воспроизвести в другом режиме",
   },
   buckets: {
     "today": "Сегодня",
