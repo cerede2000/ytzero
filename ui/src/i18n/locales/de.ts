@@ -1495,6 +1495,7 @@ export const de: Locale = {
     cardPlay: "Abspielen",
     cardPlayAudio: "Anhören",
     playlistReorderHint: "Zum Umsortieren ziehen",
+    cardPlayOther: "Im anderen Modus abspielen",
   },
   buckets: {
     today: "Heute",

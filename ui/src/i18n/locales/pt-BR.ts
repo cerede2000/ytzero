@@ -1586,6 +1586,7 @@ export const ptBR: Locale = {
     "cardPlay": "Reproduzir",
     "cardPlayAudio": "Ouvir",
     "playlistReorderHint": "Arraste para reordenar",
+    "cardPlayOther": "Reproduzir no outro modo",
   },
   buckets: {
     "today": "Hoje",
