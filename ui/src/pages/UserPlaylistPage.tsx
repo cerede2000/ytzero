@@ -214,7 +214,7 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
   >
     <Menu>
       {downloadMenuItem}
-      {!editing && <MenuItem icon={<Edit3 />} onClick={() => { setActionsOpen(false); setEditing(true); }}>{t("edit")}</MenuItem>}
+      {!editing && <MenuItem icon={<Edit3 />} onClick={() => { setActionsOpen(false); startEditing(); }}>{t("edit")}</MenuItem>}
       {(downloadMenuItem !== null || !editing) && <MenuSeparator />}
       <Popconfirm
         triggerClassName="ui-menu__popover-trigger"
@@ -266,9 +266,9 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
       ) : videos.length === 0 ? (
         <EmptyState art={<EmptyArt scene="playlistEmpty" />} title={t("playlistIsEmpty")} description={t("playlistIsEmptyHint")} />
       ) : (
-        <div className="video-grid video-grid--sm">
-          {videos.map((v) => (
-            <VideoCard
+        <div className={`video-grid video-grid--sm${reorderable ? " video-grid--reordering" : ""}`}>
+          {videos.map((v, index) => (
+            <div
               key={v.video_id}
               video={v}
               onPlay={playPlaylistVideo}

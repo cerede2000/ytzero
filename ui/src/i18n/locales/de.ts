@@ -1492,6 +1492,9 @@ export const de: Locale = {
     cleanupApplying: "Wird aufgeräumt…",
     cleanupConfirmConfirm: "Aufräumen",
     cleanupConfirmBody: "{count} werden markiert als: {action}. Das lässt sich direkt danach rückgängig machen.",
+    cardPlay: "Abspielen",
+    cardPlayAudio: "Anhören",
+    playlistReorderHint: "Zum Umsortieren ziehen",
   },
   buckets: {
     today: "Heute",

@@ -1493,6 +1493,9 @@ export const pl: Locale = {
     cleanupApplying: "Czyszczenie…",
     cleanupConfirmConfirm: "Wyczyść",
     cleanupConfirmBody: "{count} zostanie oznaczonych jako: {action}. Tę operację można cofnąć zaraz po jej wykonaniu.",
+    cardPlay: "Odtwórz",
+    cardPlayAudio: "Słuchaj",
+    playlistReorderHint: "Przeciągnij, aby zmienić kolejność",
   },
   buckets: {
     today: "Dzisiaj",
