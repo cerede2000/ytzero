@@ -48,8 +48,8 @@ const lineLimits: Record<string, number> = {
   "ui/src/app-shell/sidebarVisibility.ts": 30,
   "ui/src/app-shell/useAppPreferences.ts": 107,
 =======
-  "app/src/routes/libraryRoutes.ts": 228,
->>>>>>> 6858eaa (Answer a search in the language of whoever asked it)
+  "app/src/routes/libraryRoutes.ts": 233,
+>>>>>>> a6ba803 (Let the page say which language it is reading in)
   "app/src/routes/pluginRoutes.ts": 77,
   "app/src/routes/profileRoutes.ts": 430,
   "app/src/routes/settingsRoutes.ts": 164,

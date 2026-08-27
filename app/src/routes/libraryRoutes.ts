@@ -2,6 +2,7 @@ import type { Context, Hono } from "hono";
 import { database } from "../database";
 import { getUserSetting } from "../db";
 import { panelLanguage, type PanelLanguage } from "../relatedVideoText";
+import { languageAsked } from "../searchLanguage";
 import { childLocalOnly, isChildUser } from "../childTime";
 import { profileDownloadsEnabled } from "../downloadConfig";
 import { cancelAutoDownloadIfUnwanted } from "../downloader";
@@ -117,6 +118,10 @@ function readerLanguage(userId: number): PanelLanguage {
   return panelLanguage(getUserSetting(userId, "language"));
 }
 
+function askedLanguage(c: Context, userId: number): PanelLanguage {
+  return languageAsked(c.req.query("hl"), readerLanguage(userId));
+}
+
 api.get("/search/youtube", async (c) => {
   const uid = currentUserId(c);
   // Restricted child profiles search only the local library.
@@ -176,7 +181,7 @@ api.get("/search/external", async (c) => {
   const asked = requestedProviders(c.req.query("sources"));
   // Scrolling asks for the next window. A page nobody named is the first one.
   const page = Math.max(1, Math.trunc(Number(c.req.query("page"))) || 1);
-  const { found, failed } = await searchAcrossProviders(q, asked, page, uid, readerLanguage(uid));
+  const { found, failed } = await searchAcrossProviders(q, asked, page, uid, askedLanguage(c, uid));
   const downloadsAllowed = !await isChildUser(uid);
   const providers: Record<string, unknown> = {};
   for (const provider of asked) {
@@ -226,7 +231,7 @@ api.get("/search/suggest", async (c) => {
   ).all(uid, `%${q}%`);
 
   // Restricted child profiles never see anything but their own library.
-  const language = c.req.query("hl")?.slice(0, 5) || readerLanguage(uid);
+  const language = askedLanguage(c, uid);
   const suggestions = childLocalOnly(uid) ? [] : await searchQuerySuggestions(uid, q, language);
   return c.json({ suggestions, channels });
 });

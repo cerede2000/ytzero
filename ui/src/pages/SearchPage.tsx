@@ -21,7 +21,7 @@ function normalizeSearchText(value: string) {
 }
 
 export default function SearchPage({ onPlay, hideExternalSearch = false }: { onPlay: (video: Video) => void; hideExternalSearch?: boolean }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [params] = useSearchParams();
   const q = params.get("q")?.trim() ?? "";
   useDocumentTitle(q || t("searchTitle"));
@@ -125,7 +125,7 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
     moreBelow.current = false;
     let outstanding = active.length;
     for (const provider of active) {
-      api.searchExternal(q, [provider.id])
+      api.searchExternal(q, [provider.id], 1, language)
         .then((answer) => {
           if (cancelled) return;
           const found = answer.providers[provider.id];
@@ -166,7 +166,7 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
     moreBelow.current = false;
     setLoadingMore(true);
     const answers = await Promise.all(asking.map((provider) =>
-      api.searchExternal(q, [provider.id], (windows[provider.id]?.length ?? 0) + 1)
+      api.searchExternal(q, [provider.id], (windows[provider.id]?.length ?? 0) + 1, language)
         .then((answer) => ({ provider, found: answer.providers[provider.id] }))
         // A window that fails is not the end of the list; the next scroll retries.
         .catch(() => { moreBelow.current = true; return null; })));

@@ -189,8 +189,10 @@ export const api = {
     `/dailymotion/videos/${encodeURIComponent(id)}/progress`,
     { method: "PUT", body: JSON.stringify({ position, duration }) },
   ),
-  searchExternal: (q: string, sources: string[], page = 1) => http<ExternalSearch>(
-    `/search/external?q=${encodeURIComponent(q)}&page=${page}${sources.length ? `&sources=${encodeURIComponent(sources.join(","))}` : ""}`,
+  // The page names the language it is rendering in. What comes back is titled
+  // in that language, whatever the profile's stored setting happens to say.
+  searchExternal: (q: string, sources: string[], page = 1, language = "en") => http<ExternalSearch>(
+    `/search/external?q=${encodeURIComponent(q)}&page=${page}&hl=${encodeURIComponent(language)}${sources.length ? `&sources=${encodeURIComponent(sources.join(","))}` : ""}`,
   ),
   searchSuggest: (q: string, language: string, signal?: AbortSignal) =>
     http<{ suggestions: string[]; channels: SearchSuggestChannel[] }>(
