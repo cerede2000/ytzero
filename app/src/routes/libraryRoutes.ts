@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { database } from "../database";
+import { libraryLanguage } from "../libraryLanguage";
 import { childLocalOnly, isChildUser } from "../childTime";
 import { profileDownloadsEnabled } from "../downloadConfig";
 import { cancelAutoDownloadIfUnwanted } from "../downloader";
@@ -211,7 +212,7 @@ api.get("/search/suggest", async (c) => {
   ).all(uid, `%${q}%`);
 
   // Restricted child profiles never see anything but their own library.
-  const language = c.req.query("hl")?.slice(0, 5) || "en";
+  const language = c.req.query("hl")?.slice(0, 5) || libraryLanguage();
   const suggestions = childLocalOnly(uid) ? [] : await searchQuerySuggestions(uid, q, language);
   return c.json({ suggestions, channels });
 });
