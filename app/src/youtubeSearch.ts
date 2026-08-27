@@ -2,6 +2,7 @@ import { decodeHtmlEntities } from "./htmlEntities";
 import { log } from "./logger";
 import { readYouTubeResponse } from "./youtubeRateLimit";
 import { sapisidFrom, sapisidHash } from "./youtubeInnerTube";
+import { languageHeaders } from "./youtubeLanguageCookie";
 import type { ChannelSearchResult, PublishedAgo, SearchResult } from "./youtube";
 import { readYouTubeResponseWithCookies } from "./youtubeCookieJar";
 
