@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { database } from "../database";
+import { log } from "../logger";
 import { getUserSetting } from "../db";
 import { panelLanguage, type PanelLanguage } from "../relatedVideoText";
 import { languageAsked } from "../searchLanguage";
@@ -181,7 +182,12 @@ api.get("/search/external", async (c) => {
   const asked = requestedProviders(c.req.query("sources"));
   // Scrolling asks for the next window. A page nobody named is the first one.
   const page = Math.max(1, Math.trunc(Number(c.req.query("page"))) || 1);
-  const { found, failed } = await searchAcrossProviders(q, asked, page, uid, askedLanguage(c, uid));
+  const language = askedLanguage(c, uid);
+  const { found, failed } = await searchAcrossProviders(q, asked, page, uid, language);
+  log.info("search.answered", {
+    userId: uid, asked: c.req.query("hl") ?? null, used: language, page,
+    first: found.youtube?.results[0]?.title ?? null,
+  });
   const downloadsAllowed = !await isChildUser(uid);
   const providers: Record<string, unknown> = {};
   for (const provider of asked) {
