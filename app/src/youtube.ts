@@ -8,6 +8,7 @@ import { videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQui
 import { relatedVideosFromWatchPage, type RelatedVideo } from "./relatedVideos";
 import { acceptLanguage, parseCompactCount, parsePublishedTextAnyLanguage, type PanelLanguage } from "./relatedVideoText";
 import { libraryLanguage } from "./libraryLanguage";
+import { languageHeaders } from "./youtubeLanguageCookie";
 import { inferIsShortFromMetadata } from "./shortClassification";
 import { resolveYouTubeLanguage, youtubeRequestHeaders, youtubeRssHeaders, type ResolvedYouTubeLanguage } from "./youtubeRequestLanguage";
 export { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError, videoOEmbedAvailabilityFromStatus } from "./youtubeVideoAvailability";

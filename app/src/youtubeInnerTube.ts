@@ -1,5 +1,6 @@
 import { log } from "./logger";
 import { relatedVideosFromWatchPage, type RelatedVideo } from "./relatedVideos";
+import { languageHeaders } from "./youtubeLanguageCookie";
 import { acceptLanguage, type PanelLanguage } from "./relatedVideoText";
 
 /**
@@ -64,8 +65,7 @@ export async function fetchWatchNextPanel(
     headers: {
       "Content-Type": "application/json",
       "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-      "Accept-Language": acceptLanguage(language),
-      Cookie: cookieHeader,
+      ...languageHeaders(cookieHeader, language),
       Origin: ORIGIN,
       Referer: `${ORIGIN}/watch?v=${videoId}`,
       Authorization: sapisidHash(sapisid, ORIGIN, now()),
