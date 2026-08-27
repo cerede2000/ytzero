@@ -1,3 +1,7 @@
+// Before anything reads the queue: a list left under the older name is
+// handed over here, at the top of the graph, or the module below would take
+// its snapshot first and find nothing.
+import "./sessionQueueAdoption";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
