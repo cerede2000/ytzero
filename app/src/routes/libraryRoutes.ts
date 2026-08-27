@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { database } from "../database";
-import { libraryLanguage } from "../libraryLanguage";
+import { getUserSetting } from "../db";
+import { panelLanguage, type PanelLanguage } from "../relatedVideoText";
 import { childLocalOnly, isChildUser } from "../childTime";
 import { profileDownloadsEnabled } from "../downloadConfig";
 import { cancelAutoDownloadIfUnwanted } from "../downloader";
@@ -103,6 +104,19 @@ api.get("/in-progress", async (c) => {
   return c.json({ videos: await attachTags(uid, rows) });
 });
 
+/**
+ * The language this reader's results are named in.
+ *
+ * A search is answered to whoever asked it, so it follows their own interface
+ * language rather than the one the library is kept in — the two differ on any
+ * instance whose profiles do not all read the same language, and a French
+ * profile was being handed English titles because the primary profile was set
+ * up in English.
+ */
+function readerLanguage(userId: number): PanelLanguage {
+  return panelLanguage(getUserSetting(userId, "language"));
+}
+
 api.get("/search/youtube", async (c) => {
   const uid = currentUserId(c);
   // Restricted child profiles search only the local library.
@@ -162,7 +176,7 @@ api.get("/search/external", async (c) => {
   const asked = requestedProviders(c.req.query("sources"));
   // Scrolling asks for the next window. A page nobody named is the first one.
   const page = Math.max(1, Math.trunc(Number(c.req.query("page"))) || 1);
-  const { found, failed } = await searchAcrossProviders(q, asked, page, uid);
+  const { found, failed } = await searchAcrossProviders(q, asked, page, uid, readerLanguage(uid));
   const downloadsAllowed = !await isChildUser(uid);
   const providers: Record<string, unknown> = {};
   for (const provider of asked) {
@@ -212,7 +226,7 @@ api.get("/search/suggest", async (c) => {
   ).all(uid, `%${q}%`);
 
   // Restricted child profiles never see anything but their own library.
-  const language = c.req.query("hl")?.slice(0, 5) || libraryLanguage();
+  const language = c.req.query("hl")?.slice(0, 5) || readerLanguage(uid);
   const suggestions = childLocalOnly(uid) ? [] : await searchQuerySuggestions(uid, q, language);
   return c.json({ suggestions, channels });
 });

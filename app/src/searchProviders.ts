@@ -4,6 +4,7 @@ import { log } from "./logger";
 import { persistSetCookies } from "./youtubeCookieHealth";
 import { youtubeCookieHeader } from "./youtubeCookieHeader";
 import { searchDeeper, searchYouTube, type ChannelSearchResult, type SearchResult } from "./youtube";
+import type { PanelLanguage } from "./relatedVideoText";
 
 export interface ProviderSearch {
   results: SearchResult[];
@@ -103,6 +104,15 @@ export async function searchAcrossProviders(
    * account's, and lending it would hand one person's habits to the next.
    */
   reader: number | null = null,
+  /**
+   * The language the results are asked in.
+   *
+   * A video whose channel publishes a translated title has more than one, and
+   * YouTube hands back the one the request named. The reader is right here, so
+   * the answer is in their language rather than in whatever the instance was
+   * set up in.
+   */
+  language: PanelLanguage = "en",
 ): Promise<{ found: Record<string, ProviderSearch>; failed: string[] }> {
   const jar = reader ? youtubeCookieHeader(reader) : null;
   const per = providerCeiling();
@@ -130,7 +140,7 @@ export async function searchAcrossProviders(
            */
           onSetCookies: (setCookies) => persistSetCookies(reader, setCookies),
         }
-        : null);
+        : null, language);
     } catch (error) {
       // Named, because a provider that answers nothing and a provider that was
       // refused look the same on the page and need opposite fixes.
@@ -147,9 +157,10 @@ async function runProvider(
   from: number,
   upTo: number,
   reader: { id: number; cookieHeader: string; onSetCookies: (setCookies: string[]) => void } | null,
+  language: PanelLanguage,
 ): Promise<ProviderSearch> {
   if (id === "youtube") {
-    const deep = await searchDeeper(query, upTo, reader).catch((error: unknown) => {
+    const deep = await searchDeeper(query, upTo, reader, language).catch((error: unknown) => {
       log.warn("search.youtube_deep_failed", {
         signedIn: Boolean(reader),
         error: error instanceof Error ? error.message : String(error),
@@ -166,7 +177,7 @@ async function runProvider(
         more: deep.more,
       };
     }
-    const shallow = await searchYouTube(query);
+    const shallow = await searchYouTube(query, language);
     const results = deep?.results.length ? deep.results : shallow.results;
     return {
       results: results.slice(from, upTo),

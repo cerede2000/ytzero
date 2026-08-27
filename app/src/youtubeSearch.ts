@@ -37,8 +37,8 @@ export function parseAbbreviatedCount(text: string): number | null {
  * The key is the reader, never the cookie: it is compared, held in memory and
  * potentially logged, and a credential has no business in any of that.
  */
-export function walkKey(query: string, reader: number | null): string {
-  return `${reader ?? "personne"}\u0000${query}`;
+export function walkKey(query: string, reader: number | null, language: PanelLanguage = "en"): string {
+  return `${reader ?? "personne"}\u0000${language}\u0000${query}`;
 }
 
 /**

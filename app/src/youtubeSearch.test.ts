@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseAbbreviatedCount, searchClient } from "./youtubeSearch";
+import { parseAbbreviatedCount, searchClient, walkKey } from "./youtubeSearch";
 import { searchChannelFromLockup, searchVideoFromLockup } from "./youtube";
 import { configureLibraryLanguageProvider } from "./libraryLanguage";
 
@@ -161,5 +161,16 @@ describe("the client a search continuation is asked as", () => {
     // gl ranks results rather than translating them: moving it with the
     // language would quietly reorder every search.
     expect(searchClient("2.20260101", "fr").gl).toBe("US");
+  });
+});
+
+describe("a search walk belongs to the language it was asked in", () => {
+  test("two languages are two walks", () => {
+    // The walk holds the results already gathered. Reused across languages, a
+    // French reader would be handed the English titles the walk before it
+    // collected, and neither of them would be wrong for their own request.
+    expect(walkKey("facel vega", null, "fr")).not.toBe(walkKey("facel vega", null, "en"));
+    expect(walkKey("facel vega", 2, "fr")).not.toBe(walkKey("facel vega", 3, "fr"));
+    expect(walkKey("facel vega", null, "fr")).toBe(walkKey("facel vega", null, "fr"));
   });
 });

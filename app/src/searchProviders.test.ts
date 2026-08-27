@@ -55,7 +55,7 @@ describe("whose search a walk belongs to", () => {
   test("and the key holds the reader, never the credential", () => {
     // It is compared, held in memory and may be logged. A cookie in it would
     // be a cookie in all three.
-    expect(walkKey("chats", 7)).toBe("7\u0000chats");
+    expect(walkKey("chats", 7, "fr")).toBe("7\u0000fr\u0000chats");
   });
 });
 

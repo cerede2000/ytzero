@@ -156,6 +156,11 @@ function primaryUserId(): number {
 // are fetched in one language rather than each reader's. The primary profile's
 // is that language: it is whoever set the instance up.
 configureLibraryLanguageProvider(() => panelLanguage(getUserSetting(primaryUserIdValue, "language")));
+// Said out loud once, because everything YouTube is asked for is asked in this
+// language and nothing else on screen reveals which one it is: a household
+// whose primary profile was set up in English gets English titles in a French
+// interface, and the only way to see that was to read the code.
+log.info("youtube.library_language", { language: libraryLanguage(), primaryUserId: primaryUserIdValue });
 function isPrimaryUser(c: any): boolean {
   return currentUserId(c) === primaryUserId();
 }
