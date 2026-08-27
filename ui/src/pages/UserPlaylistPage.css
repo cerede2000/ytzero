@@ -59,3 +59,26 @@
   padding: 0 12px;
 }
 
+
+/* ---------- reordering, while the playlist is being edited ---------- */
+.playlist-video { position: relative; }
+.playlist-video--reorderable { touch-action: none; }
+.playlist-video__grip {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  cursor: grab;
+}
+.playlist-video__grip:active { cursor: grabbing; }
+.playlist-video.is-carried { opacity: 0.55; }
+.playlist-video.is-carried .playlist-video__grip { cursor: grabbing; }

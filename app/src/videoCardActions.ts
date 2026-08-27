@@ -22,6 +22,8 @@ export function isVideoCardPreviewMode(value: unknown): value is VideoCardPrevie
   return typeof value === "string" && (VIDEO_CARD_PREVIEW_MODES as readonly string[]).includes(value);
 }
 
+import { DEFAULT_HIDDEN_VIDEO_CARD_ACTION_IDS, LOCKED_VIDEO_CARD_ACTION_IDS, VIDEO_CARD_ACTION_IDS, type VideoCardActionId } from "../../shared/videoCardActions";
+
 export function isVideoCardActionMode(value: unknown): value is VideoCardActionMode {
   return typeof value === "string" && (VIDEO_CARD_ACTION_MODES as readonly string[]).includes(value);
 }

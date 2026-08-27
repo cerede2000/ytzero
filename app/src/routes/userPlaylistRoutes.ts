@@ -176,6 +176,23 @@ export function registerUserPlaylistRoutes(
     return c.json({ ok: true });
   });
 
+  api.put("/playlists/:id/order", async (c) => {
+    const uid = currentUserId(c);
+    const playlistId = c.req.param("id");
+    if (!await ownsPlaylist(uid, playlistId)) return c.json({ error: "not found" }, 404);
+    const body = await c.req.json().catch(() => null) as { video_ids?: unknown } | null;
+    if (!Array.isArray(body?.video_ids)) return c.json({ error: "invalid video ids" }, 400);
+    const held = (await database.prepare("SELECT video_id FROM user_playlist_videos WHERE playlist_id = ? ORDER BY position ASC, video_id ASC").all(playlistId) as { video_id: string }[])
+      .map((row) => row.video_id);
+    const ordered = orderedPlaylistVideoIds(body.video_ids, held);
+    await database.transaction(async () => {
+      for (const [position, videoId] of ordered.entries()) {
+        await database.prepare("UPDATE user_playlist_videos SET position = ? WHERE playlist_id = ? AND video_id = ?").run(position, playlistId, videoId);
+      }
+    })();
+    return c.json({ video_ids: ordered });
+  });
+
   api.delete("/playlists/:id/videos/:videoId", async (c) => {
     const uid = currentUserId(c);
     if (!await ownsPlaylist(uid, c.req.param("id"))) return c.json({ error: "not found" }, 404);

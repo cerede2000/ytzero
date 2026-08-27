@@ -1529,6 +1529,9 @@ export const ja: Locale = {
     "watchUnavailableRetry": "再試行",
     "searchEverySource": "すべてのソース",
     "searchExternalResults": "検索結果",
+    "cardPlay": "再生",
+    "cardPlayAudio": "音声で再生",
+    "playlistReorderHint": "ドラッグして並べ替え",
   },
   buckets: {
     "today": "今日更新",

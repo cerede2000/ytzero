@@ -1442,6 +1442,9 @@ export const en = {
     cleanupApplying: "Clearing…",
     cleanupConfirmConfirm: "Clear",
     cleanupConfirmBody: "{count} will be marked as: {action}. You can undo this right after it runs.",
+    cardPlay: "Play",
+    cardPlayAudio: "Listen",
+    playlistReorderHint: "Drag to reorder",
   },
   buckets: {
     today: "Today",

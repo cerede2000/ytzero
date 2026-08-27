@@ -29,6 +29,8 @@ import Tooltip from "./Tooltip";
 import { VideoThumbnail, watchProgress } from "./VideoThumbnail";
 import { BUCKET_ICONS, VideoScheduleActions } from "./VideoScheduleActions";
 import { VideoCardPlaylistAction } from "./VideoCardPlaylistAction";
+import { profileAudioModeEnabled } from "../audioModePreference";
+import { rememberedProfileId } from "../profilePreference";
 import { SessionPlayQueueAction } from "./SessionPlayQueueAction";
 import { Badge } from "./ui";
 import { useDeArrowBranding } from "../dearrow";
@@ -238,6 +240,9 @@ export function VideoCard({
    */
   const [thumbnailPainted, setThumbnailPainted] = useState(false);
   const [previewActive, setPreviewActive] = useState(false);
+  // Read as the card is built rather than on every render: the choice is made
+  // on the watch page, and coming back from it builds these again.
+  const [audioModeRemembered] = useState(() => profileAudioModeEnabled(rememberedProfileId()));
   const canDownloadLocally = video.live_status !== "live" && video.live_status !== "upcoming";
   const publishedTime = formatTimeAgo(video.published_at, language);
   const foundTime = formatTimeAgo(video.found_at ? `${video.found_at.replace(" ", "T")}Z` : null, language);
@@ -573,6 +578,20 @@ export function VideoCard({
   const renderSecondaryAction = (id: VideoCardActionId): ReactNode => {
     if (actionPreview && id !== "schedule") return actionPreview.renderAction(id);
     switch (id) {
+      case "play": {
+        // The overlay covers the thumbnail, so the way in is covered by the
+        // actions: this is that way back. It opens the video exactly as the
+        // thumbnail does, in the mode this profile last chose — the icon says
+        // which, so nobody has to press it to find out.
+        const label = t(audioModeRemembered ? "cardPlayAudio" : "cardPlay");
+        return <Tooltip key={id} text={label} portal>
+          <button
+            className="action-btn"
+            aria-label={label}
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); onPlay(video); }}
+          >{audioModeRemembered ? <Headphones /> : <Play />}</button>
+        </Tooltip>;
+      }
       case "sessionQueue":
         return <SessionPlayQueueAction key={id} video={video} />;
       case "playlist":

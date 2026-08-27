@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { clampedOffset } from "./tooltipPlacement";
 import "./Tooltip.css";
 
 export default function Tooltip({ text, pos = "left", delay, className, portal = false, open, children }: {
@@ -15,6 +16,7 @@ export default function Tooltip({ text, pos = "left", delay, className, portal =
   children: ReactNode;
 }) {
   const anchorRef = useRef<HTMLSpanElement>(null);
+  const tipRef = useRef<HTMLSpanElement>(null);
   const [portalStyle, setPortalStyle] = useState<CSSProperties | null>(null);
   const controlled = open !== undefined;
 
