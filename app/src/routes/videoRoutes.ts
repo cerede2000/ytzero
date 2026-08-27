@@ -192,6 +192,22 @@ api.delete("/external/:id", async (c) => {
   if (await database.prepare("SELECT 1 FROM social_posts WHERE video_id=? LIMIT 1").get(id)) {
     return c.json({ error: "video is shared in Social", code: "social_video_in_use" }, 409);
   }
+  /*
+   * The same things "clear all" refuses to take are refused here.
+   *
+   * A temporary video is a row nobody asked to keep — until somebody files it
+   * in a playlist, queues it or likes it, and then it is theirs. Deleting it
+   * takes the playlist entry with it, silently, because that entry is a
+   * foreign key on this row: the playlist stays and empties. Removing them one
+   * at a time did that; removing them all never did, and the button that
+   * clears a channel's temporary videos is a loop over this route.
+   */
+  if (await database.prepare("SELECT 1 FROM user_playlist_videos WHERE video_id=? LIMIT 1").get(id)) {
+    return c.json({ error: "video is in a playlist", code: "playlist_video_in_use" }, 409);
+  }
+  if (await database.prepare("SELECT 1 FROM user_videos WHERE video_id=? AND (status = 'queued' OR liked = 1) LIMIT 1").get(id)) {
+    return c.json({ error: "video is saved by a profile", code: "saved_video_in_use" }, 409);
+  }
   const res = await database.prepare(`
     DELETE FROM videos
     WHERE video_id = ?
