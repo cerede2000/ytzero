@@ -1,6 +1,6 @@
 # Interface localization
 
-YT Zero provides complete interface message catalogues for eight languages.
+YT Zero provides complete interface message catalogues for nine languages.
 The language is a per-profile setting, so profiles sharing one installation can
 use different languages.
 

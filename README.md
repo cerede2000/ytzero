@@ -88,7 +88,7 @@ YT Zero removes that layer. It keeps subscriptions, watch progress, playlists, t
 - **Audio mode** — switch regular videos and active livestreams to an audio-only player with Media Session controls, background playback, seeking, volume control, and per-profile browser persistence. It uses yt-dlp directly and does not require downloads to be enabled.
 - **Internationalization** — complete UI catalogues for English (`en`), Polish
   (`pl`), German (`de`), French (`fr`), Spanish (`es`), Brazilian Portuguese
-  (`pt-BR`), Russian (`ru`), and Japanese (`ja`). Language is selected per
+  (`pt-BR`), Russian (`ru`), Japanese (`ja`), and Hungarian (`hu`). Language is selected per
   profile. See the [localization guide](docs/localization.md) for native names,
   locale behavior, and contribution notes.
 
@@ -319,6 +319,10 @@ Licensed under the **GNU Affero General Public License v3.0 only** (`AGPL-3.0-on
 ## Thanks
 
 Thanks to [Green-Kite](https://github.com/Green-Kite) for help with the German language support and updating the wiki.
+
+Thanks to **[@Zan1456](https://github.com/Zan1456)** for adding Hungarian language support.
+
+Thanks to **[@cerede2000](https://github.com/cerede2000)** for creating the French translation.
 
 Thanks to [baldemar-wuda](https://github.com/baldemar-wuda) for extensive testing, great suggestions, and finding bugs.
 

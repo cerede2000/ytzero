@@ -13,6 +13,7 @@ export const UI_LANGUAGES = {
   "pt-BR": { locale: "pt-BR", nativeName: "Português (Brasil)", base: "pt" },
   ru: { locale: "ru-RU", nativeName: "Русский", base: "ru" },
   ja: { locale: "ja-JP", nativeName: "日本語", base: "ja" },
+  hu: { locale: "hu-HU", nativeName: "Magyar", base: "hu" },
 } as const;
 
 export type Language = keyof typeof UI_LANGUAGES;

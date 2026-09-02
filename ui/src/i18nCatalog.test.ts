@@ -9,7 +9,7 @@ function placeholders(value: string): string[] {
 
 describe("UI language catalogue", () => {
   test("has an Intl locale and a native picker name for every supported language", () => {
-    expect(LANGUAGE_CODES).toEqual(["en", "pl", "de", "fr", "es", "pt-BR", "ru", "ja"]);
+    expect(LANGUAGE_CODES).toEqual(["en", "pl", "de", "fr", "es", "pt-BR", "ru", "ja", "hu"]);
     for (const code of LANGUAGE_CODES) {
       expect(UI_LANGUAGES[code].nativeName.length > 0).toBe(true);
       expect(new Intl.NumberFormat(LOCALE_TAGS[code]).format(1).length > 0).toBe(true);
