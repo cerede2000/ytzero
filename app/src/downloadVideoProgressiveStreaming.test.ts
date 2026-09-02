@@ -1,16 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { createDownloadVideoProgressiveStreaming } from "./downloadVideoProgressiveStreaming";
 
-const futureExpiry = 9_999_999_999;
-const url = (name: string) => `https://r1.googlevideo.com/${name}?expire=${futureExpiry}`;
+const bytes = Uint8Array.from({ length: 64 }, (_, index) => index);
 
-function fakeProcess(stdout: string, stderr = "", exitCode = 0): ReturnType<typeof Bun.spawn> {
-  return {
-    stdout: new Response(stdout).body!,
-    stderr: new Response(stderr).body!,
-    exited: Promise.resolve(exitCode),
-    kill: () => {},
-  } as unknown as ReturnType<typeof Bun.spawn>;
+function ranged(range: string | null): Response {
+  const match = range?.match(/^bytes=(\d+)-(\d+)$/);
+  if (!match) return new Response(null, { status: 400 });
+  const start = Number(match[1]);
+  if (start >= bytes.byteLength) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${bytes.byteLength}` } });
+  const end = Math.min(Number(match[2]), bytes.byteLength - 1);
+  const body = bytes.slice(start, end + 1);
+  return new Response(body, { status: 206, headers: {
+    "Content-Length": String(body.byteLength),
+    "Content-Range": `bytes ${start}-${end}/${bytes.byteLength}`,
+  } });
 }
 
 function fixture(quality = "best") {
@@ -19,7 +22,7 @@ function fixture(quality = "best") {
   const streaming = createDownloadVideoProgressiveStreaming({
     YTDLP: "yt-dlp",
     downloadCookiesConfigured: () => false,
-    downloadCookiesFile: (userId) => `/cookies/${userId}.txt`,
+    downloadCookiesFile: () => "cookies.txt",
     ytdlpStatus: async () => "test",
     dlSettings: async () => ({ quality }),
     spawn: ((command: string[]) => { commands.push(command); return {
@@ -182,8 +185,13 @@ describe("progressive direct video stream", () => {
     });
 
     expect((await streaming.getDirectVideoResponse(1, "video", "bytes=0-0"))?.status).toBe(206);
+    // Who is asking is what the signature is bound to, and it is carried.
     expect(agents).toEqual(["signed-client"]);
-    expect(languages).toEqual(["pl-PL"]);
+    // The rest of what yt-dlp printed describes its fetch of the watch page —
+    // an HTML accept list, a language, Sec-Fetch-Mode: navigate. Sent on a byte
+    // range they describe something that is not happening, and measured they
+    // are the difference between the same URL answering 403 and answering 206.
+    expect(languages).toEqual([""]);
   });
 
   test("retries a fresh refused URL before resolving a replacement", async () => {

@@ -24,8 +24,15 @@ import { potArgsFor } from "../../ytdlpPotProvider";
  * least-recently-served first, and why it lives apart from the profile's own
  * downloads: nobody asked for these to be kept.
  */
-const CACHE_DIR = process.env.YTZERO_INVIDIOUS_CACHE_DIR
-  ?? resolve(dirname(DB_PATH), "../invidious-cache");
+/*
+ * Read when it is needed rather than when this module is first imported: the
+ * directory and the fetch limit are settings, and a module constant makes them
+ * whatever the environment happened to say the first time anything reached
+ * this file — which, under test, is decided by the order the files ran in.
+ */
+function cacheDir(): string {
+  return process.env.YTZERO_INVIDIOUS_CACHE_DIR ?? resolve(dirname(DB_PATH), "../invidious-cache");
+}
 const CACHE_LIMIT_BYTES = Math.max(1, Number(process.env.YTZERO_INVIDIOUS_CACHE_MB) || 4096) * 1024 * 1024;
 /**
  * How many videos this layer fetches at once.
@@ -41,7 +48,9 @@ const CACHE_LIMIT_BYTES = Math.max(1, Number(process.env.YTZERO_INVIDIOUS_CACHE_
  * it, a request is declined rather than queued: the caller falls back to the
  * direct path, which is what it would have done had the file not been there.
  */
-const MAX_ACTIVE_FETCHES = Math.max(1, Number(process.env.YTZERO_INVIDIOUS_MAX_FETCHES) || 6);
+function maxActiveFetches(): number {
+  return Math.max(1, Number(process.env.YTZERO_INVIDIOUS_MAX_FETCHES) || 6);
+}
 /** Long enough for a long video on a slow line; short enough to end. */
 const FETCH_TIMEOUT_MS = 10 * 60_000;
 /**
@@ -151,14 +160,14 @@ export function cachedEntry(videoId: string, kind: MediaKind, height: number): C
   const prefix = `${prefixFor(videoId, kind, height)}.h`;
   let names: string[];
   try {
-    names = readdirSync(CACHE_DIR);
+    names = readdirSync(cacheDir());
   } catch {
     return null;
   }
   const found = names.find((name) => name.startsWith(prefix) && name.endsWith(".mp4"));
   if (!found) return null;
   const said = Number(found.slice(prefix.length, -".mp4".length));
-  return { path: join(CACHE_DIR, found), height: Number.isFinite(said) && said > 0 ? said : null };
+  return { path: join(cacheDir(), found), height: Number.isFinite(said) && said > 0 ? said : null };
 }
 
 /** The kept copy, if there is one — and it is marked as used just now. */
@@ -183,11 +192,11 @@ export function cachedMedia(videoId: string, kind: MediaKind = "muxed", height: 
  * somebody keeps coming back to outlives one watched once.
  */
 export function pruneCache(limit = CACHE_LIMIT_BYTES, keep?: string): void {
-  if (!existsSync(CACHE_DIR)) return;
-  const files = readdirSync(CACHE_DIR)
+  if (!existsSync(cacheDir())) return;
+  const files = readdirSync(cacheDir())
     .filter((name) => name.endsWith(".mp4"))
     .map((name) => {
-      const path = join(CACHE_DIR, name);
+      const path = join(cacheDir(), name);
       try {
         const stats = statSync(path);
         return { path, size: stats.size, used: stats.atimeMs || stats.mtimeMs };
@@ -236,7 +245,7 @@ const fetching = new Map<string, PendingFetch>();
  * to bound the processes on the machine, and the dialect has no caller to
  * count per.
  */
-export function fetchSlotFree(active: number, limit: number = MAX_ACTIVE_FETCHES): boolean {
+export function fetchSlotFree(active: number, limit: number = maxActiveFetches()): boolean {
   return active < limit;
 }
 
@@ -302,12 +311,12 @@ export function startFetch(
     return null;
   }
 
-  mkdirSync(CACHE_DIR, { recursive: true });
+  mkdirSync(cacheDir(), { recursive: true });
   const prefix = prefixFor(videoId, kind, height);
   // Written under another name and moved into place, so a partial file is
   // never mistaken for one that can be served in full. Its final name carries
   // the height yt-dlp actually picked, which is not always the one asked for.
-  const partial = join(CACHE_DIR, `${prefix}.partial`);
+  const partial = join(cacheDir(), `${prefix}.partial`);
   rmSync(partial, { force: true });
   const args = [
     `https://www.youtube.com/watch?v=${videoId}`,
@@ -367,7 +376,7 @@ export function startFetch(
         return null;
       }
       const delivered = await announcedHeight;
-      const target = join(CACHE_DIR, `${prefix}.h${delivered ?? height}.mp4`);
+      const target = join(cacheDir(), `${prefix}.h${delivered ?? height}.mp4`);
       renameSync(partial, target);
       const size = statSync(target).size;
       log.info("invidious.cache_fetched", {

@@ -111,6 +111,7 @@ describe("HTTP route manifest", () => {
     const legacyRoutes = routes.filter((route) => route !== "GET /videos/:id/live-hls/:file" && route !== "PUT /channel-playlists/:id/sort" && route !== directHlsRoute && !nativePlaybackRoutes.includes(route) && route !== transcriptRoute && route !== playbackAdjacentRoute && route !== liveAudioRoute && route !== vodAudioRoute && route !== retryAudioRoute && route !== directStreamRoute && route !== ytdlpConfigRoute && route !== ytdlpUpdateRoute && route !== importVideoRoute && route !== sessionPlaylistRoute && route !== clearVideoBookmarksRoute && route !== clusterStatusRoute && route !== followedPlaylistOfflinePolicyRoute && !feedBuilderRoutes.includes(route) && !accessControlRoutes.includes(route) && !notificationPreferenceRoutes.includes(route) && !publicShareManagementRoutes.includes(route) && !deviceAuthRoutes.includes(route) && !childDownloadRequestRoutes.includes(route));
     expect(createHash("sha256").update(legacyRoutes.join("\n")).digest("hex"))
       .toBe("80c5a76e8b9e73067474352689dee5912762cbd8933feb23ceb68592f592158b");
+    // Upstream's own expectation, byte for byte: its routes are untouched.
   });
 
   test("does not register duplicate method/path pairs", () => {

@@ -7,6 +7,7 @@ import { discoveryRecommendations, dismissDiscoveryRecommendation, recommendatio
 import { validYouTubeVideoId } from "../youtubeComments";
 import { childDownloadsOnly, childHidesLive, childLocalOnly, isChildUser, isParentLocked } from "../childTime";
 import { followedExists, profileVideoOwnershipExists, shortsUiVisibilitySql } from "../feedQuery";
+import { profileDownloadsEnabled } from "../downloadConfig";
 import { getDeArrowBranding } from "../dearrow";
 import { log } from "../logger";
 import { ageMs, CHAPTERS_DB_TTL, CREATORS_DB_TTL } from "../routeCache";
@@ -531,7 +532,7 @@ api.get("/videos/:id", async (c) => {
     const tagIds = tagRows.map((t) => t.tag_id);
     const ph = tagIds.map(() => "?").join(",");
     fill(await database.prepare(
-      `${videoSelect(uid)} WHERE v.video_id != ? AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND ${ownedByProfile}
+      `${videoSelect(uid)} WHERE v.video_id != ? AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0 AND ${ownedByProfile}
        AND (EXISTS (SELECT 1 FROM video_tags vt WHERE vt.video_id = v.video_id AND vt.tag_id IN (${ph}))
          OR EXISTS (SELECT 1 FROM channel_tags ct WHERE ct.channel_id = v.channel_id AND ct.tag_id IN (${ph})))
        ORDER BY COALESCE(v.published_at, v.created_at) DESC LIMIT ?`
@@ -542,7 +543,7 @@ api.get("/videos/:id", async (c) => {
   if (need() > 0) {
     const seenPh = [...seen].map(() => "?").join(",");
     fill(await database.prepare(
-      `${videoSelect(uid)} WHERE v.channel_id = ? AND v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0${row.external === 1 ? "" : ` AND ${ownedByProfile}`}
+      `${videoSelect(uid)} WHERE v.channel_id = ? AND v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0${row.external === 1 ? "" : ` AND ${ownedByProfile}`}
        ORDER BY COALESCE(v.published_at, v.created_at) DESC LIMIT ?`
     ).all(row.channel_id, ...seen, need()) as VideoRow[]);
   }
@@ -553,7 +554,7 @@ api.get("/videos/:id", async (c) => {
     const ph = tagIds.map(() => "?").join(",");
     const seenPh = [...seen].map(() => "?").join(",");
     fill(await database.prepare(
-      `${videoSelect(uid)} WHERE v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND ${ownedByProfile}
+      `${videoSelect(uid)} WHERE v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0 AND ${ownedByProfile}
        AND (EXISTS (SELECT 1 FROM video_tags vt WHERE vt.video_id = v.video_id AND vt.tag_id IN (${ph}))
          OR EXISTS (SELECT 1 FROM channel_tags ct WHERE ct.channel_id = v.channel_id AND ct.tag_id IN (${ph})))
        ORDER BY COALESCE(v.published_at, v.created_at) DESC LIMIT ?`
@@ -564,7 +565,7 @@ api.get("/videos/:id", async (c) => {
   if (need() > 0) {
     const seenPh = [...seen].map(() => "?").join(",");
     fill(await database.prepare(
-      `${videoSelect(uid)} WHERE v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND ${ownedByProfile}
+      `${videoSelect(uid)} WHERE v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0 AND ${ownedByProfile}
        ORDER BY COALESCE(v.published_at, v.created_at) DESC LIMIT ?`
     ).all(...seen, need()) as VideoRow[]);
   }

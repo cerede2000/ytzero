@@ -25,6 +25,7 @@ describe("video card action configuration", () => {
     expect(parseVideoCardActionConfig({ version: 1, actions: [{ id: "playlist", hidden: true }] })?.actions).toEqual([
       { id: "schedule", hidden: false },
       { id: "playlist", hidden: true },
+      { id: "play", hidden: false },
       { id: "sessionQueue", hidden: false },
       { id: "download", hidden: true },
       { id: "archive", hidden: false },
