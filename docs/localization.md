@@ -14,6 +14,7 @@ use different languages.
 | `pt-BR` | Brazilian Portuguese | Português (Brasil) | `pt-BR` |
 | `ru` | Russian | Русский | `ru-RU` |
 | `ja` | Japanese | 日本語 | `ja-JP` |
+| `hu` | Hungarian | Magyar | `hu-HU` |
 
 The canonical language list lives in `shared/uiLanguages.ts`. It supplies the
 browser and server with the same language codes, BCP 47 locale tags, native

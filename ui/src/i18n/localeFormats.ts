@@ -87,4 +87,8 @@ export const localeFormats: Record<Language, LocaleFormat> = {
     videoCount: (n) => `${n} 本の動画`, addedVideos: (n) => `${n} 本の新しい動画を追加しました`, channelCount: (n) => `${n} チャンネル`, playlistCount: (n) => `${n} プレイリスト`, historyEntryCount: (n) => `${n} 件の履歴`,
     ageUnit: (_n, unit) => ({ days: "日", weeks: "週間", months: "か月", years: "年" })[unit],
   },
+  hu: {
+    videoCount: (n) => `${n} videó`, addedVideos: (n) => `${n} újonnan hozzáadott videó`, channelCount: (n) => `${n} csatorna`, playlistCount: (n) => `${n} lejátszási lista`, historyEntryCount: (n) => `${n} elem`,
+    ageUnit: (_n, unit) => ({ days: "nap", weeks: "hét", months: "hónap", years: "év" })[unit],
+  },
 };

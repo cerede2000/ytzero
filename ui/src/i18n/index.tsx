@@ -23,6 +23,7 @@ export const localeLoaders: Record<Exclude<Language, "en">, () => Promise<Locale
   "pt-BR": () => import("./locales/pt-BR").then((module) => module.ptBR),
   ru: () => import("./locales/ru").then((module) => module.ru),
   ja: () => import("./locales/ja").then((module) => module.ja),
+  hu: () => import("./locales/hu").then((module) => module.hu),
 };
 
 function localeFor(language: Language): Locale {
