@@ -9,6 +9,7 @@ import { defaultAudioDiagnostic, type AudioDiagnostic } from "./audioDiagnostics
 import { createAudioSourceResolver, type AudioSource } from "./audioSourceResolver";
 import { googleVideoHost, safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { createDownloadAudioVodStreaming } from "./downloadAudioVodStreaming";
+import { rangedYtdlpHeaders } from "./ytdlpHttpHeaders";
 
 interface DownloadAudioStreamingDependencies {
   YTDLP: string;
@@ -72,16 +73,16 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
   async function fetchAudioUpstream(
     userId: number,
     videoId: string,
-    sourceUrl: string,
+    source: AudioSource,
     range: AudioByteRange,
     signal: AbortSignal,
   ): Promise<Response | null> {
-    let currentUrl = sourceUrl;
+    let currentUrl = source.url;
     for (let hop = 0; hop <= AUDIO_REDIRECT_LIMIT; hop++) {
       let response: Response;
       try {
         response = await fetchImpl(currentUrl, {
-          headers: { "User-Agent": "Mozilla/5.0", Range: audioRangeHeader(range) },
+          headers: rangedYtdlpHeaders(source.httpHeaders, audioRangeHeader(range)),
           redirect: "manual",
           signal,
         });
@@ -141,7 +142,7 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     if (!source.issuedAt || Date.now() - source.issuedAt > FRESH_URL_WINDOW_MS) return null;
     for (const delay of FRESH_URL_RETRY_DELAYS_MS) {
       if (!await waitForFreshUrlRetry(delay, signal)) return null;
-      const retry = await fetchAudioUpstream(userId, videoId, source.url, range, signal);
+      const retry = await fetchAudioUpstream(userId, videoId, source, range, signal);
       if (!retry || retry.status !== 403) return retry;
       await retry.body?.cancel().catch(() => {});
     }
@@ -157,7 +158,7 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     let source = await resolveAudioSource(userId, videoId, signal);
     if (!source) return null;
 
-    let upstream = await fetchAudioUpstream(userId, videoId, source.url, range, signal);
+    let upstream = await fetchAudioUpstream(userId, videoId, source, range, signal);
     if (upstream?.status === 403) {
       await upstream.body?.cancel().catch(() => {});
       upstream = await retryFreshForbidden(userId, videoId, source, range, signal) ?? new Response(null, { status: 403 });
@@ -169,7 +170,7 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
       await upstream.body?.cancel().catch(() => {});
       source = await refreshAudioSource(userId, videoId, source.url, signal);
       if (!source) return null;
-      upstream = await fetchAudioUpstream(userId, videoId, source.url, range, signal);
+      upstream = await fetchAudioUpstream(userId, videoId, source, range, signal);
     }
     if (!upstream) {
       if (!signal.aborted) discardAudioSource(userId, videoId, source.url);

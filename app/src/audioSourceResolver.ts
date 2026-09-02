@@ -3,12 +3,14 @@ import { defaultAudioDiagnostic, type AudioDiagnostic } from "./audioDiagnostics
 import { downloadCookieAttempts, isAnonymousAddressRefusal, recordDownloadAttempt, redactYtdlpDiagnostic } from "./downloadStrategy";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { ytdlpAttemptArgs } from "./downloadConfig";
+import { parseYtdlpHttpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
 
 export interface AudioSource {
   url: string;
   mime: string;
   expiresAt: number;
   issuedAt?: number;
+  httpHeaders: YtdlpHttpHeaders;
 }
 
 interface AudioResolution {
@@ -64,6 +66,7 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
       "-f", "bestaudio[acodec^=mp4a]/bestaudio[ext=m4a]/140",
       "--print", "urls",
       "--print", "%(ext)s",
+      "--print", "%(http_headers)j",
     ];
     if (signal.aborted) return { source: null, anonymousRefused: false };
 
@@ -98,7 +101,8 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
       const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
       const url = safeGoogleVideoUrl(lines[0] ?? "");
       const extension = lines[1] ?? "m4a";
-      if (!url) {
+      const httpHeaders = parseYtdlpHttpHeaders(lines[2] ?? "");
+      if (!url || !httpHeaders) {
         reportFailure("missing_or_rejected_url");
         return { source: null, anonymousRefused: false };
       }
@@ -106,7 +110,7 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
         reportFailure("unsupported_extension");
         return { source: null, anonymousRefused: false };
       }
-      return { source: { url, mime: "audio/mp4", expiresAt: audioUrlExpiry(url), issuedAt: Date.now() }, anonymousRefused: false };
+      return { source: { url, mime: "audio/mp4", expiresAt: audioUrlExpiry(url), issuedAt: Date.now(), httpHeaders }, anonymousRefused: false };
     } catch {
       if (!signal.aborted) reportFailure("process_io_failed");
       return { source: null, anonymousRefused: false };

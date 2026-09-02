@@ -59,6 +59,7 @@ function source(userId: number, revision = 1): AudioSource {
     url: `https://r1.googlevideo.com/profile-${userId}-v${revision}`,
     mime: "audio/mp4",
     expiresAt: Date.now() + 60_000,
+    httpHeaders: { "user-agent": "test-agent" },
   };
 }
 

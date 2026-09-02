@@ -14,7 +14,7 @@ function fakeProcess(stdout: string, exitCode = 0): ReturnType<typeof Bun.spawn>
 }
 
 function successfulSpawn(url: string): typeof Bun.spawn {
-  return (() => fakeProcess(`${url}\nm4a\n`)) as unknown as typeof Bun.spawn;
+  return (() => fakeProcess(`${url}\nm4a\n{"User-Agent":"yt-dlp-agent"}\n`)) as unknown as typeof Bun.spawn;
 }
 
 function rangeResponse(
@@ -51,10 +51,14 @@ function factory(overrides: Partial<Parameters<typeof createDownloadStreaming>[0
 describe("audio streaming integration", () => {
   test("normalizes a range-less GET to one bounded verified 206 chunk", async () => {
     const ranges: string[] = [];
+    const agents: string[] = [];
     const audio = factory({
-      spawn: successfulSpawn(`https://r1.googlevideo.com/audio?expire=${futureExpiry}`),
+      spawn: (() => fakeProcess(`https://r1.googlevideo.com/audio?expire=${futureExpiry}\nm4a\n{"User-Agent":"signed-audio-client","Accept-Language":"pl-PL"}\n`)) as unknown as typeof Bun.spawn,
       fetchImpl: (async (_input, init) => {
-        ranges.push(new Headers(init?.headers).get("range") ?? "");
+        const headers = new Headers(init?.headers);
+        ranges.push(headers.get("range") ?? "");
+        agents.push(headers.get("user-agent") ?? "");
+        expect(headers.get("accept-language")).toBe("pl-PL");
         return rangeResponse([1, 2, 3, 4], 0, 4);
       }) as typeof fetch,
     });
@@ -62,6 +66,7 @@ describe("audio streaming integration", () => {
     const response = await audio.getAudioResponse(1, "video", null);
     expect(response?.status).toBe(206);
     expect(ranges).toEqual(["bytes=0-8388607"]);
+    expect(agents).toEqual(["signed-audio-client"]);
     expect(response?.headers.get("content-type")).toBe("audio/mp4");
     expect(response?.headers.get("accept-ranges")).toBe("bytes");
     expect(response?.headers.get("cache-control")).toBe("no-store");
@@ -102,7 +107,7 @@ describe("audio streaming integration", () => {
     const audio = factory({
       spawn: ((command: string[]) => {
         const videoId = new URL(command.find((arg) => arg.startsWith("https://www.youtube.com/"))!).searchParams.get("v");
-        return fakeProcess(`https://r1.googlevideo.com/${videoId}?expire=${futureExpiry}\nm4a\n`);
+        return fakeProcess(`https://r1.googlevideo.com/${videoId}?expire=${futureExpiry}\nm4a\n{"User-Agent":"yt-dlp-agent"}\n`);
       }) as unknown as typeof Bun.spawn,
       fetchImpl: (async (input) => {
         if (String(input).includes("ignored")) {
@@ -128,9 +133,13 @@ describe("audio streaming integration", () => {
         const cookieIndex = command.indexOf("--cookies");
         if (cookieIndex < 0) return fakeProcess("", 1);
         const userId = command[cookieIndex + 1].match(/(\d+)\.txt$/)?.[1];
-        return fakeProcess(`https://r1.googlevideo.com/profile-${userId}?expire=${futureExpiry}\nm4a\n`);
+        return fakeProcess(`https://r1.googlevideo.com/profile-${userId}?expire=${futureExpiry}\nm4a\n{"User-Agent":"profile-${userId}-agent"}\n`);
       }) as unknown as typeof Bun.spawn,
-      fetchImpl: (async () => rangeResponse([1], 0, 1)) as unknown as typeof fetch,
+      fetchImpl: (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const profile = String(input).match(/profile-(\d+)/)?.[1];
+        expect(new Headers(init?.headers).get("user-agent")).toBe(`profile-${profile}-agent`);
+        return rangeResponse([1], 0, 1);
+      }) as unknown as typeof fetch,
     });
 
     const [first, second] = await Promise.all([
@@ -159,7 +168,7 @@ describe("audio streaming integration", () => {
     const audio = factory({
       spawn: (() => {
         spawns++;
-        return fakeProcess(`https://r1.googlevideo.com/version-${spawns}?expire=${futureExpiry}\nm4a\n`);
+        return fakeProcess(`https://r1.googlevideo.com/version-${spawns}?expire=${futureExpiry}\nm4a\n{"User-Agent":"yt-dlp-agent"}\n`);
       }) as unknown as typeof Bun.spawn,
       fetchImpl: (async (input) => {
         fetches++;
@@ -224,7 +233,7 @@ describe("audio streaming integration", () => {
     let spawns = 0;
     const audio = factory({
       spawn: (() => fakeProcess(
-        `https://r1.googlevideo.com/version-${++spawns}?expire=${futureExpiry}\nm4a\n`,
+        `https://r1.googlevideo.com/version-${++spawns}?expire=${futureExpiry}\nm4a\n{"User-Agent":"yt-dlp-agent"}\n`,
       )) as unknown as typeof Bun.spawn,
       fetchImpl: (async (input) => String(input).includes("version-1")
         ? new Response(null, { status: 500 })
@@ -263,7 +272,7 @@ describe("audio streaming integration", () => {
     const audio = factory({
       spawn: (() => {
         spawns++;
-        return fakeProcess(`https://r1.googlevideo.com/version-${spawns}?expire=${futureExpiry}\nm4a\n`);
+        return fakeProcess(`https://r1.googlevideo.com/version-${spawns}?expire=${futureExpiry}\nm4a\n{"User-Agent":"yt-dlp-agent"}\n`);
       }) as unknown as typeof Bun.spawn,
       fetchImpl: (async (input) => {
         const url = String(input);
@@ -297,7 +306,7 @@ describe("audio streaming integration", () => {
       spawn: (() => {
         spawns++;
         if (spawns > 1) {
-          return fakeProcess(`https://r1.googlevideo.com/retry?expire=${futureExpiry}\nm4a\n`);
+          return fakeProcess(`https://r1.googlevideo.com/retry?expire=${futureExpiry}\nm4a\n{"User-Agent":"yt-dlp-agent"}\n`);
         }
         const stdout = new ReadableStream<Uint8Array>({
           start(controller) { closeFirstStdout = () => controller.close(); },
@@ -347,7 +356,7 @@ describe("audio streaming integration", () => {
   test("an explicit retry discards the cached URL and runs yt-dlp again", async () => {
     let spawns = 0;
     const audio = factory({
-      spawn: (() => fakeProcess(`https://r1.googlevideo.com/version-${++spawns}?expire=${futureExpiry}\nm4a\n`)) as unknown as typeof Bun.spawn,
+      spawn: (() => fakeProcess(`https://r1.googlevideo.com/version-${++spawns}?expire=${futureExpiry}\nm4a\n{"User-Agent":"yt-dlp-agent"}\n`)) as unknown as typeof Bun.spawn,
       fetchImpl: (async () => rangeResponse([1], 0, 1)) as unknown as typeof fetch,
     });
 

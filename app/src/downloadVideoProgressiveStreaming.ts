@@ -2,6 +2,7 @@ import { audioRangeHeader, parseAudioRange, parseAudioUnsatisfiedTotal, validate
 import { fetchGoogleVideoResponse, safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { downloadCookieAttempts, isAnonymousAddressRefusal, recordDownloadAttempt } from "./downloadStrategy";
 import { ytdlpAttemptArgs } from "./downloadConfig";
+import { parseYtdlpHttpHeaders, rangedYtdlpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
 
 interface Dependencies {
   YTDLP: string;
@@ -16,6 +17,8 @@ interface Dependencies {
 interface Source {
   url: string;
   expiresAt: number;
+  issuedAt: number;
+  httpHeaders: YtdlpHttpHeaders;
 }
 
 interface Resolution {
@@ -29,6 +32,8 @@ const CHUNK_BYTES = 8 * 1024 * 1024;
 const RESOLVE_TIMEOUT_MS = 30_000;
 const RANGE_TIMEOUT_MS = 45_000;
 const MAX_BUFFERED_REQUESTS = 4;
+const FRESH_URL_WINDOW_MS = 5_000;
+const FRESH_URL_RETRY_DELAYS_MS = [250, 400, 650, 1_000];
 
 function keyFor(userId: number, videoId: string) { return `${userId}:${videoId}`; }
 
@@ -63,6 +68,7 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
       `https://www.youtube.com/watch?v=${videoId}`, "--ignore-config", "--no-playlist", "--no-warnings",
       "-f", "22/18/best[ext=mp4][vcodec^=avc1][acodec^=mp4a][height<=720]",
       "--print", "urls", "--print", "%(ext)s", "--print", "%(vcodec)s", "--print", "%(acodec)s",
+      "--print", "%(http_headers)j",
     ];
     let proc: ReturnType<typeof Bun.spawn>;
     try {
@@ -78,10 +84,12 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
       if (signal.aborted || code !== 0) {
         return { source: null, refused: !useCookies && isAnonymousAddressRefusal(stderr) };
       }
-      const [candidate, ext, vcodec, acodec] = stdout.trim().split(/\r?\n/);
+      const [candidate, ext, vcodec, acodec, serializedHeaders] = stdout.trim().split(/\r?\n/);
       const url = safeGoogleVideoUrl(candidate ?? "");
-      if (!url || ext !== "mp4" || !vcodec?.startsWith("avc1") || !acodec?.startsWith("mp4a")) return { source: null, refused: false };
-      return { source: { url, expiresAt: sourceExpiry(url, now()) }, refused: false };
+      const httpHeaders = parseYtdlpHttpHeaders(serializedHeaders ?? "");
+      if (!url || !httpHeaders || ext !== "mp4" || !vcodec?.startsWith("avc1") || !acodec?.startsWith("mp4a")) return { source: null, refused: false };
+      const issuedAt = now();
+      return { source: { url, expiresAt: sourceExpiry(url, issuedAt), issuedAt, httpHeaders }, refused: false };
     } finally {
       signal.removeEventListener("abort", stop);
     }
@@ -149,6 +157,20 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
     return new Response(null, { status: 416, headers });
   }
 
+  async function waitForFreshUrlRetry(delay: number, signal?: AbortSignal): Promise<boolean> {
+    if (signal?.aborted) return false;
+    return await new Promise((resolve) => {
+      const finish = (ready: boolean) => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        resolve(ready);
+      };
+      const onAbort = () => finish(false);
+      const timer = setTimeout(() => finish(true), delay);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
   async function response(userId: number, videoId: string, rangeValue: string | null, signal?: AbortSignal): Promise<Response | null> {
     const range = parseAudioRange(rangeValue, CHUNK_BYTES);
     if (!range) return notSatisfiable();
@@ -160,10 +182,18 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
       if (!source) return null;
       const fetchRange = async (candidate: Source) => {
         const operation = abortSignal(signal, RANGE_TIMEOUT_MS, "direct video range timeout");
-        try { return await fetchGoogleVideoResponse(fetchImpl, candidate.url, { headers: { "User-Agent": "Mozilla/5.0", Range: audioRangeHeader(range) }, signal: operation.signal }); }
+        try { return await fetchGoogleVideoResponse(fetchImpl, candidate.url, { headers: rangedYtdlpHeaders(candidate.httpHeaders, audioRangeHeader(range)), signal: operation.signal }); }
         finally { operation.dispose(); }
       };
       let upstream = await fetchRange(source);
+      if (upstream?.status === 403 && now() - source.issuedAt <= FRESH_URL_WINDOW_MS) {
+        for (const delay of FRESH_URL_RETRY_DELAYS_MS) {
+          await upstream.body?.cancel().catch(() => {});
+          if (!await waitForFreshUrlRetry(delay, signal)) return null;
+          upstream = await fetchRange(source);
+          if (!upstream || upstream.status !== 403) break;
+        }
+      }
       if (upstream && [403, 404, 410].includes(upstream.status)) {
         await upstream.body?.cancel().catch(() => {});
         source = await resolveSource(userId, videoId, signal, true);

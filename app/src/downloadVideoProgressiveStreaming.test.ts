@@ -24,7 +24,7 @@ function fixture() {
     downloadCookiesFile: () => "cookies.txt",
     ytdlpStatus: async () => "test",
     spawn: (() => ({
-      stdout: new Response("https://r1.googlevideo.com/video?expire=9999999999\nmp4\navc1.64001f\nmp4a.40.2\n").body!,
+      stdout: new Response('https://r1.googlevideo.com/video?expire=9999999999\nmp4\navc1.64001f\nmp4a.40.2\n{"User-Agent":"yt-dlp-agent","Accept-Language":"en-US"}\n').body!,
       stderr: new Response("").body!, exited: Promise.resolve(0), kill: () => {},
     })) as unknown as typeof Bun.spawn,
     fetchImpl: (async (_input, init) => {
@@ -55,5 +55,59 @@ describe("progressive direct video stream", () => {
     expect((await streaming.getDirectVideoResponse(1, "video", "bytes=-10"))?.status).toBe(416);
     expect((await streaming.getDirectVideoResponse(1, "video", "bytes=4-2"))?.status).toBe(416);
     expect(requests).toEqual([]);
+  });
+
+  test("uses yt-dlp headers for every range request", async () => {
+    const agents: string[] = [];
+    const languages: string[] = [];
+    const streaming = createDownloadVideoProgressiveStreaming({
+      YTDLP: "yt-dlp",
+      downloadCookiesConfigured: () => true,
+      downloadCookiesFile: () => "cookies.txt",
+      ytdlpStatus: async () => "test",
+      spawn: (() => ({
+        stdout: new Response('https://r1.googlevideo.com/video?expire=9999999999\nmp4\navc1.64001f\nmp4a.40.2\n{"User-Agent":"signed-client","Accept-Language":"pl-PL"}\n').body!,
+        stderr: new Response("").body!, exited: Promise.resolve(0), kill: () => {},
+      })) as unknown as typeof Bun.spawn,
+      fetchImpl: (async (_input, init) => {
+        const headers = new Headers(init?.headers);
+        agents.push(headers.get("user-agent") ?? "");
+        languages.push(headers.get("accept-language") ?? "");
+        return ranged(headers.get("range"));
+      }) as typeof fetch,
+    });
+
+    expect((await streaming.getDirectVideoResponse(1, "video", "bytes=0-0"))?.status).toBe(206);
+    expect(agents).toEqual(["signed-client"]);
+    expect(languages).toEqual(["pl-PL"]);
+  });
+
+  test("retries a fresh refused URL before resolving a replacement", async () => {
+    let spawns = 0;
+    let fetches = 0;
+    const streaming = createDownloadVideoProgressiveStreaming({
+      YTDLP: "yt-dlp",
+      downloadCookiesConfigured: () => true,
+      downloadCookiesFile: () => "cookies.txt",
+      ytdlpStatus: async () => "test",
+      now: () => 1_000,
+      spawn: (() => {
+        spawns++;
+        return {
+          stdout: new Response('https://r1.googlevideo.com/video?expire=9999999999\nmp4\navc1.64001f\nmp4a.40.2\n{"User-Agent":"signed-client"}\n').body!,
+          stderr: new Response("").body!, exited: Promise.resolve(0), kill: () => {},
+        };
+      }) as unknown as typeof Bun.spawn,
+      fetchImpl: (async (_input, init) => {
+        fetches++;
+        return fetches === 1
+          ? new Response(null, { status: 403 })
+          : ranged(new Headers(init?.headers).get("range"));
+      }) as typeof fetch,
+    });
+
+    expect((await streaming.getDirectVideoResponse(1, "video", "bytes=0-0"))?.status).toBe(206);
+    expect(fetches).toBe(2);
+    expect(spawns).toBe(1);
   });
 });
