@@ -59,7 +59,9 @@ describe("profile administrator permissions", () => {
     expect(permissionAreasForSettings({ video_card_actions: "hover", video_card_action_buttons: "{}", video_card_swipe_devices: "{}", video_card_preview: "all" })).toEqual(["playback"]);
     expect(permissionAreasForSettings({ dearrow_titles_enabled: "1", dearrow_thumbnails_enabled: "1" })).toEqual(["playback"]);
     expect(permissionAreasForSettings({ child_watching_monitor_enabled: "0" })).toEqual(["navigation"]);
-    expect(permissionAreasForSettings({ language: "pl", player_speed: "1.5" })).toEqual(["appearance", "playback"]);
+    // The language a profile reads in is its own and gated by nothing, so it
+    // adds no area of its own — what it is sent alongside still does.
+    expect(permissionAreasForSettings({ language: "pl", player_speed: "1.5" })).toEqual(["playback"]);
     expect(permissionAreasForSettings({ feed_sort: "arrival" })).toEqual(["feed"]);
   });
 
@@ -96,7 +98,7 @@ describe("the language a profile reads the interface in", () => {
   test("still protects what it is sent alongside", () => {
     // Naming a shared setting in the same request must not ride through on
     // the language's exemption.
-    expect(permissionAreasForSettings({ language: "fr", app_name: "Mine" })).toEqual(["appearance"]);
+    expect(permissionAreasForSettings({ language: "fr", grid_size: "sm" })).toEqual(["appearance"]);
   });
 
   test("leaves the rest of appearance where it was", () => {

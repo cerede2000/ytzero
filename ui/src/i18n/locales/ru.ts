@@ -5,6 +5,19 @@ import { clusterMessages } from "./cluster";
 
 export const ru: Locale = {
   messages: {
+    "clientAccessNav": "Доступ клиентов",
+    "clientAccessNotEnabled": "Не включено",
+    "clientAccessNotEnabledHint": "Задайте YTZERO_INVIDIOUS_COMPAT=1 и перезапустите, чтобы клиенты могли обращаться к этому серверу.",
+    "clientAccessToken": "Токен доступа клиента",
+    "clientAccessTokenUsage": "Создан {created} · последнее использование {used}",
+    "clientAccessTokenHint": "Войдите из приложения, указав имя этого профиля и созданный здесь токен. Если экземпляр запрашивает учётные данные, эта же пара вводится в поля HTTP Basic Auth приложения.",
+    "clientAccessGenerate": "Создать",
+    "clientAccessRegenerate": "Создать заново",
+    "clientAccessRevoke": "Отозвать",
+    "clientAccessCopyNow": "Скопируйте сейчас",
+    "clientAccessCopyNowHint": "Он показывается только один раз. Повторное создание заменит его и завершит сеансы на всех устройствах.",
+    "clientAccessCopied": "Скопировано",
+    "clientAccessCopy": "Копировать",
     ...surfaceMessages.ru,
     ...clusterMessages.ru,
     "navToday": "Главная",

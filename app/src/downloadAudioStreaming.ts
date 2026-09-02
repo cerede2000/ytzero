@@ -69,7 +69,8 @@ const AUDIO_REFUSAL_STATUSES = new Set([401, 403, 429]);
  * milliseconds, and a request nobody reads costs a few kilobytes while waiting
  * costs the listener silence.
  */
-const AUDIO_RETRY_DELAYS_MS = [250, 400, 650, 1_000, 1_500, 2_200];
+const FRESH_URL_WINDOW_MS = 5_000;
+const FRESH_URL_RETRY_DELAYS_MS = [250, 400, 650, 1_000];
 
 export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamingDependencies) {
   const {
@@ -222,26 +223,40 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     return null;
   }
 
+  async function waitForFreshUrlRetry(delay: number, signal: AbortSignal): Promise<boolean> {
+    if (signal.aborted) return false;
+    return await new Promise((resolve) => {
+      let settled = false;
+      const finish = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      };
+      const abort = () => finish(false);
+      signal.addEventListener("abort", abort, { once: true });
+      // Through the injected wait, so a test is not made to sit through the
+      // delays a listener never notices.
+      void wait(delay).then(() => finish(true));
+    });
+  }
+
   /** Ask for a range, waiting out a refusal rather than paying to re-resolve. */
-  async function askUpstream(
+  async function retryFreshForbidden(
     userId: number,
     videoId: string,
     source: AudioSource,
     range: AudioByteRange,
     signal: AbortSignal,
   ): Promise<Response | null> {
-    let response = await fetchAudioUpstream(userId, videoId, source, range, signal);
-    for (const delay of AUDIO_RETRY_DELAYS_MS) {
-      if (!response || !AUDIO_REFUSAL_STATUSES.has(response.status) || signal.aborted) return response;
-      await response.body?.cancel().catch(() => {});
-      await wait(delay);
-      if (signal.aborted) return null;
-      audioDiagnostic("info", "audio.upstream_not_ready_yet", {
-        userId, videoId, status: response.status, afterMs: delay,
-      });
-      response = await fetchAudioUpstream(userId, videoId, source, range, signal);
+    if (!source.issuedAt || Date.now() - source.issuedAt > FRESH_URL_WINDOW_MS) return null;
+    for (const delay of FRESH_URL_RETRY_DELAYS_MS) {
+      if (!await waitForFreshUrlRetry(delay, signal)) return null;
+      const retry = await fetchAudioUpstream(userId, videoId, source, range, signal);
+      if (!retry || retry.status !== 403) return retry;
+      await retry.body?.cancel().catch(() => {});
     }
-    return response;
+    return null;
   }
 
   async function validatedAudioUpstream(
@@ -255,17 +270,19 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
     let source = await resolveAudioSource(userId, videoId, signal);
     if (!source) return null;
 
-    let upstream = await askUpstream(userId, videoId, source, range, signal);
-    // Every delay spent and still refused: the URL itself may be the problem
-    // after all — an expired one answers the same way — so resolve once more.
-    if (upstream && AUDIO_REFUSAL_STATUSES.has(upstream.status) && !signal.aborted) {
+    let upstream = await fetchAudioUpstream(userId, videoId, source, range, signal);
+    if (upstream?.status === 403) {
+      await upstream.body?.cancel().catch(() => {});
+      upstream = await retryFreshForbidden(userId, videoId, source, range, signal) ?? new Response(null, { status: 403 });
+    }
+    if (upstream && (upstream.status === 403 || upstream.status === 410)) {
       audioDiagnostic("info", "audio.source_refresh", {
         userId, videoId, reason: "upstream_status", status: upstream.status,
       });
       await upstream.body?.cancel().catch(() => {});
       source = await refreshAudioSource(userId, videoId, source.url, signal);
       if (!source) return null;
-      upstream = await askUpstream(userId, videoId, source, range, signal);
+      upstream = await fetchAudioUpstream(userId, videoId, source, range, signal);
     }
     if (!upstream) {
       if (!signal.aborted) discardAudioSource(userId, videoId, source.url);

@@ -5,6 +5,19 @@ import { clusterMessages } from "./cluster";
 // English defines the message keys; `pl` and `de` are type-checked against them.
 export const en = {
   messages: {
+    "clientAccessNav": "Client access",
+    "clientAccessNotEnabled": "Not enabled",
+    "clientAccessNotEnabledHint": "Set YTZERO_INVIDIOUS_COMPAT=1 and restart for clients to reach this server.",
+    "clientAccessToken": "Client access token",
+    "clientAccessTokenUsage": "Created {created} · last used {used}",
+    "clientAccessTokenHint": "Sign in from an app with this profile's name and a token generated here. When the instance asks clients for credentials, that same pair goes in the app's HTTP Basic Auth fields.",
+    "clientAccessGenerate": "Generate",
+    "clientAccessRegenerate": "Regenerate",
+    "clientAccessRevoke": "Revoke",
+    "clientAccessCopyNow": "Copy it now",
+    "clientAccessCopyNowHint": "This is the only time it is shown. Regenerating replaces it and signs out every device using it.",
+    "clientAccessCopied": "Copied",
+    "clientAccessCopy": "Copy",
     ...surfaceMessages.en,
     ...clusterMessages.en,
     navToday: "Main",

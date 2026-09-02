@@ -5,6 +5,19 @@ import { clusterMessages } from "./cluster";
 
 export const fr: Locale = {
   messages: {
+    "clientAccessNav": "Accès client",
+    "clientAccessNotEnabled": "Non activé",
+    "clientAccessNotEnabledHint": "Posez YTZERO_INVIDIOUS_COMPAT=1 et redémarrez pour que les applications puissent joindre ce serveur.",
+    "clientAccessToken": "Jeton d'accès client",
+    "clientAccessTokenUsage": "Créé le {created} · dernière utilisation {used}",
+    "clientAccessTokenHint": "Connectez-vous depuis une application avec le nom de ce profil et un jeton généré ici. Si l'instance demande des identifiants, c'est la même paire qui va dans les champs HTTP Basic Auth de l'application.",
+    "clientAccessGenerate": "Générer",
+    "clientAccessRegenerate": "Régénérer",
+    "clientAccessRevoke": "Révoquer",
+    "clientAccessCopyNow": "Copiez-le maintenant",
+    "clientAccessCopyNowHint": "C'est la seule fois où il est affiché. Le régénérer le remplace et déconnecte tous les appareils qui l'utilisent.",
+    "clientAccessCopied": "Copié",
+    "clientAccessCopy": "Copier",
     ...surfaceMessages.fr,
     ...clusterMessages.fr,
     "navToday": "Accueil",

@@ -838,11 +838,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
               <span className="lp-spacer" />
             </>
           )}
-          {!live && onDownload && (
-            <button className="lp-btn" onClick={onDownload} aria-label={downloadLabel} disabled={transportLocked}>
-              <ArrowDownToLine size={19} />
-            </button>
-          )}
           <SubtitlePicker
             videoId={videoId}
             available={availableSubs}

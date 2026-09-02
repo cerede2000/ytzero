@@ -3,7 +3,7 @@ import "./SettingsPage.css";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ArchiveRestore, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Download, ExternalLink, Eye, EyeOff, FileText, Filter, FolderUp, GripVertical, Info, ListMinus, LoaderCircle, ListMusic, Pencil, Play, Plug, Plus, RefreshCw, RotateCcw, ShieldCheck, Sparkles, Trash2, Tv, UserMinus, UserPlus, UsersRound, Wrench, X, Zap } from "lucide-react";
-import { api, type AppChangelog, type AppLogs, type AppLogStreamEvent, type AppVersion, type AuthMethod, type Channel, type ChannelManualStatus, type ChildLockStatus, type FilterRule, type FollowedPlaylist, type MembersOnlyVisibility, type PluginManifest, type PluginSettingsResponse, type Profile, type ProfilePermissionArea, type ProfilePermissions, type Rule, type ShortsFeedMode, type Tag, type UpdateCheck, type UserPlaylist, type UserPlaylistRule, type Video, SB_CATEGORIES } from "../api";
+import { api, type AppChangelog, type AppLogs, type AppLogStreamEvent, type AppVersion, type AuthMethod, type Channel, type ChannelManualStatus, type ChildLockStatus, type FilterRule, type FollowedPlaylist, type InvidiousTokenState, type MembersOnlyVisibility, type PluginManifest, type PluginSettingsResponse, type Profile, type ProfilePermissionArea, type ProfilePermissions, type Rule, type ShortsFeedMode, type Tag, type UpdateCheck, type UserPlaylist, type UserPlaylistRule, type Video, SB_CATEGORIES } from "../api";
 import { parseCustomPlaybackSpeeds } from "../../../shared/playbackSpeeds";
 import AuthSettings from "../components/AuthSettings";
 import { NAV_ITEMS, normalizeNav, parseNavConfig, type NavConfigEntry } from "../nav";
@@ -50,6 +50,13 @@ const SETTINGS_AREAS: { id: Tab; primaryOnly?: boolean }[] = [
   { id: "playlists" },
   { id: "display" },
   { id: "notifications" },
+  /*
+   * A profile's own way into an app, and its own to hand out — so it is not
+   * behind a permission, the way the profile's interface language is not. It
+   * lived in the Profiles tab, which an administrator sees and nobody else
+   * does: every profile but the one that needed it least.
+   */
+  { id: "clients" },
   { id: "plugins" },
   { id: "advanced", primaryOnly: true },
   { id: "profiles" },
@@ -1128,6 +1135,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
           label: option.label,
         })) : []),
         ...(tabIsVisible("notifications") ? [{ value: "notifications", label: t("notificationSettingsNav") }] : []),
+        ...(tabIsVisible("clients") ? [{ value: "clients", label: t("clientAccessNav") }] : []),
       ],
     },
     {

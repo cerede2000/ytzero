@@ -5,6 +5,19 @@ import { clusterMessages } from "./cluster";
 
 export const ja: Locale = {
   messages: {
+    "clientAccessNav": "クライアントアクセス",
+    "clientAccessNotEnabled": "無効",
+    "clientAccessNotEnabledHint": "YTZERO_INVIDIOUS_COMPAT=1 を設定して再起動すると、クライアントがこのサーバーに接続できます。",
+    "clientAccessToken": "クライアントアクセストークン",
+    "clientAccessTokenUsage": "作成: {created} · 最終使用: {used}",
+    "clientAccessTokenHint": "このプロフィール名と、ここで生成したトークンでアプリからサインインします。インスタンスが認証情報を求める場合も、同じ組み合わせをアプリの HTTP Basic 認証欄に入力します。",
+    "clientAccessGenerate": "生成",
+    "clientAccessRegenerate": "再生成",
+    "clientAccessRevoke": "取り消し",
+    "clientAccessCopyNow": "今すぐコピー",
+    "clientAccessCopyNowHint": "表示されるのはこの一度だけです。再生成すると置き換わり、使用中のすべての端末がサインアウトされます。",
+    "clientAccessCopied": "コピーしました",
+    "clientAccessCopy": "コピー",
     ...surfaceMessages.ja,
     ...clusterMessages.ja,
     "navToday": "メインページ",

@@ -6,6 +6,19 @@ import type { Locale } from "../types";
 
 export const hu: Locale = {
   messages: {
+    "clientAccessNav": "Kliens-hozzáférés",
+    "clientAccessNotEnabled": "Nincs engedélyezve",
+    "clientAccessNotEnabledHint": "Állítsd be a YTZERO_INVIDIOUS_COMPAT=1 értéket és indítsd újra, hogy a kliensek elérjék ezt a kiszolgálót.",
+    "clientAccessToken": "Kliens hozzáférési token",
+    "clientAccessTokenUsage": "Létrehozva: {created} · utoljára használva: {used}",
+    "clientAccessTokenHint": "Jelentkezz be egy alkalmazásból ennek a profilnak a nevével és egy itt generált tokennel. Ha a példány hitelesítő adatokat kér, ugyanez a pár kerül az alkalmazás HTTP Basic Auth mezőibe.",
+    "clientAccessGenerate": "Létrehozás",
+    "clientAccessRegenerate": "Újragenerálás",
+    "clientAccessRevoke": "Visszavonás",
+    "clientAccessCopyNow": "Másold ki most",
+    "clientAccessCopyNowHint": "Csak most jelenik meg. Az újragenerálás lecseréli, és kilépteti az összes eszközt, amely használja.",
+    "clientAccessCopied": "Másolva",
+    "clientAccessCopy": "Másolás",
     ...surfaceMessages.hu,
     ...clusterMessages.hu,
     navToday: "Kezdőlap",

@@ -104,7 +104,7 @@ describe("audio streaming integration", () => {
       now: () => clock,
       spawn: (() => {
         resolves++;
-        return fakeProcess(`https://r1.googlevideo.com/audio?expire=${futureExpiry}\nm4a\n`);
+        return fakeProcess(`https://r1.googlevideo.com/audio?expire=${futureExpiry}\nm4a\n{"User-Agent":"yt-dlp-agent"}\n`);
       }) as unknown as typeof Bun.spawn,
       fetchImpl: (async () => new Response(null, { status: 403 })) as unknown as typeof fetch,
     });
@@ -138,7 +138,10 @@ describe("audio streaming integration", () => {
         const headers = new Headers(init?.headers);
         ranges.push(headers.get("range") ?? "");
         agents.push(headers.get("user-agent") ?? "");
-        expect(headers.get("accept-language")).toBe("pl-PL");
+        // Only who is asking is carried: the rest of what yt-dlp printed
+        // describes its fetch of the watch page, and on a byte range those
+        // headers are what googlevideo answers 403 to.
+        expect(headers.get("accept-language")).toBeNull();
         return rangeResponse([1, 2, 3, 4], 0, 4);
       }) as typeof fetch,
     });
@@ -263,7 +266,7 @@ describe("audio streaming integration", () => {
     // The first URL is asked for again, several times, before anything is
     // re-resolved: waiting out a refusal is cheaper than six seconds of yt-dlp.
     expect(spawns).toBe(2);
-    expect(fetches).toBe(8);
+    expect(fetches).toBe(6);
   });
 
   test("follows a bounded, revalidated googlevideo redirect and preserves Range", async () => {

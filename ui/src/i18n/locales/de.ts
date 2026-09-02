@@ -5,6 +5,19 @@ import { surfaceMessages } from "./surfaceMessages";
 import { clusterMessages } from "./cluster";
 export const de: Locale = {
   messages: {
+    "clientAccessNav": "Client-Zugriff",
+    "clientAccessNotEnabled": "Nicht aktiviert",
+    "clientAccessNotEnabledHint": "YTZERO_INVIDIOUS_COMPAT=1 setzen und neu starten, damit Clients diesen Server erreichen.",
+    "clientAccessToken": "Client-Zugriffstoken",
+    "clientAccessTokenUsage": "Erstellt {created} · zuletzt verwendet {used}",
+    "clientAccessTokenHint": "In einer App mit dem Namen dieses Profils und einem hier erzeugten Token anmelden. Verlangt die Instanz Zugangsdaten, gehört dasselbe Paar in die HTTP-Basic-Auth-Felder der App.",
+    "clientAccessGenerate": "Erzeugen",
+    "clientAccessRegenerate": "Neu erzeugen",
+    "clientAccessRevoke": "Widerrufen",
+    "clientAccessCopyNow": "Jetzt kopieren",
+    "clientAccessCopyNowHint": "Es wird nur dieses eine Mal angezeigt. Neu erzeugen ersetzt es und meldet alle Geräte ab.",
+    "clientAccessCopied": "Kopiert",
+    "clientAccessCopy": "Kopieren",
     ...surfaceMessages.de,
     ...clusterMessages.de,
     navToday: "Start",

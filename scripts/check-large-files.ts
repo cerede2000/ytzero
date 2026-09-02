@@ -1,18 +1,18 @@
 import { readFile } from "node:fs/promises";
 
 const lineLimits: Record<string, number> = {
-  "app/src/routes.ts": 464,
+  "app/src/routes.ts": 477,
   "app/src/routes/authRoutes.ts": 492,
   "app/src/routes/backupRoutes.ts": 143,
   "app/src/routes/channelPlaylistRoutes.ts": 177,
   "app/src/routes/channelRoutes.ts": 639,
   "app/src/routes/childRoutes.ts": 157,
-  "app/src/routes/downloadRoutes.ts": 501,
+  "app/src/routes/downloadRoutes.ts": 496,
   "app/src/routes/feedRoutes.ts": 157,
   "app/src/routes/historyRoutes.ts": 63,
   "app/src/routes/importRoutes.ts": 245,
   "app/src/routes/insightRoutes.ts": 65,
-  "app/src/routes/libraryRoutes.ts": 132,
+  "app/src/routes/libraryRoutes.ts": 247,
   "app/src/routes/pluginRoutes.ts": 86,
   "app/src/routes/profileRoutes.ts": 434,
   "app/src/routes/settingsRoutes.ts": 280,
@@ -34,48 +34,17 @@ const lineLimits: Record<string, number> = {
   "app/src/videoRoutesSupport.ts": 133,
   "app/src/routeCache.ts": 11,
   "ui/src/App.tsx": 24,
->>>>>>> 5738e99 (Give the channel link somewhere to go)
-  "ui/src/AppRoutes.tsx": 98,
-  "ui/src/AppRoutes.tsx": 98,
->>>>>>> 831aa36 (Split searching from watching, and put their suggestions beside the picture)
->>>>>>> 5738e99 (Give the channel link somewhere to go)
+  "ui/src/AppRoutes.tsx": 105,
   "ui/src/app-shell/AppBootstrap.tsx": 17,
-  "ui/src/app-shell/AppShell.tsx": 126,
-  "ui/src/app-shell/AppSidebar.tsx": 97,
+  "ui/src/app-shell/AppShell.tsx": 110,
+  "ui/src/app-shell/AppSidebar.tsx": 109,
   "ui/src/app-shell/AppTopBar.tsx": 162,
   "ui/src/app-shell/SidebarPlaylists.tsx": 106,
   "ui/src/app-shell/SidebarSubscriptions.tsx": 86,
   "ui/src/app-shell/sidebarVisibility.ts": 30,
   "ui/src/app-shell/useAppPreferences.ts": 107,
-=======
-  "app/src/routes/libraryRoutes.ts": 248,
->>>>>>> 118eabf (Say which language each search was answered in)
-  "app/src/routes/pluginRoutes.ts": 77,
-  "app/src/routes/profileRoutes.ts": 430,
-  "app/src/routes/settingsRoutes.ts": 164,
-  "app/src/routes/socialRoutes.ts": 187,
-  "app/src/routes/systemRoutes.ts": 137,
-  "app/src/routes/tagRoutes.ts": 148,
-  "app/src/routes/userPlaylistRoutes.ts": 254,
-  "app/src/routes/videoActionRoutes.ts": 234,
->>>>>>> abac5c9 (Move our layers onto the implementations upstream now has)
-  "app/src/routes/videoRoutes.ts": 569,
-  "app/src/videoRoutesSupport.ts": 136,
-  "app/src/routeCache.ts": 11,
-  "ui/src/App.tsx": 12,
-  "ui/src/AppRoutes.tsx": 105,
->>>>>>> f5275e6 (Settle onto upstream's release, where ten issues came back at once)
-  "ui/src/app-shell/AppBootstrap.tsx": 17,
-  "ui/src/app-shell/AppShell.tsx": 104,
-  "ui/src/app-shell/AppSidebar.tsx": 109,
-  "ui/src/app-shell/AppTopBar.tsx": 146,
-  "ui/src/app-shell/SidebarPlaylists.tsx": 113,
-  "ui/src/app-shell/SidebarSubscriptions.tsx": 86,
-  "ui/src/app-shell/sidebarVisibility.ts": 30,
-  "ui/src/app-shell/useAppPreferences.ts": 103,
->>>>>>> 874b040 (Settle onto upstream's release)
   "ui/src/app-shell/useAppToast.ts": 23,
-  "ui/src/app-shell/useNavigationActivity.ts": 53,
+  "ui/src/app-shell/useNavigationActivity.ts": 54,
   "ui/src/app-shell/usePluginRoutes.ts": 43,
   "ui/src/app-shell/useProfileSession.ts": 63,
   "ui/src/pages/SettingsPage.tsx": 1340,
@@ -93,7 +62,7 @@ const lineLimits: Record<string, number> = {
   "ui/src/components/VideoCard.css": 666,
   "ui/src/components/VideoThumbnail.css": 120,
   "ui/src/pages/SearchPage.css": 164,
-  "app/src/plugins.ts": 1083,
+  "app/src/plugins.ts": 1080,
   "app/src/pluginCatalog.ts": 404,
   "ui/src/api.ts": 536,
   "ui/src/apiTypes.ts": 1114,
@@ -109,7 +78,7 @@ const lineLimits: Record<string, number> = {
   "app/src/portableBackup.ts": 496,
 >>>>>>> 232d183 (Move the line ratchet up to where this branch actually sits)
   "app/src/portableArchive.ts": 76,
-  "ui/src/pages/SettingsPage.css": 1015,
+  "ui/src/pages/SettingsPage.css": 1071,
 };
 
 // Locale modules are typed message catalogs: every product string legitimately

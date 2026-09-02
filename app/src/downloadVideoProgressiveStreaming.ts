@@ -3,7 +3,7 @@ import { fetchGoogleVideoResponse, safeGoogleVideoUrl } from "./audioUpstreamUrl
 import { downloadCookieAttempts, isAnonymousAddressRefusal, recordDownloadAttempt } from "./downloadStrategy";
 import { ytdlpAttemptArgs } from "./downloadConfig";
 import { parseYtdlpHttpHeaders, rangedYtdlpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
-
+import { askingHeadersOnly } from "./ytdlpAskingHeaders";
 import { potArgsFor } from "./ytdlpPotProvider";
 
 interface Dependencies {
@@ -71,7 +71,7 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
       "-f", "22/18/best[ext=mp4][vcodec^=avc1][acodec^=mp4a][height<=720]",
       "--print", "urls", "--print", "%(ext)s", "--print", "%(vcodec)s", "--print", "%(acodec)s",
       "--print", "%(http_headers)j",
-      ...potArgsFor(downloadCookiesConfigured(userId)),
+      ...potArgsFor(useCookies),
     ];
     let proc: ReturnType<typeof Bun.spawn>;
     try {
@@ -89,7 +89,7 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
       }
       const [candidate, ext, vcodec, acodec, serializedHeaders] = stdout.trim().split(/\r?\n/);
       const url = safeGoogleVideoUrl(candidate ?? "");
-      const httpHeaders = parseYtdlpHttpHeaders(serializedHeaders ?? "");
+      const httpHeaders = askingHeadersOnly(parseYtdlpHttpHeaders(serializedHeaders ?? ""));
       if (!url || !httpHeaders || ext !== "mp4" || !vcodec?.startsWith("avc1") || !acodec?.startsWith("mp4a")) return { source: null, refused: false };
       const issuedAt = now();
       return { source: { url, expiresAt: sourceExpiry(url, issuedAt), issuedAt, httpHeaders }, refused: false };
@@ -224,11 +224,27 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
     }
   }
 
+  /**
+   * Hand over a source somebody else already paid for.
+   *
+   * The import of a video outside the library resolves it with yt-dlp anyway,
+   * and that answer carries the progressive URL. Depositing it here is the
+   * difference between a player that starts and one that waits for the same
+   * question to be asked a second time. A source already held and still valid
+   * is left alone: it is the one requests in flight are using.
+   */
+  function primeDirectVideoSource(userId: number, videoId: string, source: Source): void {
+    const key = keyFor(userId, videoId);
+    const held = sources.get(key);
+    if (held && held.expiresAt > Date.now()) return;
+    sources.set(key, source);
+  }
+
   function invalidateDirectVideoSources(userId: number) {
     const prefix = `${userId}:`;
     for (const key of sources.keys()) if (key.startsWith(prefix)) sources.delete(key);
     for (const [key, resolution] of resolutions) if (key.startsWith(prefix)) { resolutions.delete(key); resolution.controller.abort(); }
   }
 
-  return { getDirectVideoResponse: response, invalidateDirectVideoSources };
+  return { getDirectVideoResponse: response, invalidateDirectVideoSources, primeDirectVideoSource };
 }

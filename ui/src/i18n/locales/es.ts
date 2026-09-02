@@ -5,6 +5,19 @@ import type { Locale } from "../types";
 
 export const es: Locale = {
   messages: {
+    "clientAccessNav": "Acceso de clientes",
+    "clientAccessNotEnabled": "No activado",
+    "clientAccessNotEnabledHint": "Define YTZERO_INVIDIOUS_COMPAT=1 y reinicia para que los clientes puedan llegar a este servidor.",
+    "clientAccessToken": "Token de acceso de cliente",
+    "clientAccessTokenUsage": "Creado el {created} · último uso {used}",
+    "clientAccessTokenHint": "Inicia sesión desde una aplicación con el nombre de este perfil y un token generado aquí. Cuando la instancia pide credenciales, ese mismo par va en los campos de HTTP Basic Auth de la aplicación.",
+    "clientAccessGenerate": "Generar",
+    "clientAccessRegenerate": "Regenerar",
+    "clientAccessRevoke": "Revocar",
+    "clientAccessCopyNow": "Cópialo ahora",
+    "clientAccessCopyNowHint": "Es la única vez que se muestra. Regenerarlo lo sustituye y cierra la sesión en todos los dispositivos que lo usan.",
+    "clientAccessCopied": "Copiado",
+    "clientAccessCopy": "Copiar",
     ...surfaceMessages.es,
     ...clusterMessages.es,
     navToday: "Inicio",

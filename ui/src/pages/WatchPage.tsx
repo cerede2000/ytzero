@@ -35,6 +35,8 @@ import {
   Undo2,
   UsersRound,
 } from "lucide-react";
+import { isShort } from "../shortVideos";
+import VideoQuickActions from "../components/VideoQuickActions";
 import { api, SB_CATEGORIES } from "../api";
 import { resolvePlaybackSpeeds } from "../../../shared/playbackSpeeds";
 import { compactNumber, formatPlaylistVideoCount, formatTimeAgo, formatViewsCount } from "../i18n";
@@ -83,10 +85,13 @@ function panelBackdrop(thumbnail: string | undefined, videoId: string | undefine
 
 export default function WatchPage() {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
-  const [audioMode, setAudioMode] = useProfileAudioMode();
   const videoCardActionConfig = useAppliedVideoCardActionConfig();
   const showSchedulingRow = videoCardActionConfig.actions.some((action) => action.id === "schedule" && !action.hidden);
   const showSessionQueueAction = videoCardActionConfig.actions.some((action) => action.id === "sessionQueue" && !action.hidden);
+  // A list started in audio says so here rather than through the remembered
+  // preference alone, which a browser with no remembered profile cannot keep.
+  const requestedAudio = (useLocation().state as { audio?: unknown } | null)?.audio;
+  const [audioMode, setAudioMode] = useProfileAudioMode(typeof requestedAudio === "boolean" ? requestedAudio : undefined);
   // Overlay buttons fade with the native player's own control bar.
   const [playerControlsVisible, setPlayerControlsVisible] = useState(true);
   // The controller derives the effective active state from video/profile/room

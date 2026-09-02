@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, FolderUp, Info, RotateCw, Trash2 } from "lucide-react";
 import { api, type DownloadConfigResponse, type DownloadSettingDef, type DownloadSettingValue } from "../api";
-import { emitToast } from "../events";
 import { useI18n } from "../i18n";
-import { frenchFor } from "../i18n/frenchOverlay";
 import { Alert, Badge, Button, Chip, FileDropzone, Input, InputGroup, MultiSelectMenu, SelectMenu, SettingRow, SettingsSection, Slider, Switch, Textarea } from "./ui";
 import "./DownloadConfiguration.css";
 
@@ -20,8 +18,8 @@ export default function DownloadConfiguration({ shortsEnabled }: { shortsEnabled
   const [error, setError] = useState("");
   const [cookies, setCookies] = useState(false);
   // Configured and recognised are different questions, and only the second
-  // decides whether anything works: an expired jar is not refused, it is
-  // answered as a stranger would be. null until YouTube has been asked.
+  // says whether the jar is still worth anything: an exported file goes on
+  // sitting there long after YouTube has stopped honouring it.
   const [recognised, setRecognised] = useState<boolean | null>(null);
   const [uploading, setUploading] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -29,9 +27,9 @@ export default function DownloadConfiguration({ shortsEnabled }: { shortsEnabled
   const [updatingYtdlp, setUpdatingYtdlp] = useState(false);
   const [ytdlpNotice, setYtdlpNotice] = useState("");
 
-  const load = useCallback(() => Promise.all([api.downloadConfig(), api.downloadCookies().catch(() => null)]).then(([result, jar]) => { setConfig(result); setCookies(result.cookies_configured); setRecognised(jar?.recognised ?? null); }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason))), []);
-
-
+  const load = useCallback(() => Promise.all([api.downloadConfig(), api.downloadCookies().catch(() => null)])
+    .then(([result, jar]) => { setConfig(result); setCookies(result.cookies_configured); setRecognised(jar?.recognised ?? null); })
+    .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason))), []);
   useEffect(() => { void load(); }, [load]);
 
   const defs = useMemo(() => new Map(config?.definitions.map((definition) => [definition.key, definition]) ?? []), [config]);
@@ -139,6 +137,9 @@ export default function DownloadConfiguration({ shortsEnabled }: { shortsEnabled
     <SettingsSection title={t("YouTube access cookies")} description={t("Only needed for content your YouTube account can access, such as age-restricted or members-only videos.")}>
       <Alert variant="warning" icon={<Info />}>{t("Cookies are a secret stored only on this machine. They are excluded from portable backups.")}</Alert>
       <strong className={`dl-cookie-status${cookies ? " is-configured" : ""}`}>{cookies ? t("Configured") : t("Not configured")}</strong>
+      {cookies && recognised === false && (
+        <strong className="dl-cookie-status is-stale">{t("cookiesNotRecognisedBadge")}</strong>
+      )}
       <FileDropzone
         accept=".txt,text/plain"
         disabled={uploading || !config.can_manage}

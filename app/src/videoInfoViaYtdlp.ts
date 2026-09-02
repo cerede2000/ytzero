@@ -4,7 +4,8 @@ import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { currentCookieHealth } from "./youtubeCookieHealth";
 import { log } from "./logger";
 import type { AudioSource } from "./audioSourceResolver";
-import { audioSourceHeaders } from "./audioSourceResolver";
+import { askingHeadersOnly } from "./ytdlpAskingHeaders";
+import { parseYtdlpHttpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import type { VideoInfo } from "./youtube";
 import { audioLanguageFor, audioSelectorFor } from "./audioTrackLanguage";
@@ -105,14 +106,14 @@ export function videoInfoFromYtdlpJson(videoId: string, json: Record<string, unk
 /** A muxed progressive file, which is what the direct video player streams. */
 export interface ProgressiveVideoSource {
   url: string;
-  mime: string;
   expiresAt: number;
+  issuedAt: number;
   /**
    * The headers this URL expects, for the same reason the audio track carries
    * them: a file signed for a client that was signed in answers 403 to a
    * caller that does not look like it.
    */
-  headers?: Record<string, string>;
+  httpHeaders: YtdlpHttpHeaders;
 }
 
 /** googlevideo URLs carry an `expire` unix-second param; keep just under it. */
@@ -147,12 +148,9 @@ export function audioSourceFromPrinted(printed: PrintedFormat): AudioSource | nu
   if (!absent(printed.vcodec ?? "")) return null;
   const url = printed.url ? safeGoogleVideoUrl(printed.url) : null;
   if (!url) return null;
-  return {
-    url,
-    mime: "audio/mp4",
-    expiresAt: sourceExpiry(url),
-    headers: audioSourceHeaders(printed.headers),
-  };
+  const httpHeaders = askingHeadersOnly(parseYtdlpHttpHeaders(printed.headers ?? ""));
+  if (!httpHeaders) return null;
+  return { url, mime: "audio/mp4", expiresAt: sourceExpiry(url), issuedAt: Date.now(), httpHeaders };
 }
 
 /**
@@ -170,12 +168,9 @@ export function progressiveVideoFromPrinted(printed: PrintedFormat): Progressive
   if (absent(printed.acodec ?? "") || absent(printed.vcodec ?? "")) return null;
   const url = printed.url ? safeGoogleVideoUrl(printed.url) : null;
   if (!url) return null;
-  return {
-    url,
-    mime: printed.ext === "webm" ? "video/webm" : "video/mp4",
-    expiresAt: sourceExpiry(url),
-    headers: audioSourceHeaders(printed.headers),
-  };
+  const httpHeaders = askingHeadersOnly(parseYtdlpHttpHeaders(printed.headers ?? ""));
+  if (!httpHeaders) return null;
+  return { url, expiresAt: sourceExpiry(url), issuedAt: Date.now(), httpHeaders };
 }
 
 /**

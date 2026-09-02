@@ -4,7 +4,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Check, ChevronDown, Download, Folder, HardDrive, LoaderCircle, Pin, PinOff, RotateCw, Settings2, Sparkles, Square, Trash2 } from "lucide-react";
 import { api, type DownloadsResponse, type DownloadItem } from "../api";
 import { formatTimeAgo, useI18n, type I18nKey } from "../i18n";
-import { frenchFor } from "../i18n/frenchOverlay";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { img } from "../img";
 import { formatVideoDuration } from "../components/VideoCard";
@@ -50,8 +49,6 @@ const SOURCE_KEYS: Record<string, I18nKey> = {
 
 export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolean }) {
   const { t, language } = useI18n();
-  const tx = (en: string, pl: string, de: string) => language === "pl" ? pl : language === "de" ? de
-    : language === "fr" ? frenchFor(en) ?? en : en;
   const [searchParams, setSearchParams] = useSearchParams();
   useDocumentTitle(t("downloadsTitle"));
   const [data, setData] = useState<DownloadsResponse | null>(null);
@@ -80,7 +77,6 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
     load();
     return subscribeServerEvent("downloads", load);
   }, [load]);
-
 
   const retry = (item: DownloadItem) => {
     api.requestDownload(item.video_id).then(load).catch(() => {});

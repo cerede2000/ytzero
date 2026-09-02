@@ -7,6 +7,7 @@ import { discoveryRecommendations, dismissDiscoveryRecommendation, getPluginSett
 import { validYouTubeVideoId } from "../youtubeComments";
 import { childDownloadsOnly, childHidesLive, childLocalOnly, isChildUser, isParentLocked } from "../childTime";
 import { followedExists, profileVideoOwnershipExists, shortsUiVisibilitySql } from "../feedQuery";
+import { profileDownloadsEnabled } from "../downloadConfig";
 import { getDeArrowBranding } from "../dearrow";
 import { log } from "../logger";
 import { ageMs, CHAPTERS_DB_TTL, CREATORS_DB_TTL } from "../routeCache";
@@ -234,67 +235,7 @@ api.get("/videos/:id/info", async (c) => {
   }
   if (suppressed) relatedRefreshSuppression.delete(videoId);
   try {
-    const info = await fetchVideoInfoForImport(uid, videoId);
-    if (childHidesLive(uid) && info.liveStatus !== "none") {
-      return c.json({ error: "live streams are disabled for this profile" }, 403);
-    }
-    // Channel avatar + the channel's recent uploads (for the "related" panel).
-    const [aboutResult, feedResult] = await Promise.allSettled([
-      fetchChannelAbout(info.channelId), fetchChannelFeed(info.channelId, uid),
-    ]);
-    const about = aboutResult.status === "fulfilled" ? aboutResult.value : null;
-    const feed = feedResult.status === "fulfilled" ? feedResult.value : null;
-    if (relatedRefresh && feedResult.status === "rejected" && isYouTubeRefusalError(feedResult.reason)) {
-      const until = Date.now() + RELATED_REFUSED_TTL_MS;
-      relatedRefreshSuppression.set(videoId, { kind: "refused", until });
-      return c.json({ info: null, related_refresh: "refused", retry_at: until }, 503);
-    }
-    const avatar = about?.avatar ?? "";
-
-    // Upsert channel: insert as external if new, or update avatar if missing
-    await database.prepare(`
-      INSERT INTO channels (channel_id, title, url, thumbnail, followed, external)
-      VALUES (?, ?, ?, ?, 0, 1)
-      ON CONFLICT(channel_id) DO UPDATE SET
-        thumbnail = CASE WHEN channels.thumbnail = '' OR channels.thumbnail IS NULL
-                         THEN excluded.thumbnail ELSE channels.thumbnail END
-    `).run(info.channelId, info.channelTitle, `https://www.youtube.com/channel/${info.channelId}`, avatar);
-
-    const insertRelatedVideo = database.prepare(`
-      INSERT OR IGNORE INTO videos
-        (video_id, channel_id, title, description, thumbnail, published_at, live_status, status, views, duration, external)
-      VALUES (?, ?, ?, ?, ?, ?, 'none', 'inbox', ?, ?, 1)
-    `);
-
-    // The directly requested player response is authoritative for live state,
-    // even when RSS imported this row earlier without a live marker.
-    const existing = await videoExistsStmt.get(info.videoId);
-    await persistDirectVideoInfo(info);
-
-    // Insert the channel's recent uploads as external so the related panel fills.
-    if (feed) {
-      const insertMany = database.transaction(async (videos: typeof feed.videos) => {
-        for (const v of videos) {
-          await insertRelatedVideo.run(
-            v.videoId, info.channelId, v.title, v.description,
-            v.thumbnail, v.publishedAt, v.views, null
-          );
-        }
-      });
-      await insertMany(feed.videos);
-    }
-    log.info("external.video_info_loaded", {
-      videoId: info.videoId,
-      channelId: info.channelId,
-      inserted: !existing,
-      relatedImported: feed?.videos.length ?? 0,
-    });
-    if (relatedRefresh && feed && feed.videos.length === 0) {
-      const until = Date.now() + RELATED_EMPTY_TTL_MS;
-      relatedRefreshSuppression.set(videoId, { kind: "empty", until });
-      return c.json({ info, related_refresh: "empty", retry_at: until });
-    }
-    return c.json({ info, related_refresh: "loaded" });
+    return c.json({ info: await importVideo(uid, c.req.param("id")) });
   } catch (e) {
     if (e instanceof LiveDisabledForProfileError) return c.json({ error: e.message }, 403);
     log.error("external.video_info_failed", { videoId: c.req.param("id"), error: e instanceof Error ? e.message : String(e) });
@@ -566,7 +507,7 @@ api.get("/videos/:id", async (c) => {
     const tagIds = tagRows.map((t) => t.tag_id);
     const ph = tagIds.map(() => "?").join(",");
     fill(await database.prepare(
-      `${videoSelect(uid)} WHERE v.video_id != ? AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND ${ownedByProfile}
+      `${videoSelect(uid)} WHERE v.video_id != ? AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0 AND ${ownedByProfile}
        AND (EXISTS (SELECT 1 FROM video_tags vt WHERE vt.video_id = v.video_id AND vt.tag_id IN (${ph}))
          OR EXISTS (SELECT 1 FROM channel_tags ct WHERE ct.channel_id = v.channel_id AND ct.tag_id IN (${ph})))
        ORDER BY COALESCE(v.published_at, v.created_at) DESC LIMIT ?`
@@ -577,7 +518,7 @@ api.get("/videos/:id", async (c) => {
   if (need() > 0) {
     const seenPh = [...seen].map(() => "?").join(",");
     fill(await database.prepare(
-      `${videoSelect(uid)} WHERE v.channel_id = ? AND v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0${row.external === 1 ? "" : ` AND ${ownedByProfile}`}
+      `${videoSelect(uid)} WHERE v.channel_id = ? AND v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0${row.external === 1 ? "" : ` AND ${ownedByProfile}`}
        ORDER BY COALESCE(v.published_at, v.created_at) DESC LIMIT ?`
     ).all(row.channel_id, ...seen, need()) as VideoRow[]);
   }
@@ -588,7 +529,7 @@ api.get("/videos/:id", async (c) => {
     const ph = tagIds.map(() => "?").join(",");
     const seenPh = [...seen].map(() => "?").join(",");
     fill(await database.prepare(
-      `${videoSelect(uid)} WHERE v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND ${ownedByProfile}
+      `${videoSelect(uid)} WHERE v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0 AND ${ownedByProfile}
        AND (EXISTS (SELECT 1 FROM video_tags vt WHERE vt.video_id = v.video_id AND vt.tag_id IN (${ph}))
          OR EXISTS (SELECT 1 FROM channel_tags ct WHERE ct.channel_id = v.channel_id AND ct.tag_id IN (${ph})))
        ORDER BY COALESCE(v.published_at, v.created_at) DESC LIMIT ?`
@@ -599,7 +540,7 @@ api.get("/videos/:id", async (c) => {
   if (need() > 0) {
     const seenPh = [...seen].map(() => "?").join(",");
     fill(await database.prepare(
-      `${videoSelect(uid)} WHERE v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND ${ownedByProfile}
+      `${videoSelect(uid)} WHERE v.video_id NOT IN (${seenPh}) AND v.published_at IS NOT NULL AND v.published_at != '' AND COALESCE(uv.status, 'inbox') != 'archived' AND COALESCE(uv.watched, 0) != 1 AND v.is_short = 0 AND COALESCE(v.is_unavailable, 0) = 0 AND COALESCE(v.is_private, 0) = 0 AND ${ownedByProfile}
        ORDER BY COALESCE(v.published_at, v.created_at) DESC LIMIT ?`
     ).all(...seen, need()) as VideoRow[]);
   }

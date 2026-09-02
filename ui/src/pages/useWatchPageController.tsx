@@ -84,6 +84,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     sessionQueue,
     watchTogether: Boolean(watchTogetherRoomId),
   }), [id, routePlaybackQueue, sessionQueue, video?.playback_context, watchTogetherRoomId]);
+  const queueIsPlaylist = isContinuousPlaylistQueue(playbackQueue);
   const [missingVideoId, setMissingVideoId] = useState<string | null>(null);
   // The row could not be loaded and could not be imported either. The page has
   // nothing to describe, so it says so instead of leaving an orphan embed.

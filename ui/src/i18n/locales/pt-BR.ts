@@ -5,6 +5,19 @@ import { clusterMessages } from "./cluster";
 
 export const ptBR: Locale = {
   messages: {
+    "clientAccessNav": "Acesso de clientes",
+    "clientAccessNotEnabled": "Não ativado",
+    "clientAccessNotEnabledHint": "Defina YTZERO_INVIDIOUS_COMPAT=1 e reinicie para que os clientes alcancem este servidor.",
+    "clientAccessToken": "Token de acesso do cliente",
+    "clientAccessTokenUsage": "Criado em {created} · último uso {used}",
+    "clientAccessTokenHint": "Entre por um aplicativo com o nome deste perfil e um token gerado aqui. Quando a instância pede credenciais, é esse mesmo par que vai nos campos de HTTP Basic Auth do aplicativo.",
+    "clientAccessGenerate": "Gerar",
+    "clientAccessRegenerate": "Gerar novamente",
+    "clientAccessRevoke": "Revogar",
+    "clientAccessCopyNow": "Copie agora",
+    "clientAccessCopyNowHint": "Esta é a única vez em que ele aparece. Gerar novamente o substitui e desconecta todos os dispositivos que o usam.",
+    "clientAccessCopied": "Copiado",
+    "clientAccessCopy": "Copiar",
     ...surfaceMessages["pt-BR"],
     ...clusterMessages["pt-BR"],
     "navToday": "Principal",

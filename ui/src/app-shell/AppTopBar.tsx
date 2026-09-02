@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, Play, RefreshCw } from "lucide-react";
 import type { ProfilePermissions } from "../api";
 import { emit, subscribe } from "../events";
+import { useI18n } from "../i18n";
 import ProfileMenu from "../components/ProfileMenu";
 import AppSearchBox from "./AppSearchBox";
 import { toggleSidebar } from "./sidebarVisibility";
@@ -46,6 +47,7 @@ export default function AppTopBar({
   onIncognitoChange,
 }: AppTopBarProps) {
   const location = useLocation();
+  const { t } = useI18n();
   const [solid, setSolid] = useState(window.scrollY > 8);
   const [feedRefreshing, setFeedRefreshing] = useState(false);
   const feedRefreshStartedAtRef = useRef(0);

@@ -39,15 +39,6 @@ describe("HTTP route manifest", () => {
     const liveAudioRoute = "GET /videos/:id/audio-live/:resource";
     const vodAudioRoute = "GET /videos/:id/audio/index.m3u8";
     const retryAudioRoute = "POST /videos/:id/audio/retry";
-    // Named by upstream in its own manifest, so they are held out of the hash
-    // the way it holds them out: what is left is its list, unchanged.
-    const upstreamNamedRoutes = [
-      "POST /videos/:id/import",
-      "POST /playlists/from-session-queue",
-      "DELETE /videos/:id/bookmark",
-    ];
-    // Upstream's path and upstream's name, over our own implementation of it:
-    // the seam is its, so only the body of the thing is ours to rebase.
     const directStreamRoute = "GET /videos/:id/direct-stream";
     const ytdlpConfigRoute = "PUT /downloads/ytdlp/config";
     const ytdlpUpdateRoute = "POST /downloads/ytdlp/update";
@@ -85,6 +76,7 @@ describe("HTTP route manifest", () => {
     const legacyRoutes = routes.filter((route) => route !== transcriptRoute && route !== playbackAdjacentRoute && route !== liveAudioRoute && route !== vodAudioRoute && route !== retryAudioRoute && route !== directStreamRoute && route !== ytdlpConfigRoute && route !== ytdlpUpdateRoute && route !== importVideoRoute && route !== sessionPlaylistRoute && route !== clearVideoBookmarksRoute && route !== clusterStatusRoute && !accessControlRoutes.includes(route) && !notificationPreferenceRoutes.includes(route));
     expect(createHash("sha256").update(legacyRoutes.join("\n")).digest("hex"))
       .toBe("80c5a76e8b9e73067474352689dee5912762cbd8933feb23ceb68592f592158b");
+    // Upstream's own expectation, byte for byte: its routes are untouched.
   });
 
   test("does not register duplicate method/path pairs", () => {

@@ -43,7 +43,7 @@ export const SETTING_PERMISSION_AREAS: Readonly<Record<string, ProfilePermission
   child_watching_monitor_enabled: "navigation",
   player_hl: "playback", player_cc: "playback", player_cc_lang: "playback",
   player_sub_size: "playback", player_sub_color: "playback", player_sub_bg: "playback",
-  player_quality: "playback", player_speed: "playback", player_speed_options: "playback", keyboard_seek_seconds: "playback",
+  player_quality: "playback", player_default_source: "playback", player_speed: "playback", player_speed_options: "playback", keyboard_seek_seconds: "playback",
   keyboard_shortcuts: "playback", enhance_enabled: "playback",
   enhance_replace_controls: "playback", enhance_frame_fps: "playback",
   player_screenshot_format: "playback", player_screenshot_quality: "playback",
