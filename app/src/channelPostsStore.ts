@@ -123,10 +123,10 @@ async function recordFailure(channelId: string, attemptedAt: string, error: unkn
   `).run(channelId, attemptedAt, message);
 }
 
-export async function syncChannelPosts(channelId: string, language = "en"): Promise<StoredChannelPosts> {
+export async function syncChannelPosts(channelId: string, userId?: number): Promise<StoredChannelPosts> {
   const attemptedAt = new Date().toISOString();
   try {
-    const fetched = await fetchChannelPosts(channelId, true, language);
+    const fetched = await fetchChannelPosts(channelId, true, userId);
     await persistChannelPosts(channelId, fetched.posts, fetched.fetchedAt);
     return { posts: fetched.posts, fetchedAt: fetched.fetchedAt, cached: false };
   } catch (error) {
@@ -159,6 +159,6 @@ export async function nextChannelPostsDue(maxAgeMinutes = 360): Promise<string |
 export async function syncNextChannelPosts(maxAgeMinutes = 360): Promise<string | null> {
   const channelId = await nextChannelPostsDue(maxAgeMinutes);
   if (!channelId) return null;
-  await syncChannelPosts(channelId, "en");
+  await syncChannelPosts(channelId);
   return channelId;
 }

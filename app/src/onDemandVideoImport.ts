@@ -22,13 +22,13 @@ export class OnDemandVideoImportError extends Error {
  * Materialize one externally discovered video only when an action needs it.
  * A process-local in-flight map makes concurrent actions share one extraction.
  */
-export async function ensureOnDemandVideo(videoId: string): Promise<void> {
+export async function ensureOnDemandVideo(videoId: string, userId?: number): Promise<void> {
   if (!validYouTubeVideoId(videoId)) throw new OnDemandVideoImportError("invalid video id", 400);
   if (await videoExists.get(videoId)) return;
 
   let pending = importsInFlight.get(videoId);
   if (!pending) {
-    pending = importVideo(videoId);
+    pending = importVideo(videoId, userId);
     importsInFlight.set(videoId, pending);
   }
   try {
@@ -38,11 +38,11 @@ export async function ensureOnDemandVideo(videoId: string): Promise<void> {
   }
 }
 
-async function importVideo(videoId: string): Promise<void> {
+async function importVideo(videoId: string, userId?: number): Promise<void> {
   if (await videoExists.get(videoId)) return;
   let info;
   try {
-    info = await fetchVideoInfo(videoId);
+    info = await fetchVideoInfo(videoId, { userId });
   } catch (error) {
     if (isPrivateVideoError(error)) throw new OnDemandVideoImportError("private video", 409);
     if (isDeletedVideoError(error)) throw new OnDemandVideoImportError("not found", 404);

@@ -206,13 +206,13 @@ api.get("/videos/:id/info", async (c) => {
   }
   if (suppressed) relatedRefreshSuppression.delete(videoId);
   try {
-    const info = await fetchVideoInfo(videoId);
+    const info = await fetchVideoInfo(videoId, { userId: uid });
     if (childHidesLive(uid) && info.liveStatus !== "none") {
       return c.json({ error: "live streams are disabled for this profile" }, 403);
     }
     // Channel avatar + the channel's recent uploads (for the "related" panel).
     const [aboutResult, feedResult] = await Promise.allSettled([
-      fetchChannelAbout(info.channelId), fetchChannelFeed(info.channelId),
+      fetchChannelAbout(info.channelId), fetchChannelFeed(info.channelId, uid),
     ]);
     const about = aboutResult.status === "fulfilled" ? aboutResult.value : null;
     const feed = feedResult.status === "fulfilled" ? feedResult.value : null;
@@ -292,8 +292,8 @@ api.get("/videos/:id/dearrow", async (c) => {
   });
 });
 
-async function refreshVideoChapters(videoId: string) {
-  const chapters = await fetchVideoChapters(videoId);
+async function refreshVideoChapters(videoId: string, userId?: number) {
+  const chapters = await fetchVideoChapters(videoId, userId);
   // Persist only when the video is in our DB (UPDATE no-ops otherwise).
   await database.prepare("UPDATE videos SET chapters_json = ?, chapters_fetched_at = datetime('now') WHERE video_id = ?")
     .run(JSON.stringify(chapters), videoId);
@@ -308,7 +308,7 @@ api.get("/videos/:id/chapters", async (c) => {
 
   if (cached?.chapters_json) {
     if (ageMs(cached.chapters_fetched_at) > CHAPTERS_DB_TTL) {
-      refreshVideoChapters(videoId).catch((error) => {
+      refreshVideoChapters(videoId, currentUserId(c)).catch((error) => {
         log.warn("video.chapters_background_refresh_failed", { videoId, error: error instanceof Error ? error.message : String(error) });
       });
     }
@@ -318,7 +318,7 @@ api.get("/videos/:id/chapters", async (c) => {
   }
 
   try {
-    return c.json({ chapters: await refreshVideoChapters(videoId) });
+    return c.json({ chapters: await refreshVideoChapters(videoId, currentUserId(c)) });
   } catch {
     return c.json({ chapters: [] });
   }
@@ -388,7 +388,7 @@ api.get("/videos/:id/creators", async (c) => {
   }
 
   try {
-    const fetched = await fetchVideoCreators(videoId);
+    const fetched = await fetchVideoCreators(videoId, currentUserId(c));
     const creators = fetched.length > 1 ? fetched : [fallback];
     await database.transaction(async () => {
       await database.prepare("DELETE FROM video_creators WHERE video_id = ?").run(videoId);

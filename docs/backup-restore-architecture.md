@@ -205,6 +205,12 @@ below.
   older archives and normalizes an unknown code to English. The expanded
   catalogue is recorded by `profile.settings` schema v7, while schemas 1–6
   remain readable.
+  The YouTube video-title language is portable per-profile presentation
+  configuration. It is either `profile` (the default, dynamically following
+  the interface language) or a bounded language from the same catalogue.
+  Invalid restored values normalize to `profile`. This setting is recorded by
+  `profile.settings` schema v8; schemas 1–7 remain readable and retain the
+  default when the key is absent.
   This includes `feed_sort`, the portable per-profile choice between publication and first-seen chronology, `watch_show_comments`, the opt-in presentation preference for the on-demand comments section, and `channel_posts_tab`, the opt-in presentation preference for Community Posts on channel pages. Comment payloads remain transient; the persisted Community Post catalog and its synchronization state are rebuildable cache data. Neither is exported.
   The visibility of the child-watching shortcut is also a portable per-profile
   presentation preference. It defaults to visible; live child activity remains

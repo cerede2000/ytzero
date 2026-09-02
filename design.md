@@ -1,8 +1,33 @@
 # YT Zero — system projektowy aplikacji
 
-> Status: normatywny opis interfejsu produktowego `ui/`, przygotowany na podstawie kodu z gałęzi `main`, commit `28012b9`, 2 września 2026.
+> Status: normatywny opis interfejsu produktowego `ui/`, przygotowany na podstawie stanu repozytorium z 2 września 2026.
 >
 > Ten dokument nie opisuje strony marketingowej z `pages/`. Ma ona osobny język wizualny, osobne fonty i własne tokeny.
+
+## Szybki kontrakt
+
+| Obszar | Reguła, od której zaczynamy |
+| --- | --- |
+| zakres | interfejs produktowy `ui/`; nie strona marketingowa `pages/` |
+| powierzchnie | `--bg` → `--surface` → `--surface-2` → `--surface-3` |
+| obramowania | brak na kartach, sekcjach, przyciskach, popoverach i dialogach; border tylko wtedy, gdy opisuje pole, podział, wybór, dane lub drop target |
+| odstępy | skala `0 / 4 / 8 / 12 / 16 / 20 / 24px`; wartości optyczne należą wyłącznie do receptury komponentu |
+| geometria | standardowa kontrolka `36px`, kompaktowa `30px`; input radius `8px`, popover/miniatura `12px`, dialog `14px`, Settings `16px` |
+| akcja główna | `Button primary`: jasne tło `--text`, ciemny tekst `--bg`; niebieski akcent oznacza fokus, wybór i postęp |
+| Settings | tylko `SettingsSection` + `SettingRow` + `Field` + współdzielone kontrolki |
+| media | karta bez ramki i tła; miniatura `16:9`, radius `12px`; grid `22px 12px` |
+| responsywność | globalny shell zmienia się przy `760px`; pozostałe progi należą do komponentu lub layoutu, preferowane są container queries |
+| dostępność | jawny `:focus-visible`, lokalizowane etykiety, obsługa klawiatury i urządzeń bez hovera, `prefers-reduced-motion` |
+| tekst | każdy user-facing string trafia do wszystkich 9 katalogów i18n |
+
+Skróty do najczęściej używanych części: [kolory](#31-paleta-podstawowa), [obramowania](#33-border-gdzie-go-nie-ma-i-gdzie-jest-dozwolony), [odstępy](#34-odstępy), [layout](#4-layout-aplikacji), [komponenty](#5-komponenty-podstawowe), [Settings](#61-settings), [dostępność](#8-dostępność-i-rodzaje-inputu), [dług](#12-znane-odstępstwa-i-dług-systemu) i [checklista](#13-checklist-przed-zakończeniem-zmiany-ui).
+
+Jak czytać status zasad:
+
+- Rozdziały 2–11 są **kanonem dla nowego kodu**, chyba że akapit wprost mówi o „obecnym stanie”, „legacy” albo „wyjątku”.
+- **Dozwolony wyjątek** ma nazwany zakres i funkcję, np. linie siatki wykresu lub rama dropzone. Nie rozszerza ogólnej reguły na inne komponenty.
+- Rozdział 12 opisuje **dług**. To zapis zastanego stanu, którego nie należy kopiować.
+- Konkretna implementacja współdzielonego komponentu pozostaje źródłem jego runtime API i stanów. Gdy jest sprzeczna z regułą systemową, nie dodawaj lokalnego override'u: popraw komponent i ten dokument razem.
 
 ## 1. Cel i źródła prawdy
 
@@ -18,6 +43,14 @@ Dla nowych zmian obowiązuje następująca kolejność:
 6. `docs/styles-refactor-plan.md` jest dokumentem historycznym. Nie należy kopiować z niego starego markupu ani klas legacy.
 
 Jeżeli implementacja współdzielonego komponentu i ten dokument się rozchodzą, zmiana powinna aktualizować oba w tym samym zestawie zmian. Przypadkowej klasy strony nie należy traktować jako nowego standardu.
+
+| Sytuacja | Decyzja |
+| --- | --- |
+| istniejący współdzielony komponent obsługuje potrzebę | użyj jego publicznego API i nie odtwarzaj geometrii lokalnym CSS |
+| komponent ma potrzebny wzorzec, ale brakuje wariantu | dodaj nazwany, typowany wariant do komponentu; dopiero potem użyj go w domenie |
+| ten sam brakujący wzorzec wystąpi w co najmniej dwóch domenach | najpierw dodaj lub rozszerz prymityw w `components/ui` i wspólny token, jeśli rola jest globalna |
+| potrzeba jest wyłącznie domenowa | trzymaj markup, treść i CSS przy komponencie domenowym; używaj fundamentów oraz wspólnych prymitywów |
+| lokalny CSS przeczy dokumentowi lub wspólnemu komponentowi | traktuj go jako wyjątek migracyjny, nie precedens; nie kopiuj bez jawnego udokumentowania |
 
 ## 2. Charakter interfejsu
 
@@ -60,7 +93,7 @@ Jedynym globalnym źródłem kolorów aplikacji jest `ui/src/styles/tokens.css`.
 | `--text-2` | `#aaaaaa` | tekst wtórny | opisy, metadata, nieaktywne ikony |
 | `--text-3` | `#717171` | tekst mocno wyciszony | placeholder, nieistotna metadata, eyebrow |
 | `--accent` | `#3ea6ff` | interakcja/wybór | focus, active, progress, link akcji |
-| `--live` | `#f2293a` | transmisja na żywo | live badge i live progress |
+| `--live` | `#f2293a` | czerwony produktowy/live | live badge, watched/playback progress i domyślna ikona aplikacji |
 | `--chip` | `#272727` | chip normalny | alias wizualny `--surface-2` |
 | `--chip-hover` | `#3f3f3f` | chip hover | alias wizualny `--surface-3` |
 
@@ -86,7 +119,7 @@ Kolory statusów nie są jeszcze globalnymi tokenami; poniższe wartości są ko
 | warning | `#f2a33a` | ostrzeżenie, tło zwykle baza zmieszana w 11–20% |
 | danger | `#f25b67` | błąd i destrukcja; teksty pochodne `#ff6b76`–`#ff939b` należą do komponentów |
 | success | `#52b979` | powodzenie; teksty pochodne `#78d49b`–`#8ce2aa` należą do komponentów |
-| live | `var(--live)` = `#f2293a` | wyłącznie transmisja/live progress, nie ogólny błąd |
+| live/progress | `var(--live)` = `#f2293a` | transmisja oraz watched/playback progress; nie ogólny błąd |
 | scheduled | `#6d3cc7` / rodzina `#8b5cf6` | kolejka i harmonogram; domenowy wyjątek |
 | liked | `#ff4d6a` | aktywne polubienie; hover `#ff7b8d` |
 | members-only | `#f5c542` | złoty marker treści dla wspierających |
@@ -100,7 +133,7 @@ color: color-mix(in srgb, var(--semantic-color) 75%, white);
 
 Mocne, pełne tło statusu stosuj wyłącznie dla małego badge'a, aktywnego przełącznika albo stanu, który musi być natychmiast widoczny. Biały tekst jest zarezerwowany dla takich pełnych teł i ciemnych overlayów na mediach.
 
-Kolor ikony aplikacji jest konfigurowalny per profil/instalacja i nie zmienia `--accent`. Nie wolno używać koloru logo jako tokena interakcji.
+Kolor ikony aplikacji jest konfigurowalny globalnie dla instalacji i nie zmienia `--accent`. Nie wolno używać koloru logo jako tokena interakcji.
 
 ### 3.3. Border: gdzie go nie ma i gdzie jest dozwolony
 
@@ -118,7 +151,7 @@ Domyślna wartość dla powierzchni i akcji to `border: 0`.
 | `SettingRow`, `List` divided, menu/dialog header i footer | separator `1px` | podział struktury, nie ramka dookoła |
 | `FileDropzone` | `2px dashed var(--surface-3)` | drop target musi mieć widoczną granicę |
 | swatch/wybór na obrazie | 1–2 px, często transparent w stanie neutralnym | zaznaczenie musi pozostać czytelne niezależnie od koloru tła |
-| semantic toast | subtelny 1 px w kolorze statusu | istniejący wyjątek dla komunikatu ponad treścią |
+| semantic toast | success/danger: `1px solid color-mix(in srgb, <kolor> 35%, transparent)`; scheduled: `1px solid rgba(220,199,255,.34)` | istniejący wyjątek dla komunikatu ponad treścią |
 
 Nie łącz ramki całej sekcji z separatorami jej wierszy. Nie dodawaj bordera tylko po to, żeby „karta wyglądała jak karta”. Jeśli dwa poziomy są zbyt podobne, popraw poziom powierzchni lub odstęp.
 
@@ -258,7 +291,7 @@ Disabled:
 - opacity `0.5` dla przycisków/chipów,
 - opacity `0.55` dla pól, checkboxów i switchy,
 - `cursor: default`,
-- brak reakcji hover i brak zmiany koloru,
+- brak reakcji hover i brak zmiany koloru — to kontrakt docelowy; znane braki implementacji są zapisane w rozdziale 12,
 - kontrolka pozostaje czytelna, ale nie konkuruje z aktywnymi elementami.
 
 Loading nie ma osobnego wariantu `Button`. Obowiązujący wzorzec to:
@@ -342,7 +375,7 @@ Nie odtwarzaj lokalnie `.page-title` ani `.page-hint`.
 
 ### 4.4. Grid filmów i układy medialne
 
-- `VideoGrid` używa `repeat(auto-fill, minmax(var(--video-card-min, 248px), 1fr))`.
+- Klasa layoutowa `.video-grid` używa `repeat(auto-fill, minmax(var(--video-card-min, 248px), 1fr))`; nie istnieje publiczny komponent `VideoGrid`.
 - Zakres ustawienia szerokości karty to `180–480px`, wartość domyślna `248px`.
 - Gap grida to `22px 12px`.
 - Miniatura standardowa ma proporcje `16:9` i radius `12px`.
@@ -386,7 +419,7 @@ Weryfikacja widoków powinna obejmować co najmniej 360, 768, 1280 i 1920 px.
 - Długie menu i selecty używają `ScrollArea`; nie rozszerzają viewportu.
 - Tabs przewijają się poziomo bez widocznego scrollbara i pokazują gradient krawędzi tylko wtedy, gdy jest więcej treści.
 - Dla desktopowego przeciągania poziomych rzędów używaj `useHorizontalDragScroll`; natywny touch scroll pozostaje bez zmian.
-- Popover musi mieścić się w marginesie minimum 8 px od viewportu. Gdy rodzic ma `overflow`, użyj `FloatingPopover`.
+- Call site ma utrzymać popover minimum 8 px od krawędzi viewportu. Zwykły `Popover` wybiera pionowe położenie, ale nie clampuje osi poziomej; przy krawędzi lub w rodzicu z `overflow` użyj `FloatingPopover` i ogranicz szerokość contentu.
 - Globalny scrollbar WebKit ma width `10px`, height `8px`, thumb `--surface-3` z radiusem `5px` i transparentny track. Sidebar zwęża go do `6px` i pokazuje thumb dopiero przy hover/focus-within.
 - Ukrycie scrollbara jest dozwolone tylko dla krótkiego poziomego scroller-a z czytelnym edge fade lub innym sygnałem dalszej treści.
 
@@ -453,7 +486,7 @@ Wspólne: gap `7px`, radius `999px`, border `0`, ikona `16px`/stroke `1.8`.
 - thumb `18×18px`,
 - off: track `--surface-3`, thumb `--text-2`,
 - on: track `--accent`, thumb `#fff`, przesunięcie `18px`,
-- samodzielny switch wymaga `ariaLabel`; w ustawieniach jest prawą kontrolką `SettingRow`.
+- każdy `Switch` wymaga lokalizowanego `ariaLabel`, również jako prawa kontrolka `SettingRow`; obecny `SettingRow` nie tworzy dla niego `aria-labelledby`.
 
 **TriStateSwitch**
 
@@ -466,7 +499,7 @@ Wspólne: gap `7px`, radius `999px`, border `0`, ikona `16px`/stroke `1.8`.
 **Slider / SteppedSlider**
 
 - track `6px`, radius pill,
-- thumb `18px`, bez bordera, accent shadow,
+- thumb `18px`, bez bordera; w WebKit cień `0 3px 10px color-mix(in srgb, var(--accent) 45%, transparent)`,
 - `Slider` służy wartości ciągłej,
 - `SteppedSlider` służy jawnej liście dyskretnych kroków i obsługuje Arrow/Home/End,
 - `ProgressBar` nie jest inputem: track ma `5px` i tylko prezentuje postęp.
@@ -518,7 +551,7 @@ Wspólne: gap `7px`, radius `999px`, border `0`, ikona `16px`/stroke `1.8`.
 
 - domyślnie 8 kolumn,
 - gap `5px`, option min-height `36px`, radius `8px`, ikona `18px`,
-- selected: accent 14% fill + accent 50% border.
+- selected: `color-mix(in srgb, var(--accent) 14%, transparent)` + border `color-mix(in srgb, var(--accent) 50%, transparent)`.
 
 ### 5.5. ColorPicker, EmojiPicker i ShortcutInput
 
@@ -611,7 +644,7 @@ Nie używaj w Settings surowych kontrolek, własnego row layoutu ani border-box 
 - Group label ma `11px / 700`, uppercase, tracking `.045em`, padding `0 11px 4px`.
 - Item ma min-height `36px`, padding `8px 11px`, radius `9px`, font `14px`, border `0`.
 - Hover: `--surface-2` + `--text`.
-- Active: accent 13% transparent + font 600; hover zwiększa mix do 17%.
+- Active: `color-mix(in srgb, var(--accent) 13%, transparent)` + font 600; hover zwiększa udział akcentu do 17%.
 - Mobile trigger ma radius `11px`, pełną szerokość; menu ma max-width `360px` lub `100vw - 32px`.
 - Mobile menu ma max-height `min(70dvh, 560px)` i przewija się wewnętrznie.
 
@@ -626,7 +659,7 @@ Używaj `List`, `ListRow`, `ListButton` i `ListActions`.
 - description/meta `12px`, line-height `1.45`, `--text-2`,
 - clickable row: transparent, border `0`, hover `--surface-2`,
 - actions: gap `8px`, wrap, wyrównanie do końca,
-- na wąskiej powierzchni przejdź do dwóch kolumn; meta i actions lądują pod contentem, nie poza viewportem.
+- w Settings obecny próg `≤640px` przełącza row na dwie kolumny: meta i actions lądują pod contentem. Poza Settings właściciel layoutu musi jawnie zdefiniować własny próg; bazowy `List` nie ma media query.
 
 `ListButton` służy klikalnemu wierszowi. Nie opakowuj całego `ListRow` w dodatkowy button/link.
 
@@ -637,7 +670,7 @@ Używaj `List`, `ListRow`, `ListButton` i `ListActions`.
 - surface składa się z `Popover surface="menu"` albo `FloatingPopover` + `Menu`,
 - `Menu` ma min-width `190px`, padding `6px`,
 - `MenuItem` ma padding `9px 10px`, gap `10px`, radius `8px`, font `13.5px`, border `0`,
-- hover `--surface-3`, selected accent 12% transparent,
+- hover `--surface-3`, selected `color-mix(in srgb, var(--accent) 12%, transparent)`,
 - icon/check `17px`; check `--accent`,
 - label grupy `10.5px / 700`, uppercase, padding `6px 10px 4px`,
 - separator margin `6px 4px`,
@@ -647,7 +680,7 @@ Używaj `List`, `ListRow`, `ListButton` i `ListActions`.
 
 - używaj, gdy ancestor nie clipuje powierzchni,
 - bg `--surface-2`, radius `12px`, border `0`, shadow popover, padding `12px`, min-width `190px`,
-- gap od triggera `6px`, viewport margin `8px`,
+- gap od triggera `6px`; przy `placement="auto"` margines `8px` bierze udział wyłącznie w wyborze pozycji pionowej, nie gwarantuje poziomego clampingu,
 - align `start | center | end`, placement `top | bottom | auto`,
 - zamyka się po Escape i kliknięciu poza drzewem zagnieżdżonych popoverów.
 
@@ -655,8 +688,8 @@ Używaj `List`, `ListRow`, `ListButton` i `ListActions`.
 
 - używaj w sidebarze, scroll containerze, dialogu lub przy możliwym clippingu,
 - portal do `body`, pozycja śledzi scroll/resize,
-- gap domyślny `8px`, viewport margin `8px`,
-- bg `--surface-2`, radius `12px`, border `0`, padding `12px`, mocniejszy cień.
+- gap domyślny `8px`; pozycja jest clampowana do marginesu `8px`, o ile content sam mieści się w viewportcie,
+- bg `--surface-2`, radius `12px`, border `0`, padding `12px`, cień `0 8px 30px rgba(0,0,0,.58)`.
 
 `surface="menu"` zmniejsza padding surface do `6px`. Nie dodawaj potem drugiego wrappera z własnym paddingiem 12 px.
 
@@ -672,11 +705,11 @@ Używaj `List`, `ListRow`, `ListButton` i `ListActions`.
 - body przewija się wewnętrznie,
 - footer: gap `8px`, akcje po prawej.
 
-Domyślne `520px` zmieniaj tylko nazwanym wariantem domenowym. Obecne sensowne klasy szerokości to około `420px` dla confirm, `540px` dla Social, `620px` dla channel settings/refresh, `640px` dla channel search/sync, `720px` dla transcript i do `1500px` dla permission matrix. Na każdym wariancie pozostają wspólne paddingi, focus trap i maksymalna szerokość viewportu.
+Domyślne `520px` zmieniaj tylko nazwanym wariantem domenowym. Obecne sensowne klasy szerokości to `420px` dla confirm, `540px` dla Social, `620px` dla channel settings/refresh, `640px` dla channel search/sync, `720px` dla transcript i do `1500px` dla permission matrix. Focus trap i ograniczenie do viewportu pozostają wspólne. Nazwany wariant może zmienić padding, gdy wymaga tego zawartość — np. bezpaddingowy scroll region transkryptu lub macierzy — ale nie powinien niejawnie nadpisywać geometrii globalnym selektorem.
 
 Dla krótkiego „na pewno?” użyj `Popconfirm`. Dla destrukcji z konsekwencjami, dodatkową konfiguracją lub większą ilością tekstu użyj `Dialog` + `Alert danger`.
 
-Kolejność w footerze: anulowanie jako `default`/`ghost`, akcja właściwa po prawej jako `primary` albo `danger`. Nie zamykaj niedismissable/busy dialogu kliknięciem tła.
+Kolejność w footerze: anulowanie jako `default`/`ghost`, akcja właściwa po prawej jako `primary` albo `danger`. `busy` ustawia wyłącznie `aria-busy`; aby zablokować Escape, close i kliknięcie tła podczas operacji, przekaż jednocześnie `busy` oraz `dismissible={false}`.
 
 ### 6.6. Feedback
 
@@ -823,7 +856,7 @@ Jeżeli menu jest w kontenerze z `overflow`, tę samą zawartość przenieś do 
 
 ## 9. Treść i lokalizacja
 
-Obsługiwane języki: `en`, `pl`, `de`, `fr`, `es`, `pt-BR`, `ru`, `ja`.
+Obsługiwane języki: `en`, `pl`, `de`, `fr`, `es`, `pt-BR`, `ru`, `ja`, `hu`.
 
 - `ui/src/i18n/locales/en.ts` definiuje kontrakt kluczy.
 - Każdy nowy lub zmieniony string musi zostać przetłumaczony we wszystkich katalogach w tym samym zestawie zmian.
@@ -918,7 +951,7 @@ Poniższe elementy opisują stan repozytorium, ale nie są wzorcem do kopiowania
 6. Shadow, motion, z-index, breakpoint i type scale nie mają globalnych tokenów.
 7. Większość CSS komponentów i stron nie używa zadeklarowanych `@layer components/pages`.
 8. Część wspólnej responsywności `PageHeader`, `List` i `SettingRow` nadal mieszka w `SettingsPage.css` zamiast przy właścicielu.
-9. Nie wszystkie `MenuItem`, tabs, chipy i pickery mają jeszcze jednakowo jawny focus/disabled style. Celem nowych zmian jest standard 2 px accent i brak hover dla disabled.
+9. Nie wszystkie `Button`, `MenuItem`, tabs, chipy i pickery mają jeszcze jednakowo jawny focus/disabled style. W szczególności `Button` nadal reaguje regułą hover mimo `disabled`. Celem nowych zmian jest standard 2 px accent i brak hover dla disabled.
 10. `Popover`/`Menu` zamykają się po Escape, ale menu nie ma jeszcze pełnego roving focus/sterowania strzałkami. `Dialog` ma pełny focus trap.
 11. `Tooltip` bez portalu opiera widoczność głównie na hoverze; nie może być jedynym źródłem informacji.
 12. `Popconfirm` zachowuje legacy border i `z-index: 9999`; nie należy na jego podstawie projektować nowej powierzchni.
@@ -928,6 +961,7 @@ Poniższe elementy opisują stan repozytorium, ale nie są wzorcem do kopiowania
 16. Feed onboarding, Bookmarks i część starszych settings/auth cards mają dekoracyjne obrysy. To istniejące wyjątki migracyjne, nie nowa zasada powierzchni.
 17. Insights jest celowym wyjątkiem data-visualization: niektóre wykresy używają bardzo subtelnych linii `rgba(255,255,255,.055–.08)` dla osi i siatki. Te linie opisują dane, nie ramują zwykłej karty.
 18. Bookmarks jako główna destynacja używa obecnie zwykłego `EmptyState icon` i nie ma przydzielonej ilustracji w `docs/illustrations.md`. Nie dodawaj sceny bez aktualizacji kontraktu ilustracji.
+19. `--live` jest nadal używany przez część legacy komunikatów błędu. Docelowo błędy mają korzystać z roli danger, a `--live` zostaje przy transmisji, watched/playback progress i domyślnej czerwieni znaku aplikacji.
 
 Te punkty powinny być naprawiane osobnymi, małymi zmianami z testem wizualnym. Nie należy „normalizować” ich przy okazji niepowiązanego feature bez sprawdzenia regresji.
 
@@ -954,7 +988,7 @@ Te punkty powinny być naprawiane osobnymi, małymi zmianami z testem wizualnym.
 
 ### Copy i weryfikacja
 
-- [ ] Wszystkie stringi są w katalogu i18n dla 8 języków.
+- [ ] Wszystkie stringi są w katalogu i18n dla 9 języków.
 - [ ] Empty state używa ilustracji tylko zgodnie z `docs/illustrations.md`.
 - [ ] Uruchomiono tylko potrzebne testy, typecheck/build i `git diff --check`.
 - [ ] Dla zmiany UI sprawdzono co najmniej 360, 768, 1280 i 1920 px.

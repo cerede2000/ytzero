@@ -393,6 +393,7 @@ describe("portable backup classification and restore", () => {
     setUserSetting(1, "player_screenshot_filename", "{title}_{timestamp_ms}");
     setUserSetting(1, "enhance_frame_fps", "60");
     setUserSetting(1, "feed_sort", "arrival");
+    setUserSetting(1, "youtube_title_language", "fr");
     setUserSetting(1, "video_card_actions", "delay");
     const cardActionButtons = '{"version":1,"actions":[{"id":"playlist","hidden":false},{"id":"schedule","hidden":true},{"id":"download","hidden":false},{"id":"archive","hidden":false},{"id":"watched","hidden":false},{"id":"restore","hidden":false},{"id":"remove","hidden":false}]}';
     setUserSetting(1, "video_card_action_buttons", cardActionButtons);
@@ -434,6 +435,7 @@ describe("portable backup classification and restore", () => {
     setUserSetting(1, "player_screenshot_filename", "changed");
     setUserSetting(1, "enhance_frame_fps", "24");
     setUserSetting(1, "feed_sort", "published");
+    setUserSetting(1, "youtube_title_language", "profile");
     setUserSetting(1, "video_card_actions", "hover");
     setUserSetting(1, "video_card_action_buttons", SETTING_DEFAULTS.video_card_action_buttons);
     setUserSetting(1, "video_card_swipe_devices", SETTING_DEFAULTS.video_card_swipe_devices);
@@ -468,6 +470,7 @@ describe("portable backup classification and restore", () => {
     expect(getUserSetting(1, "player_screenshot_filename")).toBe("{title}_{timestamp_ms}");
     expect(getUserSetting(1, "enhance_frame_fps")).toBe("60");
     expect(getUserSetting(1, "feed_sort")).toBe("arrival");
+    expect(getUserSetting(1, "youtube_title_language")).toBe("fr");
     expect(getUserSetting(1, "video_card_actions")).toBe("delay");
     expect(getUserSetting(1, "video_card_action_buttons")).toBe(videoCardActions.normalizeVideoCardActionConfig(cardActionButtons));
     expect(getUserSetting(1, "video_card_swipe_devices")).toBe(videoCardActions.normalizeVideoCardSwipeConfig(cardSwipeDevices));

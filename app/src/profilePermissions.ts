@@ -33,7 +33,7 @@ export function isProfilePermissionArea(value: unknown): value is ProfilePermiss
 // Every per-profile Settings key has an explicit capability.  This is kept
 // exhaustive by profilePermissions.test.ts.
 export const SETTING_PERMISSION_AREAS: Readonly<Record<string, ProfilePermissionArea>> = {
-  language: "appearance", grid_size: "appearance", watched_style: "appearance",
+  language: "appearance", youtube_title_language: "appearance", grid_size: "appearance", watched_style: "appearance",
   show_shorts: "feed", feed_max_age_value: "feed", feed_max_age_unit: "feed",
   hide_live_from_feed: "feed", channel_posts_tab: "feed",
   hide_members_only_from_feed: "feed", hide_members_only_on_channel: "feed",

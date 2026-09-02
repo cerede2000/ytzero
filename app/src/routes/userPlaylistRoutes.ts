@@ -74,7 +74,7 @@ export function registerUserPlaylistRoutes(
       for (const videoId of videoIds) if (!await database.prepare("SELECT 1 FROM videos WHERE video_id=?").get(videoId)) return c.json({ error: "restricted" }, 403);
     }
     try {
-      for (const videoId of videoIds) await ensureOnDemandVideo(videoId);
+      for (const videoId of videoIds) await ensureOnDemandVideo(videoId, uid);
     } catch (error) {
       if (error instanceof OnDemandVideoImportError) return c.json({ error: error.message }, error.status);
       throw error;
@@ -158,7 +158,7 @@ export function registerUserPlaylistRoutes(
     if (!await database.prepare("SELECT 1 FROM videos WHERE video_id = ?").get(video_id)) {
       if (childLocalOnly(uid)) return c.json({ error: "restricted" }, 403);
       try {
-        await ensureOnDemandVideo(video_id);
+        await ensureOnDemandVideo(video_id, uid);
       } catch (error) {
         if (error instanceof OnDemandVideoImportError) return c.json({ error: error.message }, error.status);
         throw error;
@@ -216,9 +216,9 @@ export function registerUserPlaylistRoutes(
   api.get("/playlists/:id/videos", async (c) => {
     try {
       const id = c.req.param("id");
-      const videos = await fetchPlaylistVideos(id);
+      const videos = await fetchPlaylistVideos(id, currentUserId(c));
       const sorted = await sortFetchedPlaylistVideos(videos, normalizePlaylistSort(c.req.query("sort")));
-      importPlaylistVideos(id).catch((error) => log.error("playlist.import.failed", {
+      importPlaylistVideos(id, false, currentUserId(c)).catch((error) => log.error("playlist.import.failed", {
         playlistId: id,
         error: error instanceof Error ? error.message : String(error),
       }));

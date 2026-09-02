@@ -113,7 +113,7 @@ api.post("/channels", async (c) => {
   const uid = currentUserId(c);
   const { url, custom_name } = await c.req.json();
   if (!url) return c.json({ error: "url required" }, 400);
-  const info = await resolveChannelId(url);
+  const info = await resolveChannelId(url, uid);
   const inserted = await database.prepare(
     "INSERT OR IGNORE INTO channels (channel_id, title, url, thumbnail) VALUES (?, ?, ?, ?)"
   ).run(info.channelId, info.title, `https://www.youtube.com/channel/${info.channelId}`, info.thumbnail);
@@ -126,8 +126,8 @@ api.post("/channels", async (c) => {
   const customTitle = typeof custom_name === "string" ? custom_name.trim() : "";
   if (customTitle) await database.prepare("UPDATE channels SET custom_title = ? WHERE channel_id = ?").run(customTitle, info.channelId);
   log.info("channel.added", { channelId: info.channelId, title: info.title, inserted: inserted.changes > 0, userId: uid }); publishAppEventForUser("live", uid);
-  refreshChannel(info.channelId)
-    .then(() => refreshLiveStatus(info.channelId))
+  refreshChannel(info.channelId, uid)
+    .then(() => refreshLiveStatus(info.channelId, { userId: uid }))
     .catch((e) => log.error("channel.initial_refresh_failed", { channelId: info.channelId, error: e instanceof Error ? e.message : String(e) }));
   return c.json({ ok: true, channel_id: info.channelId, title: info.title });
 });
@@ -331,8 +331,8 @@ async function attachPlaylistFollowState(userId: number, playlists: any[]) {
   return playlists.map((playlist) => ({ ...playlist, followed: ids.has(playlist.playlistId) }));
 }
 
-async function refreshChannelPlaylists(channelId: string, force = false) {
-  const playlists = await preservePlaylistMedia(channelId, await fetchChannelPlaylists(channelId, force));
+async function refreshChannelPlaylists(channelId: string, force = false, userId?: number) {
+  const playlists = await preservePlaylistMedia(channelId, await fetchChannelPlaylists(channelId, force, userId));
   // Channel pages are available for unsubscribed/external creators too. Their
   // parent row may not exist yet, but channel_playlists has a strict FK.
   await ensureExternalChannelRow.run(channelId, channelId, `https://www.youtube.com/channel/${channelId}`);
@@ -353,18 +353,18 @@ api.get("/channels/:id/playlists", async (c) => {
     try {
       const playlists = JSON.parse(cached.playlists_json);
       if (!syncDisabled && cached.playlists_cache_version < CHANNEL_PLAYLIST_CACHE_VERSION) {
-        return c.json({ playlists: await attachPlaylistFollowState(uid, await refreshChannelPlaylists(channelId, true)) });
+        return c.json({ playlists: await attachPlaylistFollowState(uid, await refreshChannelPlaylists(channelId, true, uid)) });
       }
       // Pre-pagination cache entries commonly contain exactly YouTube's first
       // page of 30 cards. Upgrade them synchronously so this request already
       // shows the missing playlists instead of waiting for the weekly refresh.
       if (!syncDisabled && Array.isArray(playlists) && playlists.length === 30) {
-        return c.json({ playlists: await attachPlaylistFollowState(uid, await refreshChannelPlaylists(channelId)) });
+        return c.json({ playlists: await attachPlaylistFollowState(uid, await refreshChannelPlaylists(channelId, false, uid)) });
       }
       if (Array.isArray(playlists)) await saveChannelPlaylists(channelId, playlists);
     } catch { /* corrupted cache — fall through to a fresh fetch */ }
     if (!syncDisabled && ageMs(cached.playlists_fetched_at) > PLAYLISTS_DB_TTL) {
-      refreshChannelPlaylists(channelId).catch((e) =>
+      refreshChannelPlaylists(channelId, false, uid).catch((e) =>
         log.warn("channel.playlists.refresh_failed", { channelId, error: e instanceof Error ? e.message : String(e) }));
     }
     try {
@@ -375,7 +375,7 @@ api.get("/channels/:id/playlists", async (c) => {
   if (syncDisabled) return c.json({ playlists: [] });
 
   try {
-    return c.json({ playlists: await attachPlaylistFollowState(uid, await refreshChannelPlaylists(channelId)) });
+    return c.json({ playlists: await attachPlaylistFollowState(uid, await refreshChannelPlaylists(channelId, false, uid)) });
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
   }
@@ -385,7 +385,7 @@ api.post("/channels/:id/playlists/sync", async (c) => {
   const channelId = c.req.param("id");
   if (await channelSyncIsDisabled(channelId)) return c.json({ error: "channel sync disabled" }, 409);
   try {
-    const result = await syncChannelPlaylists(channelId);
+    const result = await syncChannelPlaylists(channelId, currentUserId(c));
     log.info("channel.playlists.sync_requested", { channelId, count: result.playlists.length, synced: result.synced, added: result.added, errors: result.errors });
     return c.json({
       ok: true,
@@ -422,13 +422,13 @@ api.put("/channels/:id/follow", async (c) => {
   // profile subscription relation; otherwise SQLite correctly rejects the FK.
   if (followed && !existing) {
     try {
-      const info = await resolveChannelId(channelId);
+      const info = await resolveChannelId(channelId, currentUserId(c));
       if (info.channelId !== channelId) return c.json({ error: "channel id mismatch" }, 400);
       await database.prepare(
         "INSERT OR IGNORE INTO channels (channel_id, title, url, thumbnail) VALUES (?, ?, ?, ?)"
       ).run(channelId, info.title, `https://www.youtube.com/channel/${channelId}`, info.thumbnail);
-      refreshChannel(channelId)
-        .then(() => refreshLiveStatus(channelId))
+      refreshChannel(channelId, uid)
+        .then(() => refreshLiveStatus(channelId, { userId: uid }))
         .catch((error) => log.error("channel.initial_refresh_failed", { channelId, error: error instanceof Error ? error.message : String(error) }));
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 502);

@@ -59,7 +59,7 @@ export default function ChannelPosts({ channelId, channelName, channelAvatar, on
     if (!silent) setLoading(true);
     if (!silent) setError("");
     try {
-      const result = await api.channelPosts(channelId, language);
+      const result = await api.channelPosts(channelId);
       setPosts(result.posts);
       if (!silent) setVisible(PAGE_SIZE);
     } catch (reason) {

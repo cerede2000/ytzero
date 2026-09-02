@@ -110,7 +110,7 @@ async function orderedVideoIds(userId: number, context: Exclude<PlaybackContext,
     return sortUserPlaylistRows(rows, context.sort).map((row) => row.video_id);
   }
   if (context.kind === "channel-playlist") {
-    return (await sortFetchedPlaylistVideos(await fetchPlaylistVideos(context.playlistId), context.sort)).map((video) => video.videoId);
+    return (await sortFetchedPlaylistVideos(await fetchPlaylistVideos(context.playlistId, userId), context.sort)).map((video) => video.videoId);
   }
   if (context.kind === "recommendations") return recommendationQueueVideoIds(userId, { downloadsOnly: childDownloadsOnly(userId) });
   if (context.kind === "in-progress") {

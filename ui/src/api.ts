@@ -93,7 +93,6 @@ import {
   type YtdlpConfig,
   type YtdlpUpdateResult,
 } from "./apiTypes";
-import type { Language } from "../../shared/uiLanguages";
 import type { ChannelPost } from "./channelPostTypes";
 export * from "./apiTypes";
 export * from "./pluginTypes";
@@ -416,7 +415,7 @@ export const api = {
 
   channelAbout: (id: string) => http<ChannelAbout>(`/channels/${id}/about`),
   channelPlaylists: (id: string) => http<{ playlists: PlaylistInfo[] }>(`/channels/${id}/playlists`),
-  channelPosts: (id: string, language: Language, refresh = false) => http<{ posts: ChannelPost[]; fetchedAt: string; cached: boolean }>(`/channels/${id}/posts?language=${language}${refresh ? "&refresh=1" : ""}`),
+  channelPosts: (id: string, refresh = false) => http<{ posts: ChannelPost[]; fetchedAt: string; cached: boolean }>(`/channels/${id}/posts${refresh ? "?refresh=1" : ""}`),
   syncChannelPlaylists: (id: string) => http<{ playlists: PlaylistInfo[]; count: number; synced: number; added: number; errors: number }>(`/channels/${id}/playlists/sync`, { method: "POST" }),
   syncChannelMetadata: (id: string) => http<{ checked: number; updated: number; dates: number; durations: number; shorts: number; failed: number; remaining: number }>(`/channels/${id}/metadata/sync`, { method: "POST" }),
   channelPlaylist: (id: string) => http<{ playlist: FollowedPlaylist }>(`/channel-playlists/${id}`),

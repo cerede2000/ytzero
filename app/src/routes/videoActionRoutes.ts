@@ -25,7 +25,7 @@ api.post("/videos/:id/queue", async (c) => {
   if (!await videoExistsStmt.get(id)) {
     if (childLocalOnly(uid)) return c.json({ error: "restricted" }, 403);
     try {
-      await ensureOnDemandVideo(id);
+      await ensureOnDemandVideo(id, uid);
     } catch (error) {
       if (error instanceof OnDemandVideoImportError) return c.json({ error: error.message }, error.status);
       throw error;
@@ -48,7 +48,7 @@ api.post("/videos/:id/import", async (c) => {
   if (await videoExistsStmt.get(id)) return c.json({ ok: true });
   if (childLocalOnly(uid)) return c.json({ error: "restricted" }, 403);
   try {
-    await ensureOnDemandVideo(id);
+    await ensureOnDemandVideo(id, uid);
     return c.json({ ok: true });
   } catch (error) {
     if (error instanceof OnDemandVideoImportError) return c.json({ error: error.message }, error.status);

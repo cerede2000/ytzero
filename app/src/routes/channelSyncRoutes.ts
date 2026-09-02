@@ -49,7 +49,7 @@ export function registerChannelSyncRoutes(api: Api, currentUserId: (context: Api
       const job = startChannelSyncJob(uid, channelIds.map((channelId) => ({
         channelId,
         title: followedById.get(channelId)!.title || channelId,
-      })), syncChannel);
+      })), (channelId) => syncChannel(channelId, uid));
       log.info("channel.sync_job_started", { jobId: job.id, userId: uid, channels: job.total });
       return c.json({ job }, 202);
     } catch (error) {
@@ -66,7 +66,8 @@ export function registerSingleChannelSyncRoute(api: Api, currentUserId: (context
     if (await channelSyncIsDisabled(channelId)) return c.json({ error: "channel sync disabled" }, 409);
     try {
       const channel = await database.prepare("SELECT COALESCE(custom_title, title, channel_id) AS title FROM channels WHERE channel_id = ?").get(channelId) as { title: string } | null;
-      const job = startChannelSyncJob(currentUserId(c), [{ channelId, title: channel?.title || channelId }], syncChannel);
+      const uid = currentUserId(c);
+      const job = startChannelSyncJob(uid, [{ channelId, title: channel?.title || channelId }], (id) => syncChannel(id, uid));
       log.info("channel.sync_job_started", { jobId: job.id, userId: currentUserId(c), channels: 1 });
       return c.json({ job }, 202);
     } catch (error) {

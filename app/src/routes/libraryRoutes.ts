@@ -103,7 +103,7 @@ api.get("/search/youtube", async (c) => {
   const q = c.req.query("q");
   if (!q?.trim()) return c.json({ results: [] });
   try {
-    const search = await searchYouTube(q.trim());
+    const search = await searchYouTube(q.trim(), uid);
     const watched = await attachWatchedState(uid, search.results, (result) => result.videoId);
     const ids = watched.map((result) => result.videoId);
     const placeholders = ids.map(() => "?").join(",");

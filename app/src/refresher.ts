@@ -267,10 +267,10 @@ const ensureChannel = database.prepare(`
  * duplicates. New videos get the same tagging/rule treatment as RSS uploads.
  * The channel row is created (as external) when not already present.
  */
-export async function importPlaylistVideos(playlistId: string, force = false): Promise<{ added: number; channelId: string }> {
-  const feed = await fetchPlaylistFeed(playlistId, force);
+export async function importPlaylistVideos(playlistId: string, force = false, userId?: number): Promise<{ added: number; channelId: string }> {
+  const feed = await fetchPlaylistFeed(playlistId, force, userId);
   if (!feed.channelId) return { added: 0, channelId: "" };
-  const snapshot = await fetchPlaylistSnapshot(playlistId, force).catch((error) => {
+  const snapshot = await fetchPlaylistSnapshot(playlistId, force, userId).catch((error) => {
     if (isYouTubeRateLimitError(error)) throw error;
     return {
       videos: feed.videos.map((video, index) => ({
@@ -345,24 +345,24 @@ export async function importPlaylistVideos(playlistId: string, force = false): P
 
 const playlistSyncsInFlight = new Map<string, Promise<{ added: number; channelId: string }>>();
 
-export async function syncPlaylist(playlistId: string): Promise<{ added: number; channelId: string }> {
+export async function syncPlaylist(playlistId: string, userId?: number): Promise<{ added: number; channelId: string }> {
   const current = playlistSyncsInFlight.get(playlistId);
   if (current) return current;
   await database.prepare("UPDATE channel_playlists SET sync_attempted_at = datetime('now') WHERE playlist_id = ?").run(playlistId);
-  const task = importPlaylistVideos(playlistId, true).finally(() => playlistSyncsInFlight.delete(playlistId));
+  const task = importPlaylistVideos(playlistId, true, userId).finally(() => playlistSyncsInFlight.delete(playlistId));
   playlistSyncsInFlight.set(playlistId, task);
   return task;
 }
 
 /** Refresh a channel's public playlist catalogue and then every playlist's
  * contents, without scanning the channel's regular videos/shorts tabs. */
-export async function syncChannelPlaylists(channelId: string): Promise<{
+export async function syncChannelPlaylists(channelId: string, userId?: number): Promise<{
   playlists: Awaited<ReturnType<typeof fetchChannelPlaylists>>;
   added: number;
   synced: number;
   errors: number;
 }> {
-  const playlists = await preservePlaylistMedia(channelId, await fetchChannelPlaylists(channelId, true));
+  const playlists = await preservePlaylistMedia(channelId, await fetchChannelPlaylists(channelId, true, userId));
   await saveChannelPlaylists(channelId, playlists);
   await database.prepare("UPDATE channels SET playlists_json = ?, playlists_fetched_at = datetime('now'), playlists_cache_version = ? WHERE channel_id = ?")
     .run(JSON.stringify(playlists), CHANNEL_PLAYLIST_CACHE_VERSION, channelId);
@@ -373,7 +373,7 @@ export async function syncChannelPlaylists(channelId: string): Promise<{
   for (let index = 0; index < playlists.length; index++) {
     const playlist = playlists[index];
     try {
-      const result = await syncPlaylist(playlist.playlistId);
+      const result = await syncPlaylist(playlist.playlistId, userId);
       added += result.added;
       synced++;
     } catch (error) {
@@ -388,9 +388,9 @@ export async function syncChannelPlaylists(channelId: string): Promise<{
   return { playlists, added, synced, errors };
 }
 
-export async function refreshChannel(channelId: string): Promise<{ added: number }> {
+export async function refreshChannel(channelId: string, userId?: number): Promise<{ added: number }> {
   const startedAt = Date.now();
-  const feed = await fetchChannelFeed(channelId);
+  const feed = await fetchChannelFeed(channelId, userId);
   const inheritChannelTags = database.prepare(
     "INSERT OR IGNORE INTO video_tags (video_id, tag_id, source) SELECT ?, tag_id, 'channel' FROM channel_tags WHERE channel_id = ?"
   );
@@ -425,7 +425,7 @@ export async function refreshChannel(channelId: string): Promise<{ added: number
   ).get(channelId, VIDEO_MAINTENANCE_CUTOFF);
   if (missingDuration) {
     try {
-      const durations = await fetchChannelVideosDurations(channelId);
+      const durations = await fetchChannelVideosDurations(channelId, userId);
       const upd = database.prepare("UPDATE videos SET duration = ? WHERE video_id = ? AND (duration IS NULL OR TRIM(duration) = '')");
       for (const d of durations) await upd.run(d.duration, d.videoId);
     } catch (error) {
@@ -676,14 +676,14 @@ export async function syncChannelMissingMetadata(channelId: string): Promise<Cha
   return result;
 }
 
-export async function refreshLiveStatus(channelId: string, options: { notify?: boolean } = {}): Promise<boolean> {
+export async function refreshLiveStatus(channelId: string, options: { notify?: boolean; userId?: number } = {}): Promise<boolean> {
   const activeStatusRows = () => database.prepare(
     "SELECT video_id, live_status FROM videos WHERE channel_id = ? AND live_status IN ('live', 'upcoming')"
   ).all(channelId) as Promise<StoredLiveStatus[]>;
   const before = await activeStatusRows();
   const [primaryResult, streamsResult] = await Promise.allSettled([
-    fetchLiveInfo(channelId),
-    fetchChannelStreams(channelId),
+    fetchLiveInfo(channelId, options.userId),
+    fetchChannelStreams(channelId, options.userId),
   ]);
   const rateLimit = [primaryResult, streamsResult]
     .find((result): result is PromiseRejectedResult => result.status === "rejected" && isYouTubeRateLimitError(result.reason));
@@ -740,7 +740,7 @@ export interface ChannelSyncResult {
 
 const channelSyncsInFlight = new Map<string, Promise<ChannelSyncResult>>();
 
-async function runChannelSync(channelId: string): Promise<ChannelSyncResult> {
+async function runChannelSync(channelId: string, userId?: number): Promise<ChannelSyncResult> {
   const startedAt = Date.now();
   let rateLimited = false;
   // A channel page can be opened directly from a YouTube link, before it has
@@ -755,12 +755,12 @@ async function runChannelSync(channelId: string): Promise<ChannelSyncResult> {
   if (rateLimited) return { added: 0, rateLimited: true };
 
   const [feed, scraped, streams] = await Promise.all([
-    fetchChannelFeed(channelId).catch((error) => {
+    fetchChannelFeed(channelId, userId).catch((error) => {
       rateLimited ||= isYouTubeRateLimitError(error);
       return { videos: [], channelTitle: "", channelId };
     }),
-    fetchChannelVideos(channelId),
-    fetchChannelStreams(channelId),
+    fetchChannelVideos(channelId, userId),
+    fetchChannelStreams(channelId, userId),
   ]);
   // A stream can occasionally also be listed in /videos. Keep one copy while
   // retaining the dedicated /streams results that are otherwise invisible.
@@ -867,14 +867,14 @@ async function runChannelSync(channelId: string): Promise<ChannelSyncResult> {
   let playlistsScanned = 0;
   if (!rateLimited) {
     try {
-      const allPlaylists = await preservePlaylistMedia(channelId, await fetchChannelPlaylists(channelId, true));
+      const allPlaylists = await preservePlaylistMedia(channelId, await fetchChannelPlaylists(channelId, true, userId));
       await saveChannelPlaylists(channelId, allPlaylists);
       await database.prepare("UPDATE channels SET playlists_json = ?, playlists_fetched_at = datetime('now'), playlists_cache_version = ? WHERE channel_id = ?")
         .run(JSON.stringify(allPlaylists), CHANNEL_PLAYLIST_CACHE_VERSION, channelId);
       const playlists = allPlaylists.slice(0, MAX_SYNC_PLAYLISTS);
       for (let i = 0; i < playlists.length; i++) {
         try {
-          const r = await importPlaylistVideos(playlists[i].playlistId);
+          const r = await importPlaylistVideos(playlists[i].playlistId, false, userId);
           added += r.added;
           playlistsScanned++;
         } catch (e) {
@@ -902,7 +902,7 @@ async function runChannelSync(channelId: string): Promise<ChannelSyncResult> {
   // the periodic live-status refresh before it can appear on the channel page.
   if (!rateLimited) {
     try {
-      await refreshLiveStatus(channelId);
+      await refreshLiveStatus(channelId, { userId });
     } catch (error) {
       if (!isYouTubeRateLimitError(error)) throw error;
       rateLimited = true;
@@ -925,7 +925,7 @@ async function runChannelSync(channelId: string): Promise<ChannelSyncResult> {
 
 /** Full sync shared by the manual button and the background scheduler. Calls
  * for the same channel coalesce instead of scraping YouTube twice in parallel. */
-export function syncChannel(channelId: string): Promise<ChannelSyncResult> {
+export function syncChannel(channelId: string, userId?: number): Promise<ChannelSyncResult> {
   const current = channelSyncsInFlight.get(channelId);
   if (current) return current;
   // Register before the first await so a background batch cannot slip in
@@ -933,7 +933,7 @@ export function syncChannel(channelId: string): Promise<ChannelSyncResult> {
   const task = (async () => {
     const status = await database.prepare("SELECT manual_status FROM channels WHERE channel_id=?").get(channelId) as { manual_status: string } | null;
     if (status && status.manual_status !== "active") throw new Error(`channel sync disabled (${status.manual_status})`);
-    return runChannelSync(channelId);
+    return runChannelSync(channelId, userId);
   })().finally(() => channelSyncsInFlight.delete(channelId));
   channelSyncsInFlight.set(channelId, task);
   return task;

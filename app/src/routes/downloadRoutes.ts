@@ -202,7 +202,7 @@ api.post("/videos/:id/download", async (c) => {
   if (!await profileDownloadsEnabled(uid)) return c.json({ error: "downloads disabled" }, 409);
   const id = c.req.param("id");
   try {
-    await ensureOnDemandVideo(id);
+    await ensureOnDemandVideo(id, uid);
   } catch (error) {
     if (error instanceof OnDemandVideoImportError) return c.json({ error: error.message }, error.status);
     throw error;

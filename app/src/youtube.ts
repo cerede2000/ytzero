@@ -1,49 +1,15 @@
 import { XMLParser } from "fast-xml-parser";
 import { createRequire } from "module";
 import { decodeHtmlEntities } from "./htmlEntities";
-import { db, getUserSetting } from "./db";
 import { createYoutubeSearch, parseAbbreviatedCount } from "./youtubeSearch";
 import { isYouTubeRateLimitError, isYouTubeRefusalError, readYouTubeResponse, youtubeRefusalGate } from "./youtubeRateLimit";
 import { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError } from "./youtubeVideoAvailability";
 import { inferIsShortFromMetadata } from "./shortClassification";
-import { localeForLanguage } from "./uiLanguage";
+import { resolveYouTubeLanguage, youtubeRequestHeaders, youtubeRssHeaders, type ResolvedYouTubeLanguage } from "./youtubeRequestLanguage";
 export { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError, videoOEmbedAvailabilityFromStatus } from "./youtubeVideoAvailability";
 const _require = createRequire(import.meta.url);
 const InnerTubeClient = _require("innertube.js");
 const _yt = new InnerTubeClient();
-
-function resolveAcceptLanguage(): string {
-  // Priority: (1) env override, (2) primary-user language setting, (3) en-US fallback.
-  const envLang = process.env.YTZERO_YT_LANGUAGE;
-  if (envLang) {
-    const base = envLang.split(",")[0].trim();
-    const tag = base.split("-")[0];
-    return tag === base ? `${base};q=0.9` : `${base},${tag};q=0.9`;
-  }
-  try {
-    const row = db.prepare("SELECT id FROM users ORDER BY id ASC LIMIT 1").get() as { id: number } | null;
-    if (!row) return "en-US,en;q=0.9";
-    const locale = localeForLanguage(getUserSetting(row.id, "language"));
-    const tag = locale.split("-")[0];
-    return `${locale},${tag};q=0.9`;
-  } catch {
-    return "en-US,en;q=0.9";
-  }
-}
-
-const _ACCEPT_LANGUAGE = resolveAcceptLanguage();
-
-const FETCH_HEADERS: Record<string, string> = {
-  "User-Agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-  "Accept-Language": _ACCEPT_LANGUAGE,
-  Cookie: "CONSENT=YES+cb.20240101-00-p0.en+FX+100; SOCS=CAI",
-};
-
-const RSS_HEADERS: Record<string, string> = {
-  "User-Agent": FETCH_HEADERS["User-Agent"],
-  "Accept-Language": _ACCEPT_LANGUAGE,
-};
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
 
@@ -70,9 +36,9 @@ function asArray<T>(v: T | T[] | undefined): T[] {
   return Array.isArray(v) ? v : [v];
 }
 
-export async function fetchChannelFeed(channelId: string): Promise<ChannelFeed> {
+export async function fetchChannelFeed(channelId: string, userId?: number): Promise<ChannelFeed> {
   const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-  const res = await fetch(url, { headers: RSS_HEADERS });
+  const res = await fetch(url, { headers: youtubeRssHeaders(userId) });
   const doc = xml.parse(await readYouTubeResponse(res, `RSS fetch failed for ${channelId}`));
   const feed = doc.feed ?? {};
   const videos: FeedVideo[] = asArray(feed.entry).map((e: any) => {
@@ -101,7 +67,7 @@ export async function fetchChannelFeed(channelId: string): Promise<ChannelFeed> 
 }
 
 /** Resolve any YouTube channel URL or @handle to a channel ID (UC...). */
-export async function resolveChannelId(input: string): Promise<{ channelId: string; title: string; thumbnail: string }> {
+export async function resolveChannelId(input: string, userId?: number): Promise<{ channelId: string; title: string; thumbnail: string }> {
   let url = input.trim();
   if (/^UC[\w-]{22}$/.test(url)) {
     url = `https://www.youtube.com/channel/${url}`;
@@ -110,7 +76,7 @@ export async function resolveChannelId(input: string): Promise<{ channelId: stri
   } else if (!/^https?:\/\//.test(url)) {
     url = `https://www.youtube.com/${url.replace(/^\/+/, "")}`;
   }
-  const res = await fetch(url, { headers: FETCH_HEADERS, redirect: "follow" });
+  const res = await fetch(url, { headers: youtubeRequestHeaders(userId), redirect: "follow" });
   if (!res.ok) throw new Error(`Failed to fetch channel page (${res.status})`);
   const html = await res.text();
   // The canonical link is authoritative; "channelId" occurrences in page data
@@ -140,9 +106,9 @@ export interface LiveInfo {
  * Scrape https://www.youtube.com/channel/<id>/live to detect a current or
  * upcoming livestream. Returns null when the channel is not live.
  */
-export async function fetchLiveInfo(channelId: string): Promise<LiveInfo | null> {
+export async function fetchLiveInfo(channelId: string, userId?: number): Promise<LiveInfo | null> {
   const res = await fetch(`https://www.youtube.com/channel/${channelId}/live`, {
-    headers: FETCH_HEADERS,
+    headers: youtubeRequestHeaders(userId),
     redirect: "follow",
   });
   if (!res.ok) throw new Error(`channel live request failed (${res.status})`);
@@ -384,8 +350,8 @@ function extractSubscriberCountText(node: any): string {
   return "";
 }
 
-export async function fetchVideoOwnerSubscriberCount(videoId: string): Promise<WatchSubscriberCount | null> {
-  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: FETCH_HEADERS });
+export async function fetchVideoOwnerSubscriberCount(videoId: string, userId?: number): Promise<WatchSubscriberCount | null> {
+  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: youtubeRequestHeaders(userId) });
   if (!res.ok) return null;
   const data = extractInitialData(await res.text());
   const owner = deepCollect(data, "videoOwnerRenderer")[0];
@@ -400,10 +366,10 @@ export async function fetchVideoOwnerSubscriberCount(videoId: string): Promise<W
   };
 }
 
-export async function fetchChannelSubscriberCountFromWatch(channelId: string): Promise<WatchSubscriberCount | null> {
-  const feed = await fetchChannelFeed(channelId);
+export async function fetchChannelSubscriberCountFromWatch(channelId: string, userId?: number): Promise<WatchSubscriberCount | null> {
+  const feed = await fetchChannelFeed(channelId, userId);
   for (const video of feed.videos.slice(0, 3)) {
-    const result = await fetchVideoOwnerSubscriberCount(video.videoId);
+    const result = await fetchVideoOwnerSubscriberCount(video.videoId, userId);
     if (result?.subscriberCount) return result;
   }
   return null;
@@ -476,26 +442,32 @@ function innertubePlaylistConfig(html: string): { apiKey: string; clientVersion:
   return apiKey && clientVersion ? { apiKey, clientVersion } : null;
 }
 
-async function fetchPlaylistContinuation(token: string, config: { apiKey: string; clientVersion: string }) {
+export function playlistContinuationBody(token: string, clientVersion: string, language: string) {
+  return {
+    context: { client: { clientName: "WEB", clientVersion, hl: language, gl: "US" } },
+    continuation: token,
+  };
+}
+
+async function fetchPlaylistContinuation(token: string, config: { apiKey: string; clientVersion: string }, language: ResolvedYouTubeLanguage) {
   const res = await fetch(`https://www.youtube.com/youtubei/v1/browse?prettyPrint=false&key=${encodeURIComponent(config.apiKey)}`, {
     method: "POST",
-    headers: { ...FETCH_HEADERS, "Content-Type": "application/json", Origin: "https://www.youtube.com" },
-    body: JSON.stringify({
-      context: { client: { clientName: "WEB", clientVersion: config.clientVersion, hl: "en", gl: "US" } },
-      continuation: token,
-    }),
+    headers: { ...youtubeRequestHeaders(language.userId, language), "Content-Type": "application/json", Origin: "https://www.youtube.com" },
+    body: JSON.stringify(playlistContinuationBody(token, config.clientVersion, language.hl)),
   });
   return JSON.parse(await readYouTubeResponse(res, "playlist continuation fetch failed"));
 }
 
-export async function fetchChannelPlaylists(channelId: string, force = false): Promise<PlaylistInfo[]> {
-  const cached = playlistCache.get(channelId);
+export async function fetchChannelPlaylists(channelId: string, force = false, userId?: number): Promise<PlaylistInfo[]> {
+  const language = resolveYouTubeLanguage(userId);
+  const cacheKey = `${language.cacheKey}:${channelId}`;
+  const cached = playlistCache.get(cacheKey);
   // Older versions cached only YouTube's first page (~30 cards). Re-fetch that
   // boundary case once so it is upgraded to a complete paginated result.
   if (!force && cached && cached.complete && Date.now() - cached.at < ABOUT_TTL) return cached.data;
 
   const res = await fetch(`https://www.youtube.com/channel/${channelId}/playlists`, {
-    headers: FETCH_HEADERS,
+    headers: youtubeRequestHeaders(userId, language),
   });
   const html = await readYouTubeResponse(res, "playlists fetch failed");
   const data = extractInitialData(html);
@@ -509,7 +481,7 @@ export async function fetchChannelPlaylists(channelId: string, force = false): P
   for (let page = 0; config && token && page < MAX_PLAYLIST_CONTINUATION_PAGES; page++) {
     const previousToken = token;
     try {
-      const continuation = await fetchPlaylistContinuation(token, config);
+      const continuation = await fetchPlaylistContinuation(token, config, language);
       collectChannelPlaylists(continuation, out, seen);
       token = playlistContinuationToken(continuation);
       if (token === previousToken) break;
@@ -520,7 +492,7 @@ export async function fetchChannelPlaylists(channelId: string, force = false): P
     }
   }
   if (token) complete = false;
-  playlistCache.set(channelId, { at: Date.now(), data: out, complete });
+  playlistCache.set(cacheKey, { at: Date.now(), data: out, complete });
   return out;
 }
 
@@ -548,8 +520,8 @@ export interface PlaylistFeed {
 
 export interface VideoDuration { videoId: string; duration: string; }
 
-export async function fetchChannelVideosDurations(channelId: string): Promise<VideoDuration[]> {
-  const res = await fetch(`https://www.youtube.com/channel/${channelId}/videos`, { headers: FETCH_HEADERS });
+export async function fetchChannelVideosDurations(channelId: string, userId?: number): Promise<VideoDuration[]> {
+  const res = await fetch(`https://www.youtube.com/channel/${channelId}/videos`, { headers: youtubeRequestHeaders(userId) });
   if (!res.ok) return [];
   const data = extractInitialData(await res.text());
   const out: VideoDuration[] = [];
@@ -566,12 +538,13 @@ export async function fetchChannelVideosDurations(channelId: string): Promise<Vi
  * format used by channel feeds. More reliable than scraping the playlist page,
  * but capped at ~15 entries and without per-video duration.
  */
-export async function fetchPlaylistFeed(playlistId: string, force = false): Promise<PlaylistFeed> {
-  const cached = playlistFeedCache.get(playlistId);
+export async function fetchPlaylistFeed(playlistId: string, force = false, userId?: number): Promise<PlaylistFeed> {
+  const cacheKey = `${resolveYouTubeLanguage(userId).cacheKey}:${playlistId}`;
+  const cached = playlistFeedCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.at < ABOUT_TTL) return cached.data;
 
   const url = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
-  const res = await fetch(url, { headers: RSS_HEADERS });
+  const res = await fetch(url, { headers: youtubeRssHeaders(userId) });
   const doc = xml.parse(await readYouTubeResponse(res, "playlist feed fetch failed"));
   const feed = doc.feed ?? {};
   const videos: FeedVideo[] = asArray(feed.entry)
@@ -603,7 +576,7 @@ export async function fetchPlaylistFeed(playlistId: string, force = false): Prom
     channelTitle: decodeHtmlEntities(String(feed.author?.name ?? feed.title ?? "")),
     videos,
   };
-  playlistFeedCache.set(playlistId, { at: Date.now(), data });
+  playlistFeedCache.set(cacheKey, { at: Date.now(), data });
   return data;
 }
 
@@ -658,11 +631,13 @@ export function playlistVideoFromLockup(vm: any, fallbackIndex: number): Playlis
   };
 }
 
-export async function fetchPlaylistSnapshot(playlistId: string, force = false): Promise<{ videos: PlaylistVideo[]; complete: boolean }> {
-  const cached = playlistVideosCache.get(playlistId);
+export async function fetchPlaylistSnapshot(playlistId: string, force = false, userId?: number): Promise<{ videos: PlaylistVideo[]; complete: boolean }> {
+  const language = resolveYouTubeLanguage(userId);
+  const cacheKey = `${language.cacheKey}:${playlistId}`;
+  const cached = playlistVideosCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.at < ABOUT_TTL) return { videos: cached.videos, complete: cached.complete };
 
-  const res = await fetch(`https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`, { headers: FETCH_HEADERS });
+  const res = await fetch(`https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`, { headers: youtubeRequestHeaders(userId, language) });
   const html = await readYouTubeResponse(res, "playlist page fetch failed");
   const data = extractInitialData(html);
   const videos: PlaylistVideo[] = [];
@@ -674,7 +649,7 @@ export async function fetchPlaylistSnapshot(playlistId: string, force = false): 
   for (let page = 0; config && token && page < MAX_PLAYLIST_CONTINUATION_PAGES; page++) {
     const previousToken = token;
     try {
-      const continuation = await fetchPlaylistContinuation(token, config);
+      const continuation = await fetchPlaylistContinuation(token, config, language);
       collectPlaylistVideos(continuation, videos, seen);
       token = playlistContinuationToken(continuation);
       if (token === previousToken) { complete = false; break; }
@@ -687,7 +662,7 @@ export async function fetchPlaylistSnapshot(playlistId: string, force = false): 
   if (token) complete = false;
 
   if (videos.length === 0) {
-    const feed = await fetchPlaylistFeed(playlistId, force);
+    const feed = await fetchPlaylistFeed(playlistId, force, userId);
     const fallback = feed.videos.map((video, index) => ({
       videoId: video.videoId,
       title: video.title,
@@ -697,16 +672,16 @@ export async function fetchPlaylistSnapshot(playlistId: string, force = false): 
       duration: "",
       index,
     }));
-    playlistVideosCache.set(playlistId, { at: Date.now(), videos: fallback, complete: false });
+    playlistVideosCache.set(cacheKey, { at: Date.now(), videos: fallback, complete: false });
     return { videos: fallback, complete: false };
   }
-  playlistVideosCache.set(playlistId, { at: Date.now(), videos, complete });
+  playlistVideosCache.set(cacheKey, { at: Date.now(), videos, complete });
   return { videos, complete };
 }
 
 /** Complete playlist videos shaped for the watch page and playlist library. */
-export async function fetchPlaylistVideos(playlistId: string): Promise<PlaylistVideo[]> {
-  return (await fetchPlaylistSnapshot(playlistId)).videos;
+export async function fetchPlaylistVideos(playlistId: string, userId?: number): Promise<PlaylistVideo[]> {
+  return (await fetchPlaylistSnapshot(playlistId, false, userId)).videos;
 }
 
 export interface ScrapedVideo {
@@ -758,8 +733,8 @@ function relativePublishedFromNode(node: any): string | null {
 }
 
 /** Scrape a channel tab for uploads or completed livestreams. */
-async function fetchChannelTabVideos(channelId: string, tab: "videos" | "streams"): Promise<ScrapedVideo[]> {
-  const res = await fetch(`https://www.youtube.com/channel/${channelId}/${tab}`, { headers: FETCH_HEADERS });
+async function fetchChannelTabVideos(channelId: string, tab: "videos" | "streams", userId?: number): Promise<ScrapedVideo[]> {
+  const res = await fetch(`https://www.youtube.com/channel/${channelId}/${tab}`, { headers: youtubeRequestHeaders(userId) });
   const data = extractInitialData(await readYouTubeResponse(res, `channel ${tab} request failed`));
   const out: ScrapedVideo[] = [];
   const seen = new Set<string>();
@@ -813,13 +788,13 @@ async function fetchChannelTabVideos(channelId: string, tab: "videos" | "streams
 }
 
 /** Scrape the channel's ordinary uploads tab. */
-export async function fetchChannelVideos(channelId: string): Promise<ScrapedVideo[]> {
-  return fetchChannelTabVideos(channelId, "videos");
+export async function fetchChannelVideos(channelId: string, userId?: number): Promise<ScrapedVideo[]> {
+  return fetchChannelTabVideos(channelId, "videos", userId);
 }
 
 /** Scrape the channel's current and archived livestreams tab. */
-export async function fetchChannelStreams(channelId: string): Promise<ScrapedVideo[]> {
-  return (await fetchChannelTabVideos(channelId, "streams")).map((video) => ({ ...video, isStream: true }));
+export async function fetchChannelStreams(channelId: string, userId?: number): Promise<ScrapedVideo[]> {
+  return (await fetchChannelTabVideos(channelId, "streams", userId)).map((video) => ({ ...video, isStream: true }));
 }
 
 export interface SearchResult {
@@ -911,7 +886,8 @@ export const {
   searchVideoFromLockup,
   searchYouTube,
 } = createYoutubeSearch({
-  FETCH_HEADERS,
+  requestHeaders: youtubeRequestHeaders,
+  resolveCacheKey: (userId) => resolveYouTubeLanguage(userId).cacheKey,
   cleanSubscriberCount,
   deepCollect,
   extractInitialData,
@@ -995,8 +971,8 @@ export function parseVideoCreatorsFromHtml(html: string): VideoCreatorInfo[] {
   return parseVideoCreatorsFromInitialData(extractInitialData(html), ownerChannelId);
 }
 
-export async function fetchVideoCreators(videoId: string): Promise<VideoCreatorInfo[]> {
-  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: FETCH_HEADERS });
+export async function fetchVideoCreators(videoId: string, userId?: number): Promise<VideoCreatorInfo[]> {
+  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: youtubeRequestHeaders(userId) });
   if (!res.ok) throw new Error(`YouTube creators fetch failed (${res.status})`);
   return parseVideoCreatorsFromHtml(await res.text());
 }
@@ -1060,16 +1036,17 @@ async function fetchVideoInfoFromInnerTube(videoId: string): Promise<VideoInfo> 
   return videoInfoFromPlayerResponse(videoId, data);
 }
 
-async function fetchVideoInfoFromEmbed(videoId: string): Promise<VideoInfo> {
-  const res = await fetch(`https://www.youtube.com/embed/${videoId}`, { headers: FETCH_HEADERS });
+async function fetchVideoInfoFromEmbed(videoId: string, userId?: number): Promise<VideoInfo> {
+  const res = await fetch(`https://www.youtube.com/embed/${videoId}`, { headers: youtubeRequestHeaders(userId) });
   if (!res.ok) throw new Error(`YouTube embed fetch failed (${res.status})`);
   const pr = extractVariable(await res.text(), "ytInitialPlayerResponse");
   return videoInfoFromPlayerResponse(videoId, pr);
 }
 
-export async function fetchVideoInfo(videoId: string, options: { force?: boolean } = {}): Promise<VideoInfo> {
-  if (options.force) videoInfoCache.delete(videoId);
-  const cached = videoInfoCache.get(videoId);
+export async function fetchVideoInfo(videoId: string, options: { force?: boolean; userId?: number } = {}): Promise<VideoInfo> {
+  const cacheKey = `${resolveYouTubeLanguage(options.userId).cacheKey}:${videoId}`;
+  if (options.force) videoInfoCache.delete(cacheKey);
+  const cached = videoInfoCache.get(cacheKey);
   if (cached && Date.now() - cached.at < VIDEO_INFO_TTL) return cached.data;
 
   youtubeRefusalGate.enter();
@@ -1077,7 +1054,7 @@ export async function fetchVideoInfo(videoId: string, options: { force?: boolean
   let result: VideoInfo;
   try {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const res = await fetch(url, { headers: FETCH_HEADERS });
+    const res = await fetch(url, { headers: youtubeRequestHeaders(options.userId) });
     if (!res.ok) throw new Error(`YouTube fetch failed (${res.status})`);
     const html = await res.text();
     const pr = extractVariable(html, "ytInitialPlayerResponse");
@@ -1089,7 +1066,7 @@ export async function fetchVideoInfo(videoId: string, options: { force?: boolean
     } catch (innerTubeError) {
       if (isYouTubeRefusalError(innerTubeError)) throw youtubeRefusalGate.refused(innerTubeError);
       try {
-        result = await fetchVideoInfoFromEmbed(videoId);
+        result = await fetchVideoInfoFromEmbed(videoId, options.userId);
       } catch (embedError) {
         if (isYouTubeRefusalError(embedError)) throw youtubeRefusalGate.refused(embedError);
         if ([htmlError, innerTubeError, embedError].some(isPrivateVideoError)) {
@@ -1108,14 +1085,14 @@ export async function fetchVideoInfo(videoId: string, options: { force?: boolean
       }
     }
   }
-  videoInfoCache.set(videoId, { at: Date.now(), data: result });
+  videoInfoCache.set(cacheKey, { at: Date.now(), data: result });
   youtubeRefusalGate.answered();
   return result;
 }
 
 /** Fetch only the exact publish date without requiring a playable video. */
-export async function fetchVideoPublishedAt(videoId: string): Promise<string | null> {
-  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: FETCH_HEADERS });
+export async function fetchVideoPublishedAt(videoId: string, userId?: number): Promise<string | null> {
+  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: youtubeRequestHeaders(userId) });
   let html: string;
   try {
     html = await readYouTubeResponse(res, "YouTube publication date fetch failed");
@@ -1149,11 +1126,12 @@ const CHAPTERS_TTL = 60 * 60_000;
  * them from description timestamps or creator-defined markers. Returns an empty
  * list when the video has no chapters. No YouTube API involved.
  */
-export async function fetchVideoChapters(videoId: string): Promise<VideoChapter[]> {
-  const cached = chaptersCache.get(videoId);
+export async function fetchVideoChapters(videoId: string, userId?: number): Promise<VideoChapter[]> {
+  const cacheKey = `${resolveYouTubeLanguage(userId).cacheKey}:${videoId}`;
+  const cached = chaptersCache.get(cacheKey);
   if (cached && Date.now() - cached.at < CHAPTERS_TTL) return cached.data;
 
-  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: FETCH_HEADERS });
+  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, { headers: youtubeRequestHeaders(userId) });
   if (!res.ok) return [];
   const data = extractInitialData(await res.text());
   const out: VideoChapter[] = [];
@@ -1166,7 +1144,7 @@ export async function fetchVideoChapters(videoId: string): Promise<VideoChapter[
     out.push({ title, start });
   }
   out.sort((a, b) => a.start - b.start);
-  chaptersCache.set(videoId, { at: Date.now(), data: out });
+  chaptersCache.set(cacheKey, { at: Date.now(), data: out });
   return out;
 }
 
@@ -1187,7 +1165,7 @@ export async function classifyIsShort(
     const res = await fetchImpl(`https://www.youtube.com/shorts/${videoId}`, {
       method: "HEAD",
       redirect: "manual",
-      headers: FETCH_HEADERS,
+      headers: youtubeRequestHeaders(),
     });
     if (res.status === 429) throw youtubeRefusalGate.refused(new Error("YouTube shorts fetch failed (429)"));
     if (res.status === 200) {

@@ -41,6 +41,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
     changeFeedMaxAge,
     changeShortsFeedMode,
     changeMembersOnlyVisibility,
+    changeYoutubeTitleLanguage,
     changeWatchedStyle,
     changeVideoCardActions, changeVideoCardActionConfig, channelPostsTab,
     deArrowThumbnailsEnabled,
@@ -108,6 +109,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
     watchShowRelated,
     watchedStyle,
     videoCardActions, videoCardActionConfig,
+    youtubeTitleLanguage,
   } = controller;
 
   return (
@@ -171,6 +173,18 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
               onChange={(next) => {
                 setLanguage(next).then(() => showToast(t("displaySettingsSaved"))).catch(console.error);
               }}
+            />
+          </SettingRow>
+
+          <SettingRow label={t("videoTitleLanguage")} description={t("videoTitleLanguageHint")}>
+            <SelectMenu
+              label={t("videoTitleLanguage")}
+              value={youtubeTitleLanguage}
+              options={[
+                { value: "profile" as const, label: t("videoTitleLanguageProfile", { language: languageName(language) }) },
+                ...LANGUAGES.map((code) => ({ value: code, label: languageName(code) })),
+              ]}
+              onChange={changeYoutubeTitleLanguage}
             />
           </SettingRow>
 

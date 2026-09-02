@@ -402,7 +402,7 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
     setPostsRefreshing(true);
     setSyncMsg(null);
     try {
-      await api.channelPosts(id, language, true);
+      await api.channelPosts(id, true);
       setPostsRefreshRevision((revision) => revision + 1);
       setSyncMsg(t("channelPostsRefreshed"));
     } catch { setSyncMsg(t("syncError")); }

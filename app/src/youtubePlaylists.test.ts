@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { playlistContinuationToken, playlistVideoFromLockup } from "./youtube";
+import { playlistContinuationBody, playlistContinuationToken, playlistVideoFromLockup } from "./youtube";
 
 describe("YouTube playlist view models", () => {
   test("parses current video lockups", () => {
@@ -26,5 +26,12 @@ describe("YouTube playlist view models", () => {
     expect(playlistContinuationToken({
       continuationItemViewModel: { continuationCommand: { innertubeCommand: { continuationCommand: { token: "next-page" } } } },
     })).toBe("next-page");
+  });
+
+  test("uses the resolved language for continuations without changing result region", () => {
+    expect(playlistContinuationBody("next-page", "1.0", "fr")).toEqual({
+      context: { client: { clientName: "WEB", clientVersion: "1.0", hl: "fr", gl: "US" } },
+      continuation: "next-page",
+    });
   });
 });

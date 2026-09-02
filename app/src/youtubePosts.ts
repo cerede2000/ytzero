@@ -1,13 +1,9 @@
 import { isYouTubeRateLimitError, readYouTubeResponse } from "./youtubeRateLimit";
 import { parsePublishedTimeText, relativePublishedAt } from "./youtube";
+import { resolveYouTubeLanguage, youtubeRequestHeaders, type ResolvedYouTubeLanguage } from "./youtubeRequestLanguage";
 
 const POSTS_TTL_MS = 30 * 60 * 1000;
 const MAX_CONTINUATION_PAGES = 4;
-const FETCH_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-  "Accept-Language": "en-US,en;q=0.9",
-  Cookie: "CONSENT=YES+cb.20240101-00-p0.en+FX+100; SOCS=CAI",
-};
 
 export interface ChannelPostImage { url: string; width: number | null; height: number | null }
 export interface ChannelPostAttachment {
@@ -35,8 +31,8 @@ interface PostsCacheEntry { at: number; posts: ChannelPost[] }
 const postsCache = new Map<string, PostsCacheEntry>();
 const inFlight = new Map<string, Promise<PostsCacheEntry>>();
 
-function requestHeaders(language: string) {
-  return { ...FETCH_HEADERS, "Accept-Language": `${language},en;q=0.8` };
+function requestHeaders(language: ResolvedYouTubeLanguage) {
+  return youtubeRequestHeaders(language.userId, language);
 }
 
 function extractInitialData(html: string): any | null {
@@ -162,17 +158,17 @@ function innertubeConfig(html: string): { apiKey: string; clientVersion: string 
   return apiKey && clientVersion ? { apiKey, clientVersion } : null;
 }
 
-async function fetchContinuation(token: string, config: { apiKey: string; clientVersion: string }, language: string): Promise<any> {
+async function fetchContinuation(token: string, config: { apiKey: string; clientVersion: string }, language: ResolvedYouTubeLanguage): Promise<any> {
   const response = await fetch(`https://www.youtube.com/youtubei/v1/browse?prettyPrint=false&key=${encodeURIComponent(config.apiKey)}`, {
     method: "POST",
     headers: { ...requestHeaders(language), "Content-Type": "application/json", Origin: "https://www.youtube.com" },
-    body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion: config.clientVersion, hl: language, gl: "US" } }, continuation: token }),
+    body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion: config.clientVersion, hl: language.hl, gl: "US" } }, continuation: token }),
   });
   return JSON.parse(await readYouTubeResponse(response, "posts continuation fetch failed"));
 }
 
-async function fetchFresh(channelId: string, language: string): Promise<PostsCacheEntry> {
-  const response = await fetch(`https://www.youtube.com/channel/${encodeURIComponent(channelId)}/posts?hl=${encodeURIComponent(language)}`, { headers: requestHeaders(language) });
+async function fetchFresh(channelId: string, language: ResolvedYouTubeLanguage): Promise<PostsCacheEntry> {
+  const response = await fetch(`https://www.youtube.com/channel/${encodeURIComponent(channelId)}/posts?hl=${encodeURIComponent(language.hl)}`, { headers: requestHeaders(language) });
   const html = await readYouTubeResponse(response, "posts fetch failed");
   const data = extractInitialData(html);
   const posts = parseChannelPosts(data);
@@ -195,8 +191,9 @@ async function fetchFresh(channelId: string, language: string): Promise<PostsCac
   return entry;
 }
 
-export async function fetchChannelPosts(channelId: string, force = false, language = "en"): Promise<{ posts: ChannelPost[]; fetchedAt: string; cached: boolean }> {
-  const cacheKey = `${language}:${channelId}`;
+export async function fetchChannelPosts(channelId: string, force = false, userId?: number): Promise<{ posts: ChannelPost[]; fetchedAt: string; cached: boolean }> {
+  const language = resolveYouTubeLanguage(userId);
+  const cacheKey = `${language.cacheKey}:${channelId}`;
   const cached = postsCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.at < POSTS_TTL_MS) {
     return { posts: cached.posts, fetchedAt: new Date(cached.at).toISOString(), cached: true };

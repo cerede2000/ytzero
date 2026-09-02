@@ -2,7 +2,8 @@ import { decodeHtmlEntities } from "./htmlEntities";
 import type { ChannelSearchResult, PublishedAgo, SearchResult } from "./youtube";
 
 interface YoutubeSearchDependencies {
-  FETCH_HEADERS: Record<string, string>;
+  requestHeaders: (userId?: number) => Record<string, string>;
+  resolveCacheKey: (userId?: number) => string;
   cleanSubscriberCount: (text: string) => string;
   deepCollect: (node: any, key: string, out?: any[]) => any[];
   extractInitialData: (html: string) => any | null;
@@ -49,7 +50,8 @@ export function parseAbbreviatedCount(text: string): number | null {
 
 export function createYoutubeSearch(dependencies: YoutubeSearchDependencies) {
   const {
-    FETCH_HEADERS,
+    requestHeaders,
+    resolveCacheKey,
     cleanSubscriberCount,
     deepCollect,
     extractInitialData,
@@ -180,9 +182,9 @@ function collectSearchChannels(data: any): ChannelSearchResult[] {
   return channels;
 }
 
-async function fetchSearchData(query: string, filter = ""): Promise<any | null> {
+async function fetchSearchData(query: string, filter = "", userId?: number): Promise<any | null> {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${filter}`;
-  const res = await fetch(url, { headers: FETCH_HEADERS });
+  const res = await fetch(url, { headers: requestHeaders(userId) });
   if (!res.ok) throw new Error(`YouTube search failed (${res.status})`);
   return extractInitialData(await res.text());
 }
@@ -192,11 +194,12 @@ async function fetchSearchData(query: string, filter = ""): Promise<any | null> 
 // re-query with this filter when no channel surfaced.
 const SEARCH_CHANNEL_FILTER = "&sp=EgIQAg%3D%3D";
 
-async function searchYouTube(query: string): Promise<{ results: SearchResult[]; channels: ChannelSearchResult[] }> {
-  const cached = searchCache.get(query);
+async function searchYouTube(query: string, userId?: number): Promise<{ results: SearchResult[]; channels: ChannelSearchResult[] }> {
+  const cacheKey = `${resolveCacheKey(userId)}:${query}`;
+  const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.at < SEARCH_TTL) return cached.data;
 
-  const data = await fetchSearchData(query);
+  const data = await fetchSearchData(query, "", userId);
   if (!data) throw new Error("YouTube search returned no data (bot challenge or layout change)");
 
   const results = collectSearchVideos(data);
@@ -206,7 +209,7 @@ async function searchYouTube(query: string): Promise<{ results: SearchResult[]; 
   // a channel-filtered follow-up reliably brings it back.
   if (channels.length === 0) {
     try {
-      const channelData = await fetchSearchData(query, SEARCH_CHANNEL_FILTER);
+      const channelData = await fetchSearchData(query, SEARCH_CHANNEL_FILTER, userId);
       if (channelData) channels = collectSearchChannels(channelData);
     } catch {
       // Keep the (empty) channel list rather than failing the whole search.
@@ -214,7 +217,7 @@ async function searchYouTube(query: string): Promise<{ results: SearchResult[]; 
   }
 
   const result = { results: results.slice(0, 20), channels: channels.slice(0, 10) };
-  searchCache.set(query, { at: Date.now(), data: result });
+  searchCache.set(cacheKey, { at: Date.now(), data: result });
   return result;
 }
 

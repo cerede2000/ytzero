@@ -209,6 +209,8 @@ db.exec("UPDATE videos SET bucket = 'tonight' WHERE bucket = 'evening';");
 
 export const SETTING_DEFAULTS: Record<string, string> = {
   language: "en",
+  // YouTube title localization follows the profile language unless explicitly pinned.
+  youtube_title_language: "profile",
   // 0 = no Shorts in Main, selected = opted-in channels, 1 = every channel.
   // Keeping the legacy 0/1 values makes existing databases and backups retain
   // their exact behaviour without a data migration.

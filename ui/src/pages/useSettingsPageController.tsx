@@ -16,7 +16,7 @@ import { PlaylistIconPicker } from "../components/PlaylistIcon";
 import { TableSkeleton } from "../components/LoadingState";
 import Popconfirm from "../components/Popconfirm";
 import { emit } from "../events";
-import { formatAgeUnit, formatVideoCount, LANGUAGES, languageName, useI18n, type I18nKey } from "../i18n";
+import { formatAgeUnit, formatVideoCount, LANGUAGES, languageName, useI18n, type I18nKey, type Language } from "../i18n";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { applyWatchedStyle, parseWatchedStyle, WATCHED_STYLES, type WatchedStyle } from "../watchedStyle";
 import { applyVideoCardActionsMode, parseVideoCardActionsMode, type VideoCardActionsMode } from "../videoCardActions";
@@ -156,6 +156,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
   const [appName, setAppName] = useState("YT Zero");
   const [appNameInput, setAppNameInput] = useState("YT Zero");
   const [appIconColor, setAppIconColor] = useState("#0a5fff");
+  const [youtubeTitleLanguage, setYoutubeTitleLanguage] = useState<"profile" | Language>("profile");
   const [timeZoneLocked, setTimeZoneLocked] = useState(false);
   // App-wide settings (app name, icon color, timezone, child lock) are owned by the
   // primary profile; other profiles see them read-only.
@@ -432,6 +433,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
       setAppName(name);
       setAppNameInput(name);
       setAppIconColor(r.settings.app_icon_color || "#0a5fff");
+      setYoutubeTitleLanguage(r.settings.youtube_title_language === "profile" || LANGUAGES.includes(r.settings.youtube_title_language) ? r.settings.youtube_title_language : "profile");
       setTimeZoneLocked(Boolean(r.settings_meta?.timezone_locked));
       setUpdateCheckInterval(r.settings.update_check_interval || "off");
       setShortsFeedMode(r.settings.show_shorts === "disabled" || r.settings.show_shorts === "1" || r.settings.show_shorts === "selected" ? r.settings.show_shorts : "0");
@@ -720,6 +722,18 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     await api.updateSettings({ watched_style: next });
     emit("watched-style-changed");
     showToast(t("displaySettingsSaved"));
+  };
+
+  const changeYoutubeTitleLanguage = async (next: "profile" | Language) => {
+    const previous = youtubeTitleLanguage;
+    setYoutubeTitleLanguage(next);
+    try {
+      await api.updateSettings({ youtube_title_language: next });
+      showToast(t("displaySettingsSaved"));
+    } catch (error) {
+      setYoutubeTitleLanguage(previous);
+      showToast(error instanceof Error ? error.message : t("error"));
+    }
   };
 
   const changeVideoCardActions = async (next: VideoCardActionsMode) => {
@@ -1162,6 +1176,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     changeFeedAutoplayDirection,
     changeFeedMaxAge,
     changeMembersOnlyVisibility,
+    changeYoutubeTitleLanguage,
     changeWatchedStyle,
     changelog,
     changelogRemoteError,
@@ -1351,5 +1366,6 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     watchedStyle,
     videoCardActions, changeVideoCardActions,
     videoCardActionConfig, changeVideoCardActionConfig,
+    youtubeTitleLanguage,
   };
 }

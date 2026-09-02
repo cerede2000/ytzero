@@ -10,6 +10,7 @@ import { configuredTimeZone, isValidTimeZone, timeZoneIsEnvironmentLocked } from
 import { normalizeKeyboardShortcutSetting } from "../keyboardShortcutSettings";
 import { isLanguage } from "../../../shared/uiLanguages";
 import { removeRoleFromExternalMappings } from "../externalRoleMappings";
+import { normalizeYouTubeTitleLanguage } from "../youtubeRequestLanguage";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>; type ApiContext = Context<ApiEnvironment>;
@@ -234,6 +235,9 @@ api.put("/settings", async (c) => {
   if (!body || typeof body !== "object" || Array.isArray(body)) return c.json({ error: "settings must be an object" }, 400);
   if (Object.keys(body).some((key) => !(key in SETTING_DEFAULTS))) return c.json({ error: "unknown setting" }, 400);
   if ("language" in body && !isLanguage(body.language)) return c.json({ error: "unsupported interface language" }, 400);
+  if ("youtube_title_language" in body && normalizeYouTubeTitleLanguage(body.youtube_title_language) !== body.youtube_title_language) {
+    return c.json({ error: "unsupported video title language" }, 400);
+  }
   if ("timezone" in body && timeZoneIsEnvironmentLocked()) return c.json({ error: "timezone is controlled by the TZ environment variable" }, 409);
   if ("timezone" in body && !isValidTimeZone(body.timezone)) return c.json({ error: "invalid timezone" }, 400);
   const videoCardSettingsError = validateVideoCardSettings(body); if (videoCardSettingsError) return c.json({ error: videoCardSettingsError }, 400);

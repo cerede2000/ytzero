@@ -26,14 +26,14 @@ async function audioVideo(videoId: string): Promise<AudioVideoState | null> {
     .get(videoId) as AudioVideoState | null;
 }
 
-async function refreshAudioVideoState(videoId: string, source: string): Promise<AudioVideoState | null> {
+async function refreshAudioVideoState(videoId: string, source: string, userId?: number): Promise<AudioVideoState | null> {
   const previous = await audioVideo(videoId);
   if (!previous) return null;
   try {
     // A missing progressive format can be the first evidence that an RSS row
     // was actually imported for an active livestream. Bypass the short video
     // info cache here because this path exists specifically to repair state.
-    const info = await fetchVideoInfo(videoId, { force: true });
+    const info = await fetchVideoInfo(videoId, { force: true, userId });
     await persistDirectVideoInfo(info);
     const current = await audioVideo(videoId);
     if (current && current.live_status !== previous.live_status) {
@@ -71,7 +71,7 @@ export function registerAudioRoutes(api: Api, currentUserId: (context: ApiContex
     let resolved = await retryAudioSource(userId, videoId, live, context.req.raw.signal);
     if (resolved) return context.json({ ok: true, live });
 
-    const refreshed = await refreshAudioVideoState(videoId, "audio_retry");
+    const refreshed = await refreshAudioVideoState(videoId, "audio_retry", userId);
     const correctedLive = refreshed?.live_status === "live";
     if (refreshed && correctedLive !== live) {
       const eligible = correctedLive ? liveAudioVideoIsEligible(refreshed) : audioVideoIsEligible(refreshed);
@@ -116,7 +116,7 @@ export function registerAudioRoutes(api: Api, currentUserId: (context: ApiContex
       ? await getAudioHeadResponse(userId, videoId, range, context.req.raw.signal)
       : await getAudioResponse(userId, videoId, range, context.req.raw.signal);
     if (response) return response;
-    const refreshed = await refreshAudioVideoState(videoId, "progressive_audio_failure");
+    const refreshed = await refreshAudioVideoState(videoId, "progressive_audio_failure", userId);
     if (refreshed?.live_status === "live") {
       return context.json({ error: "video is live", code: "video_is_live" }, 409);
     }
@@ -135,7 +135,7 @@ export function registerAudioRoutes(api: Api, currentUserId: (context: ApiContex
     if (resource === "index.m3u8") {
       const playlist = await getLiveAudioPlaylist(userId, videoId, context.req.raw.signal);
       if (!playlist) {
-        const refreshed = await refreshAudioVideoState(videoId, "live_audio_failure");
+        const refreshed = await refreshAudioVideoState(videoId, "live_audio_failure", userId);
         if (refreshed && refreshed.live_status !== "live") {
           return context.json({ error: "video is no longer live", code: "video_is_not_live" }, 409);
         }

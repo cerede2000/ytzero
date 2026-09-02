@@ -18,7 +18,7 @@ access.
 
 ## Experience settings
 
-- **Appearance** controls the interface language, application identity, video-card density, and watched-video style.
+- **Appearance** controls the interface language, YouTube video-title language, application identity, video-card density, and watched-video style. Video titles follow the profile language by default, or can be pinned to another supported language.
 - **Feed** controls the feed age window and visibility of Shorts, live, Upcoming, and members-only content. Shorts can be hidden, shown for selected channels, or shown for every followed channel; a channel opt-in affects only the main feed.
 - **Navigation** controls Shorts, top channels, and the order and visibility of sidebar destinations.
 - **Playback** controls related videos, on-demand comments, list continuation, player language, quality, speed, keyboard seeking, and automatic landscape fullscreen. Download configuration also offers a default remote player: YouTube embed or a direct, no-disk MP4 stream.
