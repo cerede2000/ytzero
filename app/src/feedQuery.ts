@@ -1,10 +1,10 @@
 import { getUserSetting } from "./db";
 import { childHidesLive } from "./childTime";
-import { feedSortSql, filterOnlySql, followedExists, followedPlaylistExists, tagFilterSql } from "./feedQueryFragments";
+import { feedSortSql, filterOnlySql, followedExists, followedPlaylistExists, profileVideoOwnershipExists, tagFilterSql } from "./feedQueryFragments";
 import { feedMaxAgeCutoff } from "./feedMaxAge";
 import { pluginEnabled } from "./plugins";
 
-export { feedSortSql, filterOnlySql, followedExists, followedPlaylistExists, tagFilterSql };
+export { feedSortSql, filterOnlySql, followedExists, followedPlaylistExists, profileVideoOwnershipExists, tagFilterSql };
 
 export function feedSourceExists(uid: number): string {
   const archived = pluginEnabled("tubearchivist")

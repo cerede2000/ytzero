@@ -69,6 +69,40 @@ export function followedPlaylistExists(uid: number) {
   )`;
 }
 
+/**
+ * EXISTS fragment: this video belongs to the active profile's library or has
+ * durable state created by that profile. The catalog itself is shared across
+ * profiles, so recommendation-style projections must use this guard instead
+ * of treating every globally cached video as visible to everyone.
+ */
+export function profileVideoOwnershipExists(uid: number) {
+  return `(
+    ${followedExists(uid)}
+    OR ${followedPlaylistExists(uid)}
+    OR EXISTS (SELECT 1 FROM user_videos uv_owner WHERE uv_owner.video_id = v.video_id AND uv_owner.user_id = ${uid})
+    OR EXISTS (SELECT 1 FROM history h_owner WHERE h_owner.video_id = v.video_id AND h_owner.user_id = ${uid})
+    OR EXISTS (
+      SELECT 1 FROM video_tags vt_owner
+      JOIN tags vt_owner_tag ON vt_owner_tag.id = vt_owner.tag_id
+      WHERE vt_owner.video_id = v.video_id AND vt_owner_tag.user_id = ${uid}
+    )
+    OR EXISTS (
+      SELECT 1 FROM channel_tags ct_owner
+      JOIN tags ct_owner_tag ON ct_owner_tag.id = ct_owner.tag_id
+      WHERE ct_owner.channel_id = v.channel_id AND ct_owner_tag.user_id = ${uid}
+    )
+    OR EXISTS (
+      SELECT 1 FROM user_playlist_videos upv_owner
+      JOIN user_playlists up_owner ON up_owner.id = upv_owner.playlist_id
+      WHERE upv_owner.video_id = v.video_id AND up_owner.user_id = ${uid}
+    )
+    OR EXISTS (SELECT 1 FROM bookmarks b_owner WHERE b_owner.video_id = v.video_id AND b_owner.user_id = ${uid})
+    OR EXISTS (SELECT 1 FROM download_owners do_owner WHERE do_owner.video_id = v.video_id AND do_owner.user_id = ${uid})
+    OR EXISTS (SELECT 1 FROM discovery_recommendations dr_owner WHERE dr_owner.video_id = v.video_id AND dr_owner.user_id = ${uid})
+    OR EXISTS (SELECT 1 FROM social_posts sp_owner WHERE sp_owner.video_id = v.video_id AND sp_owner.author_user_id = ${uid})
+  )`;
+}
+
 export type FeedSort = "published" | "arrival";
 
 export function feedSortSql(sort: FeedSort = "published") {
