@@ -42,4 +42,10 @@ describe("download failure notifications", () => {
     expect(result.nextCycleCreated).toBe(1);
     expect(result.finalCount).toBe(2);
   });
+
+  test("uses an opt-in channel default and lets the profile master switch win", () => {
+    expect(result.channelDefaultCreated).toBe(0);
+    expect(result.channelOverrideCreated).toBe(1);
+    expect(result.masterDisabledCreated).toBe(0);
+  });
 });

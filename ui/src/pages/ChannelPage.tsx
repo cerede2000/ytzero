@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import "./ChannelPage.css";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { CalendarClock, Captions, Check, ChevronLeft, ChevronRight, ExternalLink, FileClock, Gauge, ListRestart, ListVideo, MessageSquareText, Plus, Radio, RefreshCw, Search, SlidersHorizontal, Star, UserMinus, UserPlus, Video as VideoIcon, X, Zap } from "lucide-react";
+import { Bell, CalendarClock, Captions, ExternalLink, FileClock, Gauge, ListRestart, ListVideo, MessageSquareText, Plus, Radio, RefreshCw, Search, Star, UserMinus, UserPlus, Video as VideoIcon, X, Zap } from "lucide-react";
 import { api, type ChannelAbout, type ChannelManualStatus, type ChannelShortsFeedVisibility, type MembersOnlyVisibility, type PlaylistInfo, type Tag, type Video } from "../api";
 import { resolvePlaybackSpeeds } from "../../../shared/playbackSpeeds";
 import TagChip from "../components/TagChip";
@@ -15,13 +15,16 @@ import { emit } from "../events";
 import { formatAddedVideos, formatPlaylistVideoCount, useI18n } from "../i18n";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { SUBTITLE_LANGUAGES, subtitleLanguageLabel } from "../subtitleLanguages";
-import { Badge, Button, ButtonAnchor, EmptyState, IconButton, Input, Menu, MenuHeader, MenuItem, MenuLabel, MenuSeparator, MenuStatus, Popover, ScrollArea, SectionHeader, SplitButton, Tabs } from "../components/ui";
+import { Badge, Button, ButtonAnchor, EmptyState, Input, MenuItem, Popover, SectionHeader, SplitButton, Tabs } from "../components/ui";
 import { formatAppDate, parseAppTimestamp } from "../dateTime";
 import ChannelRefreshScheduleDialog from "../components/ChannelRefreshScheduleDialog";
 import { markYouTubeUrl } from "../youtubeUrl";
 import { isChannelSyncRateLimitMessage } from "../channelSync";
 import { useChannelSyncActivity } from "../useChannelSyncActivity";
 import ChannelPosts from "../components/ChannelPosts";
+import NotificationSourceMenu from "../components/NotificationSourceMenu";
+import type { NotificationSourceMode } from "../components/NotificationSourceSelect";
+import { HeaderSettingsHeader, HeaderSettingsItem, HeaderSettingsOption, HeaderSettingsPopover, HeaderSettingsScroll, HeaderSettingsSectionLabel, HeaderSettingsSeparator } from "../components/HeaderSettingsMenu";
 
 type Tab = "videos" | "shorts" | "playlists" | "posts" | "processing";
 // Matches the server's default /feed page size.
@@ -56,7 +59,9 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
   const [technicalOpen, setTechnicalOpen] = useState(false);
   const [refreshScheduleOpen, setRefreshScheduleOpen] = useState(false);
   const [startedSyncJobId, setStartedSyncJobId] = useState<string | null>(null);
-  const [technicalView, setTechnicalView] = useState<"root" | "speed" | "captions" | "members" | "shorts">("root");
+  const [technicalView, setTechnicalView] = useState<"root" | "speed" | "captions" | "members" | "shorts" | "notifications">("root");
+  const [notificationMode, setNotificationMode] = useState<NotificationSourceMode>("default");
+  const [notificationPending, setNotificationPending] = useState(false);
   useEffect(() => { if (!shortsEnabled && technicalView === "shorts") setTechnicalView("root"); }, [shortsEnabled, technicalView]);
   const [channelTags, setChannelTags] = useState<Tag[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
@@ -118,6 +123,7 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
     setCaptionLanguage(null);
     setMembersOnlyVisibility("default");
     setShortsFeedVisibility("default");
+    setNotificationMode("default");
     setStartedSyncJobId(null);
     window.scrollTo(0, 0);
     api.channelAbout(id).then((about) => { setAbout(about); emit("channels-changed"); }).catch(console.error);
@@ -147,6 +153,10 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
       .finally(() => setProcessingLoading(false));
     api.channelLive(id).then((r) => setLiveStreams(r.videos)).catch(console.error);
     api.channelPlaylists(id).then((r) => setPlaylists(r.playlists)).catch(() => setPlaylists([]));
+    api.notificationPreferences().then((preferences) => {
+      const value = preferences.channels.find((source) => source.channel_id === id)?.notification_enabled;
+      setNotificationMode(value == null ? "default" : value === 1 ? "on" : "off");
+    }).catch(console.error);
     setTagsLoading(true);
     api.tags().then((r) => setAllTags(r.tags)).catch(console.error).finally(() => setTagsLoading(false));
   }, [id]);
@@ -251,6 +261,19 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
         setMembersOnlyVisibility(previous);
         console.error(error);
       });
+  };
+
+  const changeNotificationMode = async (next: NotificationSourceMode) => {
+    if (!id || !followed || notificationPending) return;
+    const previous = notificationMode;
+    setNotificationMode(next);
+    setNotificationPending(true);
+    try {
+      await api.updateNotificationSource("channel", id, next === "default" ? null : next === "on");
+    } catch (error) {
+      setNotificationMode(previous);
+      console.error(error);
+    } finally { setNotificationPending(false); }
   };
 
   const shortsFeedLabel = shortsFeedVisibility === "show"
@@ -532,112 +555,73 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
             {followed ? <UserMinus size={15} /> : <UserPlus size={15} />}
             {followed ? t("unfollow") : t("follow")}
           </Button>
-          <Popover
-            align="end"
-            surface="menu"
+          <HeaderSettingsPopover
             open={technicalOpen}
             onOpenChange={setTechnicalOpen}
-            className="channel-technical-popover"
-            trigger={<IconButton variant={technicalOpen ? "secondary" : "default"} label={t("channelTechnicalSettings")}><SlidersHorizontal size={16} /></IconButton>}
+            label={t("channelTechnicalSettings")}
           >
-              <Menu className="channel-technical-menu">
                 {technicalView === "root" && (
                   <>
-                    <div className="more-menu-section-label">{t("channelPlayback")}</div>
-                    <button className="channel-technical-item" onClick={() => setTechnicalView("speed")}>
-                      <Gauge /> <span>{t("channelSpeed")}</span><MenuStatus>{channelSpeed ? `${channelSpeed}×` : t("channelSettingDefault")}</MenuStatus><ChevronRight />
-                    </button>
-                    <button className="channel-technical-item" onClick={() => setTechnicalView("captions")}>
-                      <Captions /> <span>{t("subtitles")}</span><MenuStatus>{captionsLabel}</MenuStatus><ChevronRight />
-                    </button>
-                    <MenuSeparator />
-                    <div className="more-menu-section-label">{t("channelFeed")}</div>
-                    {withFeedSettingsTooltip(<button className="channel-technical-item" disabled={!followed} onClick={() => { setTechnicalOpen(false); setRefreshScheduleOpen(true); }}>
-                      <CalendarClock /> <span>{t("channelRefreshSchedule")}</span><ChevronRight />
-                    </button>)}
-                    {withFeedSettingsTooltip(<button className="channel-technical-item" disabled={!followed} onClick={() => setTechnicalView("members")}>
-                      <Star /> <span>{t("channelMembersOnlyFeed")}</span><MenuStatus>{membersOnlyFeedLabel}</MenuStatus><ChevronRight />
-                    </button>)}
-                    {shortsEnabled && withFeedSettingsTooltip(<button className="channel-technical-item" disabled={!followed} onClick={() => setTechnicalView("shorts")}>
-                      <Zap /> <span>{t("channelShortsFeed")}</span><MenuStatus>{shortsFeedLabel}</MenuStatus><ChevronRight />
-                    </button>)}
+                    <HeaderSettingsSectionLabel>{t("channelPlayback")}</HeaderSettingsSectionLabel>
+                    <HeaderSettingsItem icon={<Gauge />} label={t("channelSpeed")} status={channelSpeed ? `${channelSpeed}×` : t("channelSettingDefault")} onClick={() => setTechnicalView("speed")} />
+                    <HeaderSettingsItem icon={<Captions />} label={t("subtitles")} status={captionsLabel} onClick={() => setTechnicalView("captions")} />
+                    <HeaderSettingsSeparator />
+                    <HeaderSettingsSectionLabel>{t("channelFeed")}</HeaderSettingsSectionLabel>
+                    {withFeedSettingsTooltip(<HeaderSettingsItem icon={<CalendarClock />} label={t("channelRefreshSchedule")} disabled={!followed} onClick={() => { setTechnicalOpen(false); setRefreshScheduleOpen(true); }} />)}
+                    {withFeedSettingsTooltip(<HeaderSettingsItem icon={<Star />} label={t("channelMembersOnlyFeed")} status={membersOnlyFeedLabel} disabled={!followed} onClick={() => setTechnicalView("members")} />)}
+                    {shortsEnabled && withFeedSettingsTooltip(<HeaderSettingsItem icon={<Zap />} label={t("channelShortsFeed")} status={shortsFeedLabel} disabled={!followed} onClick={() => setTechnicalView("shorts")} />)}
+                    {withFeedSettingsTooltip(<HeaderSettingsItem icon={<Bell />} label={t("notificationChannelUploads")} status={notificationMode === "default" ? t("notificationSourceDefaultOff") : notificationMode === "on" ? t("notificationSourceAlwaysOn") : t("notificationSourceAlwaysOff")} disabled={!followed} onClick={() => setTechnicalView("notifications")} />)}
                   </>
                 )}
                 {technicalView === "speed" && (
                   <>
-                    <div className="more-menu-header"><button className="more-menu-back" onClick={() => setTechnicalView("root")}><ChevronLeft /></button>{t("channelSpeed")}</div>
-                    <button className={!channelSpeed ? "is-selected" : undefined} onClick={() => changeSpeed(null)}>
-                      {t("channelSettingDefault")}
-                      {!channelSpeed && <MenuStatus><Check size={14} /></MenuStatus>}
-                    </button>
-                    <MenuSeparator className="channel-technical-spacer" />
+                    <HeaderSettingsHeader onBack={() => setTechnicalView("root")} backLabel={t("back")}>{t("channelSpeed")}</HeaderSettingsHeader>
+                    <HeaderSettingsOption selected={!channelSpeed} onClick={() => changeSpeed(null)}>{t("channelSettingDefault")}</HeaderSettingsOption>
+                    <HeaderSettingsSeparator spacer />
                     {playbackSpeeds.map((speed) => (
-                      <button key={speed} className={channelSpeed === speed ? "is-selected" : undefined} onClick={() => changeSpeed(speed)}>
-                        {speed === "1" ? "1×" : `${speed}×`}
-                        {channelSpeed === speed && <MenuStatus><Check size={14} /></MenuStatus>}
-                      </button>
+                      <HeaderSettingsOption key={speed} selected={channelSpeed === speed} onClick={() => changeSpeed(speed)}>{speed === "1" ? "1×" : `${speed}×`}</HeaderSettingsOption>
                     ))}
                   </>
                 )}
                 {technicalView === "captions" && (
                   <>
-                    <div className="more-menu-header"><button className="more-menu-back" onClick={() => setTechnicalView("root")}><ChevronLeft /></button>{t("subtitles")}</div>
-                    <ScrollArea viewportClassName="channel-technical-scroll">
-                      <button className={captionMode == null ? "is-selected" : undefined} onClick={() => changeCaptions(null)}>
-                        {t("channelSettingDefault")}
-                        {captionMode == null && <MenuStatus><Check size={14} /></MenuStatus>}
-                      </button>
-                      <button className={captionMode === "off" ? "is-selected" : undefined} onClick={() => changeCaptions("off")}>
-                        {t("captionsOff")}
-                        {captionMode === "off" && <MenuStatus><Check size={14} /></MenuStatus>}
-                      </button>
-                      <MenuSeparator />
+                    <HeaderSettingsHeader onBack={() => setTechnicalView("root")} backLabel={t("back")}>{t("subtitles")}</HeaderSettingsHeader>
+                    <HeaderSettingsScroll>
+                      <HeaderSettingsOption selected={captionMode == null} onClick={() => changeCaptions(null)}>{t("channelSettingDefault")}</HeaderSettingsOption>
+                      <HeaderSettingsOption selected={captionMode === "off"} onClick={() => changeCaptions("off")}>{t("captionsOff")}</HeaderSettingsOption>
+                      <HeaderSettingsSeparator />
                       {SUBTITLE_LANGUAGES.map((language) => (
-                        <button key={language.code} className={captionMode === "language" && captionLanguage === language.code ? "is-selected" : undefined} onClick={() => changeCaptions("language", language.code)}>
-                          {language.label}
-                          {captionMode === "language" && captionLanguage === language.code && <MenuStatus><Check size={14} /></MenuStatus>}
-                        </button>
+                        <HeaderSettingsOption key={language.code} selected={captionMode === "language" && captionLanguage === language.code} onClick={() => changeCaptions("language", language.code)}>{language.label}</HeaderSettingsOption>
                       ))}
-                    </ScrollArea>
+                    </HeaderSettingsScroll>
                   </>
                 )}
                 {technicalView === "members" && (
                   <>
-                    <div className="more-menu-header"><button className="more-menu-back" onClick={() => setTechnicalView("root")}><ChevronLeft /></button>{t("channelMembersOnlyFeed")}</div>
-                    <button className={membersOnlyVisibility === "default" ? "is-selected" : undefined} onClick={() => changeMembersOnlyVisibility("default")}>
-                      {t("channelSettingDefault")}
-                      {membersOnlyVisibility === "default" && <MenuStatus><Check size={14} /></MenuStatus>}
-                    </button>
-                    <MenuSeparator className="channel-technical-spacer" />
-                    <button className={membersOnlyVisibility === "everywhere" ? "is-selected" : undefined} onClick={() => changeMembersOnlyVisibility("everywhere")}>
-                      {t("channelMembersOnlyEverywhere")}
-                      {membersOnlyVisibility === "everywhere" && <MenuStatus><Check size={14} /></MenuStatus>}
-                    </button>
-                    <button className={membersOnlyVisibility === "channel" ? "is-selected" : undefined} onClick={() => changeMembersOnlyVisibility("channel")}>
-                      {t("channelMembersOnlyChannelOnly")}
-                      {membersOnlyVisibility === "channel" && <MenuStatus><Check size={14} /></MenuStatus>}
-                    </button>
-                    <button className={membersOnlyVisibility === "hidden" ? "is-selected" : undefined} onClick={() => changeMembersOnlyVisibility("hidden")}>
-                      {t("channelMembersOnlyNowhere")}
-                      {membersOnlyVisibility === "hidden" && <MenuStatus><Check size={14} /></MenuStatus>}
-                    </button>
+                    <HeaderSettingsHeader onBack={() => setTechnicalView("root")} backLabel={t("back")}>{t("channelMembersOnlyFeed")}</HeaderSettingsHeader>
+                    <HeaderSettingsOption selected={membersOnlyVisibility === "default"} onClick={() => changeMembersOnlyVisibility("default")}>{t("channelSettingDefault")}</HeaderSettingsOption>
+                    <HeaderSettingsSeparator spacer />
+                    <HeaderSettingsOption selected={membersOnlyVisibility === "everywhere"} onClick={() => changeMembersOnlyVisibility("everywhere")}>{t("channelMembersOnlyEverywhere")}</HeaderSettingsOption>
+                    <HeaderSettingsOption selected={membersOnlyVisibility === "channel"} onClick={() => changeMembersOnlyVisibility("channel")}>{t("channelMembersOnlyChannelOnly")}</HeaderSettingsOption>
+                    <HeaderSettingsOption selected={membersOnlyVisibility === "hidden"} onClick={() => changeMembersOnlyVisibility("hidden")}>{t("channelMembersOnlyNowhere")}</HeaderSettingsOption>
                   </>
                 )}
                 {shortsEnabled && technicalView === "shorts" && (
                   <>
-                    <div className="more-menu-header"><button className="more-menu-back" onClick={() => setTechnicalView("root")}><ChevronLeft /></button>{t("channelShortsFeed")}</div>
-                    <button className={shortsFeedVisibility === "default" ? "is-selected" : undefined} onClick={() => changeShortsFeedVisibility("default")}>
-                      {t("channelSettingDefault")}
-                      {shortsFeedVisibility === "default" && <MenuStatus><Check size={14} /></MenuStatus>}
-                    </button>
-                    <button className={shortsFeedVisibility === "show" ? "is-selected" : undefined} onClick={() => changeShortsFeedVisibility("show")}>
-                      {t("channelShortsFeedShow")}
-                      {shortsFeedVisibility === "show" && <MenuStatus><Check size={14} /></MenuStatus>}
-                    </button>
+                    <HeaderSettingsHeader onBack={() => setTechnicalView("root")} backLabel={t("back")}>{t("channelShortsFeed")}</HeaderSettingsHeader>
+                    <HeaderSettingsOption selected={shortsFeedVisibility === "default"} onClick={() => changeShortsFeedVisibility("default")}>{t("channelSettingDefault")}</HeaderSettingsOption>
+                    <HeaderSettingsOption selected={shortsFeedVisibility === "show"} onClick={() => changeShortsFeedVisibility("show")}>{t("channelShortsFeedShow")}</HeaderSettingsOption>
                   </>
                 )}
-              </Menu>
-          </Popover>
+                {technicalView === "notifications" && <NotificationSourceMenu
+                  mode={notificationMode}
+                  defaultEnabled={false}
+                  title={t("notificationChannelUploads")}
+                  disabled={notificationPending}
+                  onBack={() => setTechnicalView("root")}
+                  onChange={(mode) => void changeNotificationMode(mode)}
+                />}
+          </HeaderSettingsPopover>
           {id && <ChannelRefreshScheduleDialog channelId={id} open={refreshScheduleOpen} onOpenChange={setRefreshScheduleOpen} />}
           <ButtonAnchor href={markYouTubeUrl(`https://www.youtube.com/channel/${id}`)} target="_blank" rel="noreferrer" leadingIcon={<ExternalLink />}>YouTube</ButtonAnchor>
         </div>

@@ -265,6 +265,23 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
       { kind: "add-column", table: "auth_sessions", column: "permission_group_uuid", definition: "TEXT" },
     ],
   },
+  {
+    version: 104,
+    name: "profile-notification-preferences",
+    schemaHashes: {
+      "app/src/schema.sql": "8c0bc0ca87a8b3ad0ca28d09f3ec500d6463427899476fa6414097fae737b777",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+    },
+    sqlite: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS notification_preferences (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, kind TEXT NOT NULL, source_id TEXT NOT NULL DEFAULT '', enabled INTEGER NOT NULL CHECK (enabled IN (0,1)), PRIMARY KEY (user_id,kind,source_id))" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_notification_preferences_user ON notification_preferences(user_id)" },
+    ],
+    postgres: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS notification_preferences (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, kind TEXT NOT NULL, source_id TEXT NOT NULL DEFAULT '', enabled INTEGER NOT NULL CHECK (enabled IN (0,1)), PRIMARY KEY (user_id,kind,source_id))" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_notification_preferences_user ON notification_preferences(user_id)" },
+    ],
+  },
 ];
 
 function quoteIdentifier(identifier: string): string {

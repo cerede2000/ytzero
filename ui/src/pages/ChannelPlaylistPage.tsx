@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import "./ChannelPlaylistPage.css";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Download, FileClock, ListMinus, ListPlus, MoreHorizontal, RefreshCw } from "lucide-react";
+import { Bell, Download, FileClock, ListFilter, ListMinus, ListPlus, MoreHorizontal, RefreshCw } from "lucide-react";
 import { api, type FollowedPlaylist, type Video } from "../api";
 import VideoCard from "../components/VideoCard";
 import { VideoGridSkeleton } from "../components/LoadingState";
 import { useI18n } from "../i18n";
 import { useDocumentTitle } from "../useDocumentTitle";
-import { EmptyState, IconButton, LocalToast, Menu, MenuItem, MenuSeparator, Popover, SectionHeader, SelectMenu } from "../components/ui";
+import { EmptyState, IconButton, LocalToast, Menu, MenuItem, MenuSeparator, Popover, SectionHeader } from "../components/ui";
 import Popconfirm from "../components/Popconfirm";
 import ChannelPlaylistHero from "../components/ChannelPlaylistHero";
 import PlaylistPlaybackActions from "../components/PlaylistPlaybackActions";
 import { normalizePlaylistSort, playlistSortSearch, type PlaylistSort } from "../playlistSort";
 import { videosInPlaylistOrder } from "../playlistPlayback";
+import NotificationSourceMenu from "../components/NotificationSourceMenu";
+import type { NotificationSourceMode } from "../components/NotificationSourceSelect";
+import { HeaderSettingsHeader, HeaderSettingsItem, HeaderSettingsOption, HeaderSettingsPopover } from "../components/HeaderSettingsMenu";
 
 export default function ChannelPlaylistPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,14 +33,20 @@ export default function ChannelPlaylistPage() {
   const [downloadPending, setDownloadPending] = useState(false);
   const [downloadFeedback, setDownloadFeedback] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState<"root" | "sort" | "notifications">("root");
+  const [notificationMode, setNotificationMode] = useState<NotificationSourceMode>("default");
+  const [notificationSaving, setNotificationSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [details, contents] = await Promise.all([api.channelPlaylist(id), api.channelPlaylistVideos(id, sort)]);
+    const [details, contents, preferences] = await Promise.all([api.channelPlaylist(id), api.channelPlaylistVideos(id, sort), api.notificationPreferences()]);
     setPlaylist(details.playlist);
     setVideos(contents.videos);
     setProcessingVideos(contents.processing);
     setVideoOrder(contents.order);
+    const value = preferences.playlists.find((source) => source.playlist_id === id)?.notification_enabled;
+    setNotificationMode(value == null ? "default" : value === 1 ? "on" : "off");
   }, [id, sort]);
 
   const changeSort = (next: PlaylistSort) => {
@@ -65,6 +74,19 @@ export default function ChannelPlaylistPage() {
     try { await api.syncPlaylist(id); await load(); } finally { setPending(false); }
   };
 
+  const changeNotificationMode = async (next: NotificationSourceMode) => {
+    if (!id || notificationSaving || !playlist?.followed) return;
+    const previous = notificationMode;
+    setNotificationMode(next);
+    setNotificationSaving(true);
+    try {
+      await api.updateNotificationSource("playlist", id, next === "default" ? null : next === "on");
+    } catch (error) {
+      setNotificationMode(previous);
+      console.error(error);
+    } finally { setNotificationSaving(false); }
+  };
+
   const downloadAll = async () => {
     if (!id) return;
     if (![...videos, ...processingVideos].some((video) => video.downloads_enabled)) { navigate("/downloads?view=configuration"); return; }
@@ -84,6 +106,15 @@ export default function ChannelPlaylistPage() {
     if (id) navigate(`/watch/${video.video_id}/playlist/${id}${playlistSortSearch(sort)}`);
   };
 
+  const sortOptions: Array<{ value: PlaylistSort; label: string }> = [
+    { value: "playlist-order", label: t("playlistSortOrder") },
+    { value: "oldest", label: t("playlistSortOldest") },
+    { value: "newest", label: t("playlistSortNewest") },
+    { value: "title-asc", label: t("playlistSortTitleAsc") },
+    { value: "title-desc", label: t("playlistSortTitleDesc") },
+  ];
+  const sortLabel = sortOptions.find((option) => option.value === sort)?.label ?? t("playlistSortOrder");
+
   if (loading && !playlist) return <VideoGridSkeleton gridSize="sm" />;
   if (!playlist) return <EmptyState title={t("playlistUnavailable")} />;
   const downloadMenuItem = !canDownloadPlaylist ? null : allPlaylistVideos.some((video) => video.downloads_enabled)
@@ -99,26 +130,35 @@ export default function ChannelPlaylistPage() {
   return <>
     <ChannelPlaylistHero playlist={playlist} actions={<>
           <PlaylistPlaybackActions videos={orderedPlaylistVideos} disabled={loading} onPlay={playPlaylistVideo} />
-          <SelectMenu
-            floating
-            label={t("playlistSort")}
-            value={sort}
-            onChange={changeSort}
-            options={[
-              { value: "playlist-order", label: t("playlistSortOrder") },
-              { value: "oldest", label: t("playlistSortOldest") },
-              { value: "newest", label: t("playlistSortNewest") },
-              { value: "title-asc", label: t("playlistSortTitleAsc") },
-              { value: "title-desc", label: t("playlistSortTitleDesc") },
-            ]}
-          />
           {downloadFeedback && <LocalToast>{downloadFeedback}</LocalToast>}
+          <HeaderSettingsPopover
+            open={settingsOpen}
+            onOpenChange={(open) => { setSettingsOpen(open); if (!open) setSettingsView("root"); }}
+            label={t("playlistSettings")}
+          >
+            {settingsView === "root" && <>
+              <HeaderSettingsItem icon={<ListFilter />} label={t("playlistSort")} status={sortLabel} onClick={() => setSettingsView("sort")} />
+              {playlist.followed && <HeaderSettingsItem icon={<Bell />} label={t("notificationPlaylistUpdates")} status={notificationMode === "default" ? t("notificationSourceDefaultOn") : notificationMode === "on" ? t("notificationSourceAlwaysOn") : t("notificationSourceAlwaysOff")} onClick={() => setSettingsView("notifications")} />}
+            </>}
+            {settingsView === "sort" && <>
+              <HeaderSettingsHeader onBack={() => setSettingsView("root")} backLabel={t("back")}>{t("playlistSort")}</HeaderSettingsHeader>
+              {sortOptions.map((option) => <HeaderSettingsOption key={option.value} selected={sort === option.value} onClick={() => changeSort(option.value)}>{option.label}</HeaderSettingsOption>)}
+            </>}
+            {settingsView === "notifications" && <NotificationSourceMenu
+              mode={notificationMode}
+              defaultEnabled
+              title={t("notificationPlaylistUpdates")}
+              disabled={notificationSaving}
+              onBack={() => setSettingsView("root")}
+              onChange={(mode) => void changeNotificationMode(mode)}
+            />}
+          </HeaderSettingsPopover>
           <Popover
             align="end"
             surface="menu"
             open={actionsOpen}
             onOpenChange={setActionsOpen}
-            trigger={<IconButton variant={actionsOpen ? "secondary" : "ghost"} label={t("moreActions")} icon={<MoreHorizontal />} />}
+            trigger={<IconButton variant={actionsOpen ? "secondary" : "default"} label={t("moreActions")} icon={<MoreHorizontal />} />}
           >
             <Menu>
               <MenuItem

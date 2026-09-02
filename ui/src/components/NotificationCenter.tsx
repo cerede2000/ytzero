@@ -80,6 +80,7 @@ export default function NotificationCenter() {
           <List divided={false}>
             {notifications.map((notification) => {
               const playlistVideo = notification.kind === "playlist_video";
+              const channelVideo = notification.kind === "channel_video";
               const downloadFailed = notification.kind === "download_failed";
               const social = notification.kind.startsWith("social_");
               const media = social && notification.payload.actor
@@ -88,7 +89,7 @@ export default function NotificationCenter() {
                   : <span className="profile-notification-avatar profile-notification-avatar--fallback" style={{ background: notification.payload.actor.avatar_color }}>{notification.payload.actor.name.trim()[0]?.toUpperCase() ?? "?"}</span>
                 : downloadFailed
                 ? <span className="profile-notification-icon profile-notification-icon--danger"><AlertTriangle /></span>
-                : playlistVideo
+                : playlistVideo || channelVideo
                   ? notification.payload.channelThumbnail
                     ? <img className="profile-notification-avatar" src={img(notification.payload.channelThumbnail)} alt="" />
                     : <span className="profile-notification-icon"><ListVideo /></span>
@@ -99,6 +100,7 @@ export default function NotificationCenter() {
                 ? t(notification.kind === "social_post" ? "socialNotificationNewPost" : notification.kind === "social_comment" ? "socialNotificationComment" : notification.kind === "social_mention" ? "socialNotificationMention" : notification.kind === "social_comment_like" ? "socialNotificationCommentLike" : "socialNotificationReaction", { profile: socialActor })
                 : downloadFailed
                 ? notification.payload.videoTitle || t("downloadFailedNotificationTitle")
+                : channelVideo ? notification.payload.videoTitle || t("channelVideoNotificationTitle")
                 : playlistVideo ? notification.payload.videoTitle || t("playlistVideoNotificationTitle") : t("updateNotificationTitle");
               const description = social
                 ? notification.payload.commentBody || notification.payload.postBody
@@ -106,15 +108,16 @@ export default function NotificationCenter() {
                   : t("socialNotificationOpen")
                 : downloadFailed
                 ? t("downloadFailedNotificationDescription")
+                : channelVideo ? t("channelVideoNotificationDescription", { channel: notification.payload.channelTitle || "" })
                 : playlistVideo ? t("playlistVideoNotificationDescription", { playlist: notification.payload.playlistTitle || "" }) : t("updateNotificationDescription", { version: notification.payload.version ?? "" });
               return <ListButton
-                  className={`profile-notification profile-notification--${social ? "social" : downloadFailed ? "download-failed" : playlistVideo ? "playlist" : "update"}${notification.read_at ? " is-read" : " is-unread"}`}
+                  className={`profile-notification profile-notification--${social ? "social" : downloadFailed ? "download-failed" : playlistVideo || channelVideo ? "playlist" : "update"}${notification.read_at ? " is-read" : " is-unread"}`}
                   key={notification.id}
                   onClick={() => void select(notification)}
                   media={media}
                   title={title}
                   description={description}
-                  meta={(playlistVideo || downloadFailed) && notification.payload.thumbnail ? <img className="profile-notification-thumbnail" src={img(notification.payload.thumbnail)} alt="" /> : undefined}
+                  meta={(playlistVideo || channelVideo || downloadFailed) && notification.payload.thumbnail ? <img className="profile-notification-thumbnail" src={img(notification.payload.thumbnail)} alt="" /> : undefined}
                 >
                   <time>{notificationTime(notification.created_at, locale, timeZone, t("notificationJustNow"))}</time>
                 </ListButton>;

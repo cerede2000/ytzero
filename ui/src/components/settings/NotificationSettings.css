@@ -1,0 +1,2 @@
+.notification-settings { display: grid; gap: 12px; }
+.notification-settings__loading { min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-2); }

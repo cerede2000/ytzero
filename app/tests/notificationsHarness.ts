@@ -1,4 +1,4 @@
-const { notifyDownloadFailed } = await import("../src/notifications");
+const { notifyChannelVideos, notifyDownloadFailed } = await import("../src/notifications");
 const { db } = await import("../src/db");
 
 db.prepare("INSERT INTO channels(channel_id, title, url) VALUES(?, ?, ?)")
@@ -20,5 +20,13 @@ db.prepare("UPDATE downloads SET created_at = ? WHERE video_id = ?")
 const nextCycleCreated = await notifyDownloadFailed("notifyvideo1", "another failure");
 const finalCount = (db.prepare("SELECT count(*) AS count FROM notifications").get() as { count: number }).count;
 
-console.log("RESULT " + JSON.stringify({ firstCreated, duplicateCreated, firstRows, nextCycleCreated, finalCount }));
+db.prepare("INSERT INTO user_channels(user_id,channel_id,followed) VALUES(1,'UCnotify',1)").run();
+const channelDefaultCreated = await notifyChannelVideos("UCnotify", ["notifyvideo1"]);
+db.prepare("INSERT INTO notification_preferences(user_id,kind,source_id,enabled) VALUES(1,'channel_video','UCnotify',1)").run();
+const channelOverrideCreated = await notifyChannelVideos("UCnotify", ["notifyvideo1"]);
+db.prepare("UPDATE downloads SET created_at='2026-07-28 22:00:00' WHERE video_id='notifyvideo1'").run();
+db.prepare("INSERT INTO notification_preferences(user_id,kind,source_id,enabled) VALUES(1,'*','',0)").run();
+const masterDisabledCreated = await notifyDownloadFailed("notifyvideo1", "disabled");
+
+console.log("RESULT " + JSON.stringify({ firstCreated, duplicateCreated, firstRows, nextCycleCreated, finalCount, channelDefaultCreated, channelOverrideCreated, masterDisabledCreated }));
 db.close();

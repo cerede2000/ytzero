@@ -58,6 +58,8 @@ import {
   type ImportCommitResult,
   type ImportManifest,
   type MembersOnlyVisibility,
+  type NotificationCategory,
+  type NotificationPreferences,
   type PlaylistDownloadResult,
   type PlaylistInfo,
   type PlaylistVideo,
@@ -265,6 +267,11 @@ export const api = {
   notifications: () => sharedGet<{ notifications: AppNotification[]; unread: number }>("notifications", "/notifications"),
   readNotification: (id: number) => http<{ ok: true }>(`/notifications/${id}/read`, { method: "POST", body: "{}" }),
   readAllNotifications: () => http<{ ok: true }>("/notifications/read-all", { method: "POST", body: "{}" }),
+  notificationPreferences: () => http<NotificationPreferences>("/notification-preferences"),
+  updateNotificationPreferences: (input: { enabled?: boolean; categories?: Partial<Record<NotificationCategory, boolean>> }) =>
+    http<Pick<NotificationPreferences, "enabled" | "categories" | "overrides">>("/notification-preferences", { method: "PUT", body: JSON.stringify(input) }),
+  updateNotificationSource: (sourceType: "channel" | "playlist", sourceId: string, enabled: boolean | null) =>
+    http<{ ok: true }>(`/notification-preferences/sources/${sourceType}/${encodeURIComponent(sourceId)}`, { method: "PUT", body: JSON.stringify({ enabled }) }),
   live: () => http<{ videos: Video[] }>("/live"),
   channelLive: (id: string) => http<{ videos: Video[] }>(`/channels/${id}/live`),
   video: (id: string) => sharedGet<{ video: Video; related: Video[] }>(`video:${id}`, `/videos/${id}`),

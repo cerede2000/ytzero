@@ -25,4 +25,5 @@
   .channel-playlist-hero__channel { max-width: none; width: 100%; }
   .channel-playlist-hero__actions { align-items: stretch; width: 100%; }
   .channel-playlist-hero__actions .ui-button { flex: 1 1 auto; }
+  .channel-playlist-hero__actions .ui-button--icon { flex: 0 0 36px; }
 }

@@ -35,12 +35,13 @@ import { ChangelogNote, LogLine, SettingsLoadingState } from "../components/sett
 import { SettingsSearch } from "../components/settings/SettingsSearch";
 import ChannelSettingsDialog, { hasCustomChannelSettings } from "../components/settings/ChannelSettingsDialog";
 import { filterPlaylistsByName } from "../playlistSearch";
+import NotificationSettings from "../components/settings/NotificationSettings";
 
 const AuthSettings = lazy(() => import("../components/AuthSettings"));
 const TubeArchivistSettings = lazy(() => import("../components/settings/TubeArchivistSettings")
   .then((module) => ({ default: module.TubeArchivistSettings })));
 
-type Tab = "channels" | "tags" | "playlists" | "display" | "plugins" | "advanced" | "profiles" | "auth";
+type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "plugins" | "advanced" | "profiles" | "auth";
 
 const TIME_ZONES = (() => {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "timeZone") => string[] };
@@ -57,6 +58,7 @@ const SETTINGS_AREAS: { id: Tab; primaryOnly?: boolean }[] = [
   { id: "tags" },
   { id: "playlists" },
   { id: "display" },
+  { id: "notifications" },
   { id: "plugins" },
   { id: "advanced", primaryOnly: true },
   { id: "profiles" },
@@ -467,6 +469,8 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
       {!isCurrentTabLocked && tab === "auth" && canManageAdministrators && <Suspense fallback={null}>
         <AuthSettings showToast={showToast} />
       </Suspense>}
+
+      {!isCurrentTabLocked && tab === "notifications" && <NotificationSettings />}
 
       {!isCurrentTabLocked && tab === "channels" && (
         <SettingsSection>

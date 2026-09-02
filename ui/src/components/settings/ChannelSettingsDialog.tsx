@@ -5,10 +5,12 @@ import { resolvePlaybackSpeeds } from "../../../../shared/playbackSpeeds";
 import { SUBTITLE_LANGUAGES } from "../../subtitleLanguages";
 import { useI18n } from "../../i18n";
 import ChannelRefreshScheduleDialog from "../ChannelRefreshScheduleDialog";
+import NotificationSourceSelect from "../NotificationSourceSelect";
 import { Alert, Button, Dialog, SelectMenu, SettingRow, SettingsSection } from "../ui";
 import "./ChannelSettingsDialog.css";
 
 type CaptionChoice = "default" | "off" | `language:${string}`;
+type NotificationMode = "default" | "on" | "off";
 
 interface ChannelSettingsDraft {
   status: ChannelManualStatus;
@@ -16,6 +18,7 @@ interface ChannelSettingsDraft {
   captions: CaptionChoice;
   membersOnly: MembersOnlyVisibility;
   shorts: ChannelShortsFeedVisibility;
+  notifications: NotificationMode;
 }
 
 function draftFromChannel(channel: Channel): ChannelSettingsDraft {
@@ -29,6 +32,7 @@ function draftFromChannel(channel: Channel): ChannelSettingsDraft {
         : "default",
     membersOnly: channel.members_only_visibility ?? "default",
     shorts: channel.shorts_feed_visibility ?? "default",
+    notifications: "default",
   };
 }
 
@@ -59,6 +63,7 @@ export default function ChannelSettingsDialog({ channel, open, onOpenChange, onS
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [notificationMode, setNotificationMode] = useState<NotificationMode>("default");
 
   useEffect(() => {
     if (!open || !channel) return;
@@ -68,9 +73,17 @@ export default function ChannelSettingsDialog({ channel, open, onOpenChange, onS
     setLoadedChannel(null);
     setInitial(null);
     setDraft(null);
-    api.channel(channel.channel_id).then(({ channel: details }) => {
+    setNotificationMode("default");
+    api.channel(channel.channel_id).then(async ({ channel: details }) => {
       if (cancelled) return;
       const next = draftFromChannel(details);
+      try {
+        const preferences = await api.notificationPreferences();
+        const value = preferences.channels.find((source) => source.channel_id === channel.channel_id)?.notification_enabled;
+        const notifications: NotificationMode = value == null ? "default" : value === 1 ? "on" : "off";
+        next.notifications = notifications;
+        setNotificationMode(notifications);
+      } catch { /* notification settings are optional for unavailable profiles */ }
       setLoadedChannel(details);
       setInitial(next);
       setDraft(next);
@@ -107,6 +120,9 @@ export default function ChannelSettingsDialog({ channel, open, onOpenChange, onS
       }
       if (loadedChannel?.followed !== 0 && draft.shorts !== initial.shorts) {
         requests.push(api.setChannelShortsFeedVisibility(channel.channel_id, draft.shorts));
+      }
+      if (loadedChannel?.followed !== 0 && draft.notifications !== initial.notifications) {
+        requests.push(api.updateNotificationSource("channel", channel.channel_id, draft.notifications === "default" ? null : draft.notifications === "on"));
       }
       await Promise.all(requests);
       onSaved?.();
@@ -215,6 +231,14 @@ export default function ChannelSettingsDialog({ channel, open, onOpenChange, onS
           <SettingRow label={t("channelRefreshSchedule")} description={t("channelRefreshScheduleHint")}>
             <Button disabled={!followed} leadingIcon={<CalendarClock />} onClick={() => setScheduleOpen(true)}>{t("channelRefreshSchedule")}</Button>
           </SettingRow>
+          {followed && <SettingRow label={t("notificationChannelUploads")}>
+            <NotificationSourceSelect
+              label={t("notificationChannelUploads")}
+              mode={notificationMode}
+              defaultEnabled={false}
+              onChange={(notifications) => { setNotificationMode(notifications); setDraft((current) => current && ({ ...current, notifications })); }}
+            />
+          </SettingRow>}
         </SettingsSection>
       </>}
     </Dialog>

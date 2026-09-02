@@ -19,6 +19,7 @@ import {
   resolveProxyPermissionGroupUuid,
 } from "./auth";
 import { registerSystemRoutes } from "./routes/systemRoutes";
+import { registerNotificationRoutes } from "./routes/notificationRoutes";
 import { registerSocialRoutes } from "./routes/socialRoutes";
 import { registerSocialWatchPartyRoutes } from "./routes/socialWatchPartyRoutes";
 import { registerTagRoutes } from "./routes/tagRoutes";
@@ -458,3 +459,4 @@ registerAuthRoutes(api, {
 });
 
 registerSystemRoutes(api, { isAdmin, currentUserId });
+registerNotificationRoutes(api, currentUserId);

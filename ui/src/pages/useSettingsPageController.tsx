@@ -34,7 +34,7 @@ import ProfilesSettings, { ProfilePasswordSettings } from "../components/setting
 import { ChannelOwnership, FilterRuleGroups, PlaylistSettingsItem, PluginMultiselect, RuleRow, SidebarNavEditor, TagRow } from "../components/settings/SettingsEditors";
 import { ChangelogNote, LogLine, SettingsLoadingState } from "../components/settings/SettingsSupport";
 
-type Tab = "channels" | "tags" | "playlists" | "display" | "plugins" | "advanced" | "profiles" | "auth";
+type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "plugins" | "advanced" | "profiles" | "auth";
 const TIME_ZONES = (() => {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "timeZone") => string[] };
   const supported = intl.supportedValuesOf?.("timeZone") ?? [
@@ -49,6 +49,7 @@ const SETTINGS_AREAS: { id: Tab; primaryOnly?: boolean }[] = [
   { id: "tags" },
   { id: "playlists" },
   { id: "display" },
+  { id: "notifications" },
   { id: "plugins" },
   { id: "advanced", primaryOnly: true },
   { id: "profiles" },
@@ -1105,10 +1106,13 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     },
     {
       label: t("settingsGroupExperience"),
-      items: tabIsVisible("display") ? displaySubTabOptions.map((option) => ({
-        value: option.value === "appearance" ? "display" : `display:${option.value}`,
-        label: option.label,
-      })) : [],
+      items: [
+        ...(tabIsVisible("display") ? displaySubTabOptions.map((option) => ({
+          value: option.value === "appearance" ? "display" : `display:${option.value}`,
+          label: option.label,
+        })) : []),
+        ...(tabIsVisible("notifications") ? [{ value: "notifications", label: t("notificationSettingsNav") }] : []),
+      ],
     },
     {
       label: t("settingsGroupAdministration"),

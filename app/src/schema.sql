@@ -366,6 +366,18 @@ CREATE TABLE IF NOT EXISTS user_settings (
   PRIMARY KEY (user_id, key)
 );
 
+-- Portable per-profile notification choices. An empty source_id stores the
+-- profile-wide master/category value; a stable YouTube channel or playlist id
+-- stores an explicit source override.
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind      TEXT NOT NULL,
+  source_id TEXT NOT NULL DEFAULT '',
+  enabled   INTEGER NOT NULL CHECK (enabled IN (0,1)),
+  PRIMARY KEY (user_id, kind, source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_notification_preferences_user ON notification_preferences(user_id);
+
 CREATE TABLE IF NOT EXISTS update_check_state (
   user_id         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   last_checked_at TEXT NOT NULL DEFAULT (datetime('now'))

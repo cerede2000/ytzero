@@ -105,6 +105,7 @@ instance/access-control.json
 instance/channels.jsonl
 profiles/index.json
 profiles/<profile-uuid>/settings.json
+profiles/<profile-uuid>/notification-preferences.jsonl
 profiles/<profile-uuid>/access-control.json
 profiles/<profile-uuid>/downloads.json
 profiles/<profile-uuid>/subscriptions.jsonl
@@ -265,6 +266,11 @@ below.
   Sidebar navigation entries may be visible, kept under the overflow disclosure,
   or completely hidden. This bounded tri-state is portable configuration in
   `profile.settings` schema v6. Older backups retain their two-state meaning.
+- `notification_preferences`: portable per-profile notification configuration,
+  serialized through `profile.notification-preferences` schema v1. It contains
+  the profile-wide master switch, category defaults, and explicit overrides
+  keyed by stable YouTube channel or playlist IDs. Generated notification rows,
+  read state, and deduplication keys remain transient and are not exported.
 - Personal playlist membership is portable organization data. Its source
   addition timestamp and stable playlist position are included in
   `profile.playlists` schema v2. Older schema v1 archives restore membership in

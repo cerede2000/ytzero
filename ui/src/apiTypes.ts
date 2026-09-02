@@ -333,6 +333,7 @@ export interface AppNotification {
     playlistId?: string;
     playlistTitle?: string;
     channelTitle?: string;
+    channelId?: string;
     channelThumbnail?: string;
     error?: string;
     attempts?: number;
@@ -345,6 +346,15 @@ export interface AppNotification {
   target: string;
   read_at: string | null;
   created_at: string;
+}
+
+export type NotificationCategory = "channel_video" | "playlist_video" | "download_failed" | "social" | "app_update";
+export interface NotificationPreferences {
+  enabled: boolean;
+  categories: Record<NotificationCategory, boolean>;
+  overrides: Array<{ sourceType: "channel" | "playlist"; sourceId: string; enabled: boolean }>;
+  channels: Array<{ channel_id: string; title: string; thumbnail: string; notification_enabled: number | null }>;
+  playlists: Array<{ playlist_id: string; title: string; thumbnail: string; channel_title: string; notification_enabled: number | null }>;
 }
 
 export interface SearchResult {

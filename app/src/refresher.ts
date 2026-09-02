@@ -6,7 +6,7 @@ import { applyFilterRules } from "./filterRules";
 import { log } from "./logger";
 import { CHANNEL_PLAYLIST_CACHE_VERSION, ensureChannelPlaylist, saveChannelPlaylists, savePlaylistMemberships } from "./channelPlaylists";
 import { preserveChannelMedia, preservePlaylistMedia } from "./channelMedia";
-import { notifyFollowedPlaylistVideos } from "./notifications";
+import { notifyChannelVideos, notifyFollowedPlaylistVideos } from "./notifications";
 import { IMPORTED_CHANNEL_ID } from "./takeout";
 import { beginMutation, maintenanceActive } from "./maintenance";
 import { estimateUploadCadenceMs, selectRefreshBatch, targetRefreshIntervalMs, type AdaptiveRefreshOptions, type RefreshCandidate } from "./adaptiveRefresh";
@@ -395,7 +395,7 @@ export async function refreshChannel(channelId: string, userId?: number): Promis
     "INSERT OR IGNORE INTO video_tags (video_id, tag_id, source) SELECT ?, tag_id, 'channel' FROM channel_tags WHERE channel_id = ?"
   );
 
-  let added = 0;
+  let added = 0; const discoveredVideoIds: string[] = [];
   for (const v of feed.videos) {
     const isNew = !await videoExists.get(v.videoId);
     await upsertVideo.run(v.videoId, channelId, v.title, v.description, v.thumbnail, v.publishedAt, v.views, v.likes);
@@ -404,7 +404,7 @@ export async function refreshChannel(channelId: string, userId?: number): Promis
       await applyFilterRules(v.videoId, channelId, v.title, v.description);
       await applyPlaylistRulesToVideo(v.videoId);
       await inheritChannelTags.run(v.videoId, channelId);
-      added++;
+      added++; discoveredVideoIds.push(v.videoId);
       log.info("video.added", { source: "rss", channelId, videoId: v.videoId, title: v.title, publishedAt: v.publishedAt });
     }
   }
@@ -446,7 +446,7 @@ export async function refreshChannel(channelId: string, userId?: number): Promis
     log.warn("channel.metadata_refresh_failed", { channelId, error: e instanceof Error ? e.message : String(e) });
   });
   await database.prepare("UPDATE channels SET last_refreshed_at = datetime('now') WHERE channel_id = ?").run(channelId);
-  if (added > 0) log.info("channel.refresh.added", { channelId, title: feed.channelTitle, added, ms: Date.now() - startedAt });
+  await notifyChannelVideos(channelId, discoveredVideoIds); if (added > 0) log.info("channel.refresh.added", { channelId, title: feed.channelTitle, added, ms: Date.now() - startedAt });
   return { added };
 }
 
@@ -800,7 +800,7 @@ async function runChannelSync(channelId: string, userId?: number): Promise<Chann
   );
 
   let added = 0;
-  const seen = new Set<string>();
+  const seen = new Set<string>(); const discoveredVideoIds: string[] = [];
 
   for (const v of scrapedVideos) {
     seen.add(v.videoId);
@@ -829,7 +829,7 @@ async function runChannelSync(channelId: string, userId?: number): Promise<Chann
       await applyFilterRules(v.videoId, channelId, rss?.title ?? v.title, rss?.description ?? "");
       await applyPlaylistRulesToVideo(v.videoId);
       await inheritChannelTags.run(v.videoId, channelId);
-      added++;
+      added++; discoveredVideoIds.push(v.videoId);
       log.info("video.added", { source: "sync", channelId, videoId: v.videoId, title: rss?.title ?? v.title, publishedAt: rss?.publishedAt ?? null });
     }
   }
@@ -846,7 +846,7 @@ async function runChannelSync(channelId: string, userId?: number): Promise<Chann
       await applyFilterRules(v.videoId, channelId, v.title, v.description);
       await applyPlaylistRulesToVideo(v.videoId);
       await inheritChannelTags.run(v.videoId, channelId);
-      added++;
+      added++; discoveredVideoIds.push(v.videoId);
       log.info("video.added", { source: "rss-only", channelId, videoId: v.videoId, title: v.title, publishedAt: v.publishedAt });
     }
   }
@@ -913,7 +913,7 @@ async function runChannelSync(channelId: string, userId?: number): Promise<Chann
   } else {
     await database.prepare("UPDATE channels SET last_refreshed_at = datetime('now'), last_full_synced_at = datetime('now') WHERE channel_id = ?").run(channelId);
   }
-  log.info("channel.sync.complete", {
+  await notifyChannelVideos(channelId, discoveredVideoIds); log.info("channel.sync.complete", {
     channelId, added, rateLimited, scraped: scraped.length, streams: streams.length,
     rss: feed.videos.length, playlists: playlistsScanned,
     availabilityChecked: availability.checked, unavailable: availability.deleted,
