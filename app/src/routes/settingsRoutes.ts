@@ -11,6 +11,7 @@ import { normalizeKeyboardShortcutSetting } from "../keyboardShortcutSettings";
 import { isLanguage } from "../../../shared/uiLanguages";
 import { removeRoleFromExternalMappings } from "../externalRoleMappings";
 import { normalizeYouTubeTitleLanguage } from "../youtubeRequestLanguage";
+import { normalizePlaybackSpeed, normalizePlaybackSpeedOptionsSetting } from "../../../shared/playbackSpeeds";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>; type ApiContext = Context<ApiEnvironment>;
@@ -242,6 +243,8 @@ api.put("/settings", async (c) => {
   if ("timezone" in body && !isValidTimeZone(body.timezone)) return c.json({ error: "invalid timezone" }, 400);
   const videoCardSettingsError = validateVideoCardSettings(body); if (videoCardSettingsError) return c.json({ error: videoCardSettingsError }, 400);
   if ("keyboard_shortcuts" in body && normalizeKeyboardShortcutSetting(body.keyboard_shortcuts) === null) return c.json({ error: "invalid keyboard shortcut settings" }, 400);
+  if ("player_speed" in body && normalizePlaybackSpeed(body.player_speed) === null) return c.json({ error: "invalid playback speed" }, 400);
+  if ("player_speed_options" in body && normalizePlaybackSpeedOptionsSetting(body.player_speed_options) === null) return c.json({ error: "invalid playback speed options" }, 400);
   if ("show_shorts" in body && body.show_shorts !== "disabled" && body.show_shorts !== "0" && body.show_shorts !== "selected" && body.show_shorts !== "1") {
     return c.json({ error: "invalid Shorts feed mode" }, 400);
   }
@@ -252,7 +255,13 @@ api.put("/settings", async (c) => {
       // Only an administrator owns app-wide settings (name, icon, timezone).
       if (primary) await setSetting(key, String(body[key]));
     } else {
-      const value = key === "keyboard_shortcuts" ? normalizeKeyboardShortcutSetting(body[key])! : normalizeVideoCardSetting(key, body[key]);
+      const value = key === "keyboard_shortcuts"
+        ? normalizeKeyboardShortcutSetting(body[key])!
+        : key === "player_speed"
+          ? normalizePlaybackSpeed(body[key])!
+          : key === "player_speed_options"
+            ? normalizePlaybackSpeedOptionsSetting(body[key])!
+            : normalizeVideoCardSetting(key, body[key]);
       await setUserSetting(uid, key, value);
     }
   }

@@ -211,6 +211,12 @@ below.
   Invalid restored values normalize to `profile`. This setting is recorded by
   `profile.settings` schema v8; schemas 1–7 remain readable and retain the
   default when the key is absent.
+  The custom playback-speed option list is bounded portable per-profile
+  presentation configuration. It stores at most 16 unique values from 0.25 to
+  4 with up to two decimal places; built-in speeds are omitted from the stored
+  list. Restore normalizes invalid data to an empty list. This setting is
+  recorded by `profile.settings` schema v9; schemas 1–8 remain readable and use
+  the application default when the key is absent.
   This includes `feed_sort`, the portable per-profile choice between publication and first-seen chronology, `watch_show_comments`, the opt-in presentation preference for the on-demand comments section, and `channel_posts_tab`, the opt-in presentation preference for Community Posts on channel pages. Comment payloads remain transient; the persisted Community Post catalog and its synchronization state are rebuildable cache data. Neither is exported.
   The visibility of the child-watching shortcut is also a portable per-profile
   presentation preference. It defaults to visible; live child activity remains

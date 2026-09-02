@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Check, Play } from "lucide-react";
-import { PLAYBACK_SPEEDS, SB_CATEGORIES, type ShortsFeedMode } from "../../api";
+import { SB_CATEGORIES, type ShortsFeedMode } from "../../api";
 import { emit } from "../../events";
 import { formatAgeUnit, LANGUAGES, languageName } from "../../i18n";
 import { DEFAULT_SCREENSHOT_FILENAME_TEMPLATE } from "../../playerScreenshot";
@@ -12,6 +12,8 @@ import { useSettingsPageController } from "../../pages/useSettingsPageController
 import Popconfirm from "../Popconfirm";
 import { Button, ColorPicker, Divider, Inline, Input, InputGroup, SelectMenu, SettingRow, SettingsSection, Slider, Switch, Text } from "../ui";
 import { SidebarNavEditor, VideoCardActionEditor } from "./SettingsEditors"; import { KeyboardShortcutSettings } from "./KeyboardShortcutSettings";
+import PlaybackSpeedOptionsSetting from "./PlaybackSpeedOptionsSetting";
+import { resolvePlaybackSpeeds, serializeCustomPlaybackSpeeds } from "../../../../shared/playbackSpeeds";
 const VideoCardSwipeSetting = lazy(() => import("./VideoCardSwipeSetting").then((module) => ({ default: module.VideoCardSwipeSetting })));
 const TIME_ZONES = (() => {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "timeZone") => string[] };
@@ -65,6 +67,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
     playerHl,
     playerQuality,
     playerSpeed,
+    playerSpeedOptions,
     plugins,
     resetNavConfig,
     saveAppIconColor,
@@ -84,6 +87,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
     setPlayerHl,
     setPlayerQuality,
     setPlayerSpeed,
+    setPlayerSpeedOptions,
     setScreenshotFilename,
     setScreenshotFormat,
     setScreenshotQuality,
@@ -342,10 +346,26 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
             <SelectMenu
               label={t("playbackSpeed")}
               value={playerSpeed}
-              options={PLAYBACK_SPEEDS.map((speed) => ({ value: String(speed), label: `${speed}×` }))}
+              options={resolvePlaybackSpeeds(serializeCustomPlaybackSpeeds(playerSpeedOptions), playerSpeed).map((speed) => ({ value: speed, label: `${speed}×` }))}
               onChange={(next) => {
                 setPlayerSpeed(next);
                 savePlayer({ player_speed: next });
+              }}
+            />
+          </SettingRow>
+
+          <SettingRow label={t("customPlaybackSpeeds")} description={t("customPlaybackSpeedsHint")} align="start">
+            <PlaybackSpeedOptionsSetting
+              value={playerSpeedOptions}
+              onChange={async (next) => {
+                const previous = playerSpeedOptions;
+                setPlayerSpeedOptions(next);
+                try {
+                  await savePlayer({ player_speed_options: serializeCustomPlaybackSpeeds(next) });
+                } catch (error) {
+                  setPlayerSpeedOptions(previous);
+                  throw error;
+                }
               }}
             />
           </SettingRow>

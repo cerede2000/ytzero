@@ -3,7 +3,8 @@ import "./SettingsPage.css";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ArchiveRestore, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Download, ExternalLink, Eye, EyeOff, FileText, Filter, FolderUp, GripVertical, Info, ListMinus, LoaderCircle, ListMusic, Pencil, Play, Plug, Plus, RefreshCw, RotateCcw, ShieldCheck, Sparkles, Trash2, Tv, UserMinus, UserPlus, UsersRound, Wrench, X, Zap } from "lucide-react";
-import { api, type AppChangelog, type AppLogs, type AppLogStreamEvent, type AppVersion, type AuthMethod, type Channel, type ChannelManualStatus, type ChildLockStatus, type FilterRule, type FollowedPlaylist, type MembersOnlyVisibility, type PluginManifest, type PluginSettingsResponse, type Profile, type ProfilePermissionArea, type ProfilePermissions, type Rule, type ShortsFeedMode, type Tag, type UpdateCheck, type UserPlaylist, type UserPlaylistRule, type Video, SB_CATEGORIES, PLAYBACK_SPEEDS } from "../api";
+import { api, type AppChangelog, type AppLogs, type AppLogStreamEvent, type AppVersion, type AuthMethod, type Channel, type ChannelManualStatus, type ChildLockStatus, type FilterRule, type FollowedPlaylist, type MembersOnlyVisibility, type PluginManifest, type PluginSettingsResponse, type Profile, type ProfilePermissionArea, type ProfilePermissions, type Rule, type ShortsFeedMode, type Tag, type UpdateCheck, type UserPlaylist, type UserPlaylistRule, type Video, SB_CATEGORIES } from "../api";
+import { parseCustomPlaybackSpeeds } from "../../../shared/playbackSpeeds";
 import AuthSettings from "../components/AuthSettings";
 import { NAV_ITEMS, normalizeNav, parseNavConfig, type NavConfigEntry } from "../nav";
 import { img } from "../img";
@@ -189,6 +190,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
   const [subBg, setSubBg] = useState(75);
   const [playerQuality, setPlayerQuality] = useState("auto");
   const [playerSpeed, setPlayerSpeed] = useState("1");
+  const [playerSpeedOptions, setPlayerSpeedOptions] = useState<string[]>([]);
   const [keyboardSeekSeconds, setKeyboardSeekSeconds] = useState("5");
   const [screenshotFormat, setScreenshotFormat] = useState<PlayerScreenshotFormat>("jpeg");
   const [screenshotQuality, setScreenshotQuality] = useState("0.92");
@@ -470,6 +472,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
       setSubBg(Number.isFinite(Number(r.settings.player_sub_bg)) ? Number(r.settings.player_sub_bg) : 75);
       setPlayerQuality(r.settings.player_quality);
       setPlayerSpeed(r.settings.player_speed ?? "1");
+      setPlayerSpeedOptions(parseCustomPlaybackSpeeds(r.settings.player_speed_options));
       setKeyboardSeekSeconds(r.settings.keyboard_seek_seconds ?? "5");
       setScreenshotFormat(parsePlayerScreenshotFormat(r.settings.player_screenshot_format));
       setScreenshotQuality(r.settings.player_screenshot_quality ?? "0.92");
@@ -1249,6 +1252,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     playerHl,
     playerQuality,
     playerSpeed,
+    playerSpeedOptions,
     playlistIcon,
     playlistName,
     playlistRules,
@@ -1303,6 +1307,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     setPlayerHl,
     setPlayerQuality,
     setPlayerSpeed,
+    setPlayerSpeedOptions,
     setPlaylistIcon,
     setPlaylistName,
     setPluginSettingsModalId,

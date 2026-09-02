@@ -27,6 +27,12 @@ describe("UI language catalogue", () => {
     }
   });
 
+  test("keeps the pre-React document-language bootstrap in sync with supported languages", async () => {
+    const documentSource = await Bun.file(`${import.meta.dir}/../index.html`).text();
+    const codes = documentSource.match(/const bootstrapLanguageCodes = (\[[^\n]+\]);/)?.[1];
+    expect(codes == null ? null : JSON.parse(codes)).toEqual(LANGUAGE_CODES);
+  });
+
   test("normalizes unknown persisted values to English", () => {
     expect(normalizeLanguage("fr")).toBe("fr");
     expect(normalizeLanguage("unknown")).toBe("en");

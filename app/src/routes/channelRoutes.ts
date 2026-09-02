@@ -20,6 +20,7 @@ import { videoSelect, type VideoRow } from "../videoRoutesSupport";
 import { ABOUT_DB_TTL, ageMs, PLAYLISTS_DB_TTL } from "../routeCache";
 import { registerChannelSyncRoutes, registerSingleChannelSyncRoute } from "./channelSyncRoutes";
 import { registerChannelPostRoutes } from "./channelPostRoutes";
+import { normalizePlaybackSpeed } from "../../../shared/playbackSpeeds";
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
 type ApiContext = Context<ApiEnvironment>;
@@ -451,7 +452,8 @@ api.put("/channels/:id/follow", async (c) => {
 api.put("/channels/:id/speed", async (c) => {
   const uid = currentUserId(c);
   const { speed } = await c.req.json<{ speed: string | null }>();
-  const value = !speed || speed === "default" ? null : speed;
+  const value = !speed || speed === "default" ? null : normalizePlaybackSpeed(speed);
+  if (speed && speed !== "default" && value === null) return c.json({ error: "invalid playback speed" }, 400);
   await database.prepare(
     `INSERT INTO user_channels (user_id, channel_id, playback_speed) VALUES (?, ?, ?)
      ON CONFLICT(user_id, channel_id) DO UPDATE SET playback_speed = excluded.playback_speed`

@@ -1,0 +1,49 @@
+.playback-speed-options-setting {
+  display: grid;
+  gap: 8px;
+  min-width: min(100%, 280px);
+}
+
+.playback-speed-options-setting__entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.playback-speed-options-setting__entry .ui-input-group {
+  width: 112px;
+}
+
+.playback-speed-options-setting__values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.playback-speed-options-setting__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+  padding-left: 10px;
+  border: 1px solid var(--surface-3);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.playback-speed-options-setting__value .ui-button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+}
+
+@media (max-width: 640px) {
+  .playback-speed-options-setting__values {
+    justify-content: flex-start;
+  }
+}

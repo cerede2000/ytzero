@@ -1,8 +1,7 @@
 import type { I18nKey } from "./i18n";
 import type { EmojiSkinTone } from "./emojiSkinTone";
 import type { PlaybackQueueContext } from "./playbackQueue";
-// YouTube-supported playback rates, shared by the settings, watch and channel UIs.
-export const PLAYBACK_SPEEDS = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"] as const;
+export { DEFAULT_PLAYBACK_SPEEDS as PLAYBACK_SPEEDS } from "../../shared/playbackSpeeds";
 export interface Tag {
   id: number;
   name: string;
@@ -280,6 +279,7 @@ export interface AppSettings {
   player_sub_bg: string;
   player_quality: string;
   player_speed: string;
+  player_speed_options: string;
   keyboard_seek_seconds: string; keyboard_shortcuts: string;
   enhance_enabled: string;
   enhance_replace_controls: string;

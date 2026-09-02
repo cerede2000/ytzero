@@ -5,7 +5,7 @@ import { SettingsDisplayView } from "../components/settings/SettingsDisplayView"
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ArchiveRestore, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Download, ExternalLink, Eye, EyeOff, FileText, Filter, FolderUp, GripVertical, Info, LoaderCircle, Pencil, Play, Plug, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Tv, UserMinus, UserPlus, UsersRound, Wrench, X, Zap } from "lucide-react";
-import { api, type AppChangelog, type AppLogs, type AppLogStreamEvent, type AppVersion, type AuthMethod, type Channel, type ChildLockStatus, type FilterRule, type MembersOnlyVisibility, type PluginManifest, type PluginSettingsResponse, type Profile, type ProfilePermissionArea, type ProfilePermissions, type Rule, type Tag, type UpdateCheck, type UserPlaylist, type UserPlaylistRule, type Video, SB_CATEGORIES, PLAYBACK_SPEEDS } from "../api";
+import { api, type AppChangelog, type AppLogs, type AppLogStreamEvent, type AppVersion, type AuthMethod, type Channel, type ChildLockStatus, type FilterRule, type MembersOnlyVisibility, type PluginManifest, type PluginSettingsResponse, type Profile, type ProfilePermissionArea, type ProfilePermissions, type Rule, type Tag, type UpdateCheck, type UserPlaylist, type UserPlaylistRule, type Video, SB_CATEGORIES } from "../api";
 import { NAV_ITEMS, normalizeNav, parseNavConfig, type NavConfigEntry } from "../nav";
 import { img } from "../img";
 import TagChip from "../components/TagChip";
@@ -1318,7 +1318,7 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
         </SettingsSection>
       )}
         </div>
-        <ChannelSettingsDialog channel={settingsChannel} open={settingsChannel !== null} onOpenChange={(open) => { if (!open) setSettingsChannel(null); }} onSaved={() => void load()} shortsEnabled={controller.shortsFeedMode !== "disabled"} />
+        <ChannelSettingsDialog channel={settingsChannel} open={settingsChannel !== null} onOpenChange={(open) => { if (!open) setSettingsChannel(null); }} onSaved={() => void load()} shortsEnabled={controller.shortsFeedMode !== "disabled"} playbackSpeedOptions={JSON.stringify(controller.playerSpeedOptions)} />
       </div>
     </>
   );

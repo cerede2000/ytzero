@@ -392,6 +392,7 @@ describe("portable backup classification and restore", () => {
     db.prepare(`UPDATE channels SET refresh_schedule_days='[1,3]', refresh_schedule_time='["08:02","18:02"]' WHERE channel_id='UCportable'`).run();
     setUserSetting(1, "player_screenshot_filename", "{title}_{timestamp_ms}");
     setUserSetting(1, "enhance_frame_fps", "60");
+    setUserSetting(1, "player_speed_options", '["2.3","2.75"]');
     setUserSetting(1, "feed_sort", "arrival");
     setUserSetting(1, "youtube_title_language", "fr");
     setUserSetting(1, "video_card_actions", "delay");
@@ -427,6 +428,9 @@ describe("portable backup classification and restore", () => {
     db.prepare("INSERT INTO social_comment_likes(comment_id,user_id) VALUES(?,1)").run(socialCommentId);
     db.prepare("INSERT INTO social_post_mentions(post_id,mentioned_user_id,token) VALUES(?,1,'@Default')").run(socialPostId);
     const zip = await backup.createPortableBackup({ preset: "full", profiles: [profile.id] });
+    const exportedEntries = backup.readPortableZip(zip);
+    const exportedManifest = JSON.parse(decoder.decode(exportedEntries.get("manifest.json")!));
+    expect(exportedManifest.sections.find((section: any) => section.id === "profile.settings").schemaVersion).toBe(9);
     const before = (db.prepare("SELECT count(*) n FROM history").get() as { n: number }).n;
     db.prepare("UPDATE channels SET manual_status='active' WHERE channel_id='UCportable'").run();
     db.prepare("UPDATE channels SET refresh_schedule_days=NULL, refresh_schedule_time=NULL WHERE channel_id='UCportable'").run();
@@ -434,6 +438,7 @@ describe("portable backup classification and restore", () => {
     db.prepare("DELETE FROM user_channels WHERE user_id=1 AND channel_id='UCportable'").run();
     setUserSetting(1, "player_screenshot_filename", "changed");
     setUserSetting(1, "enhance_frame_fps", "24");
+    setUserSetting(1, "player_speed_options", "[]");
     setUserSetting(1, "feed_sort", "published");
     setUserSetting(1, "youtube_title_language", "profile");
     setUserSetting(1, "video_card_actions", "hover");
@@ -469,6 +474,7 @@ describe("portable backup classification and restore", () => {
     expect(db.prepare("SELECT refresh_schedule_days, refresh_schedule_time FROM channels WHERE channel_id='UCportable'").get()).toEqual({ refresh_schedule_days: "[1,3]", refresh_schedule_time: '["08:02","18:02"]' });
     expect(getUserSetting(1, "player_screenshot_filename")).toBe("{title}_{timestamp_ms}");
     expect(getUserSetting(1, "enhance_frame_fps")).toBe("60");
+    expect(getUserSetting(1, "player_speed_options")).toBe('["2.3","2.75"]');
     expect(getUserSetting(1, "feed_sort")).toBe("arrival");
     expect(getUserSetting(1, "youtube_title_language")).toBe("fr");
     expect(getUserSetting(1, "video_card_actions")).toBe("delay");

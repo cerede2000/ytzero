@@ -32,7 +32,8 @@ import {
   Undo2,
   UsersRound,
 } from "lucide-react";
-import { api, SB_CATEGORIES, PLAYBACK_SPEEDS } from "../api";
+import { api, SB_CATEGORIES } from "../api";
+import { resolvePlaybackSpeeds } from "../../../shared/playbackSpeeds";
 import { compactNumber, formatPlaylistVideoCount, formatTimeAgo, formatViewsCount } from "../i18n";
 import { formatAppDate } from "../dateTime";
 import TagChip from "../components/TagChip";
@@ -209,6 +210,7 @@ export default function WatchPage() {
     youtubeError,
     ytWrapRef,
   } = controller;
+  const playbackSpeeds = resolvePlaybackSpeeds(settings?.player_speed_options, speed, video?.channel_playback_speed);
 
   const { errorText: watchTogetherError, transportLockLabel: watchTogetherTransportLockLabel } = getWatchTogetherLabels(watchTogether, t);
   return (
@@ -551,7 +553,7 @@ export default function WatchPage() {
               </Button>}
             >
                 <Menu className="watch-speed-menu">
-                  {PLAYBACK_SPEEDS.map((s) => (
+                  {playbackSpeeds.map((s) => (
                     <MenuItem key={s} selected={speed === s} onClick={() => changeSpeed(s)}>
                       {s === "1" ? "1×" : `${s}×`}
                     </MenuItem>
@@ -723,7 +725,7 @@ export default function WatchPage() {
                         </button>
                         {t("channelSpeed")}
                       </div>
-                      {PLAYBACK_SPEEDS.map((s) => (
+                      {playbackSpeeds.map((s) => (
                         <button
                           key={s}
                           className={speed === s ? "is-selected" : undefined}

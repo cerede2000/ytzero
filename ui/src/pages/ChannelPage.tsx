@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import "./ChannelPage.css";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CalendarClock, Captions, Check, ChevronLeft, ChevronRight, ExternalLink, FileClock, Gauge, ListRestart, ListVideo, MessageSquareText, Plus, Radio, RefreshCw, Search, SlidersHorizontal, Star, UserMinus, UserPlus, Video as VideoIcon, X, Zap } from "lucide-react";
-import { api, type ChannelAbout, type ChannelManualStatus, type ChannelShortsFeedVisibility, type MembersOnlyVisibility, type PlaylistInfo, type Tag, type Video, PLAYBACK_SPEEDS } from "../api";
+import { api, type ChannelAbout, type ChannelManualStatus, type ChannelShortsFeedVisibility, type MembersOnlyVisibility, type PlaylistInfo, type Tag, type Video } from "../api";
+import { resolvePlaybackSpeeds } from "../../../shared/playbackSpeeds";
 import TagChip from "../components/TagChip";
 import TagCreateForm from "../components/TagCreateForm";
 import TagPickerMenu from "../components/TagPickerMenu";
@@ -47,6 +48,7 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
   const [postsEnabled, setPostsEnabled] = useState(false);
   const [unfollowPending, setUnfollowPending] = useState(false);
   const [channelSpeed, setChannelSpeed] = useState("");
+  const [playerSpeedOptions, setPlayerSpeedOptions] = useState("[]");
   const [captionMode, setCaptionMode] = useState<"off" | "language" | null>(null);
   const [captionLanguage, setCaptionLanguage] = useState<string | null>(null);
   const [membersOnlyVisibility, setMembersOnlyVisibility] = useState<MembersOnlyVisibility>("default");
@@ -132,6 +134,7 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
       setMembersOnlyVisibility(r.channel.members_only_visibility ?? "default");
       setShortsFeedVisibility(r.channel.shorts_feed_visibility ?? "default");
     }).catch(console.error);
+    api.settings().then((result) => setPlayerSpeedOptions(result.settings.player_speed_options)).catch(() => setPlayerSpeedOptions("[]"));
     api
       .feed({ channel: id, status: "all", shorts: true, page: 0 })
       .then((r) => { setVideos(r.videos); setHasMore(r.videos.length === CHANNEL_PAGE_SIZE); })
@@ -229,6 +232,7 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
     : captionMode === "language" && captionLanguage
       ? subtitleLanguageLabel(captionLanguage)
       : t("channelSettingDefault");
+  const playbackSpeeds = resolvePlaybackSpeeds(playerSpeedOptions, channelSpeed);
 
   const membersOnlyFeedLabel = {
     default: t("channelSettingDefault"),
@@ -567,7 +571,7 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
                       {!channelSpeed && <MenuStatus><Check size={14} /></MenuStatus>}
                     </button>
                     <MenuSeparator className="channel-technical-spacer" />
-                    {PLAYBACK_SPEEDS.map((speed) => (
+                    {playbackSpeeds.map((speed) => (
                       <button key={speed} className={channelSpeed === speed ? "is-selected" : undefined} onClick={() => changeSpeed(speed)}>
                         {speed === "1" ? "1×" : `${speed}×`}
                         {channelSpeed === speed && <MenuStatus><Check size={14} /></MenuStatus>}

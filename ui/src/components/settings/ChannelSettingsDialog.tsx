@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, LoaderCircle } from "lucide-react";
-import { api, PLAYBACK_SPEEDS, type Channel, type ChannelManualStatus, type ChannelShortsFeedVisibility, type MembersOnlyVisibility } from "../../api";
+import { api, type Channel, type ChannelManualStatus, type ChannelShortsFeedVisibility, type MembersOnlyVisibility } from "../../api";
+import { resolvePlaybackSpeeds } from "../../../../shared/playbackSpeeds";
 import { SUBTITLE_LANGUAGES } from "../../subtitleLanguages";
 import { useI18n } from "../../i18n";
 import ChannelRefreshScheduleDialog from "../ChannelRefreshScheduleDialog";
@@ -42,12 +43,13 @@ export function hasCustomChannelSettings(channel: Channel): boolean {
     || schedule.refresh_schedule_time != null;
 }
 
-export default function ChannelSettingsDialog({ channel, open, onOpenChange, onSaved, shortsEnabled }: {
+export default function ChannelSettingsDialog({ channel, open, onOpenChange, onSaved, shortsEnabled, playbackSpeedOptions = "[]" }: {
   channel: Channel | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: () => void;
   shortsEnabled: boolean;
+  playbackSpeedOptions?: string;
 }) {
   const { t } = useI18n();
   const [loadedChannel, setLoadedChannel] = useState<Channel | null>(null);
@@ -85,6 +87,7 @@ export default function ChannelSettingsDialog({ channel, open, onOpenChange, onS
     { value: "off" as const, label: t("captionsOff") },
     ...SUBTITLE_LANGUAGES.map((language) => ({ value: `language:${language.code}` as CaptionChoice, label: language.label })),
   ], [t]);
+  const playbackSpeeds = resolvePlaybackSpeeds(playbackSpeedOptions, draft?.speed);
 
   const save = async () => {
     if (!channel || !draft || !initial || saving) return;
@@ -163,7 +166,7 @@ export default function ChannelSettingsDialog({ channel, open, onOpenChange, onS
               value={draft.speed}
               options={[
                 { value: "", label: t("channelSettingDefault") },
-                ...PLAYBACK_SPEEDS.map((speed) => ({ value: speed, label: `${speed}×` })),
+                ...playbackSpeeds.map((speed) => ({ value: speed, label: `${speed}×` })),
               ]}
               onChange={(speed) => setDraft((current) => current && ({ ...current, speed }))}
             />
