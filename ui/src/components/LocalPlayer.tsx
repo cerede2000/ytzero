@@ -751,7 +751,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
           <span className="lp-spacer" />
           {live && onExitStreaming && (
             <>
-              <button className="lp-exit-stream" onClick={onExitStreaming} title={exitStreamingLabel} disabled={transportLocked}>
+              <button className="lp-exit-stream" onClick={onExitStreaming} aria-label={exitStreamingLabel} disabled={transportLocked}>
                 <MonitorPlay size={17} />
                 {exitStreamingLabel && <span>{exitStreamingLabel}</span>}
               </button>
@@ -759,7 +759,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
             </>
           )}
           {!live && onDownload && (
-            <button className="lp-btn" onClick={onDownload} aria-label={downloadLabel} title={downloadLabel} disabled={transportLocked}>
+            <button className="lp-btn" onClick={onDownload} aria-label={downloadLabel} disabled={transportLocked}>
               <ArrowDownToLine size={19} />
             </button>
           )}
@@ -773,7 +773,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
             onSelect={pickSubLang}
             onToggle={toggleSubtitles}
           />
-          <button className="lp-btn" onClick={() => void takeScreenshot()} aria-label={t("playerScreenshot")} title={`${t("playerScreenshot")} (S)`} disabled={buffering}>
+          <button className="lp-btn" onClick={() => void takeScreenshot()} aria-label={`${t("playerScreenshot")} (S)`} disabled={buffering}>
             <Camera size={19} />
           </button>
           {onToggleCinema && (
@@ -782,7 +782,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
               onClick={onToggleCinema}
               aria-label={t("cinemaMode")}
               aria-pressed={cinemaMode}
-              title={t("cinemaMode")}
             >
               <Clapperboard size={19} />
             </button>

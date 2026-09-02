@@ -1,32 +1,26 @@
 import type { ReactNode } from "react";
-import { SelectMenu } from "./Selection";
 import { cx } from "./utils";
 import "./PermissionMatrix.css";
 
 export type PermissionMatrixValue = "inherit" | "allow" | "deny";
 
-export function PermissionMatrix<Row extends { id: number | string }>({ rows, columns, valueFor, onChange, renderRow, disabled, rowHeader = "Profile", stateLabels = { inherit: "Inherited", allow: "Allowed", deny: "Denied" } }: {
+/** A large-data table with pinned identity columns and domain-rendered cells. */
+export function PermissionMatrix<Row extends { id: number | string }>({ rows, columns, corner, secondaryHeader, renderRow, renderSecondary, renderCell, rowDisabled }: {
   rows: readonly Row[];
   columns: readonly { id: string; label: ReactNode }[];
-  valueFor: (row: Row, columnId: string) => PermissionMatrixValue;
-  onChange: (row: Row, columnId: string, value: PermissionMatrixValue) => void;
+  corner: ReactNode;
+  secondaryHeader: ReactNode;
   renderRow: (row: Row) => ReactNode;
-  disabled?: (row: Row) => boolean;
-  rowHeader?: ReactNode;
-  stateLabels?: Record<PermissionMatrixValue, string>;
+  renderSecondary: (row: Row) => ReactNode;
+  renderCell: (row: Row, columnId: string) => ReactNode;
+  rowDisabled?: (row: Row) => boolean;
 }) {
-  const options: { value: PermissionMatrixValue; label: string }[] = [
-    { value: "inherit", label: stateLabels.inherit }, { value: "allow", label: stateLabels.allow }, { value: "deny", label: stateLabels.deny },
-  ];
   return <div className="ui-permission-matrix-wrap"><table className="ui-permission-matrix">
-    <thead><tr><th scope="col">{rowHeader}</th>{columns.map((column) => <th key={column.id} scope="col">{column.label}</th>)}</tr></thead>
-    <tbody>{rows.map((row) => <tr key={row.id} className={cx(disabled?.(row) && "ui-permission-matrix__row--disabled")}>
-      <th scope="row">{renderRow(row)}</th>
-      {columns.map((column) => <td key={column.id}><SelectMenu
-        value={valueFor(row, column.id)} options={options}
-        label={typeof column.label === "string" ? column.label : String(column.id)} size="sm"
-        disabled={disabled?.(row)} onChange={(value) => onChange(row, column.id, value)}
-      /></td>)}
+    <thead><tr><th className="ui-permission-matrix__identity" scope="col">{corner}</th><th className="ui-permission-matrix__secondary" scope="col">{secondaryHeader}</th>{columns.map((column) => <th key={column.id} scope="col">{column.label}</th>)}</tr></thead>
+    <tbody>{rows.map((row) => <tr key={row.id} className={cx(rowDisabled?.(row) && "ui-permission-matrix__row--disabled")}>
+      <th className="ui-permission-matrix__identity" scope="row">{renderRow(row)}</th>
+      <td className="ui-permission-matrix__secondary">{renderSecondary(row)}</td>
+      {columns.map((column) => <td key={column.id}>{renderCell(row, column.id)}</td>)}
     </tr>)}</tbody>
   </table></div>;
 }

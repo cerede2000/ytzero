@@ -15,6 +15,17 @@
 .ui-switch--checked { background: var(--accent); }
 .ui-switch--checked .ui-switch__thumb { background: #fff; transform: translateX(18px); }
 .ui-switch:disabled { cursor: default; opacity: .55; }
+.ui-tristate-switch { background: var(--bg); border: 1px solid var(--surface-3); border-radius: 10px; display: inline-grid; grid-template-columns: repeat(3,minmax(0,1fr)); overflow: hidden; padding: 3px; }
+.ui-tristate-switch--binary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.ui-tristate-switch__option { align-items: center; background: transparent; border: 0; border-radius: 7px; color: var(--text-2); cursor: pointer; display: inline-flex; font: inherit; font-size: 12px; font-weight: 600; gap: 5px; justify-content: center; min-height: 32px; padding: 5px 9px; white-space: nowrap; }
+.ui-tristate-switch__option svg { height: 14px; width: 14px; }
+.ui-tristate-switch__option:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.ui-tristate-switch__option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ui-tristate-switch__option--active { background: var(--surface-3); color: var(--text); }
+.ui-tristate-switch__option--allow.ui-tristate-switch__option--active { background: color-mix(in srgb,#52b979 22%,var(--surface-2)); color: #8bd7a8; }
+.ui-tristate-switch__option--deny.ui-tristate-switch__option--active { background: color-mix(in srgb,var(--live) 20%,var(--surface-2)); color: #ff8992; }
+.ui-tristate-switch__option:disabled { cursor: default; opacity: .55; }
+.ui-tristate-switch:has(.ui-tristate-switch__option > svg:only-child) .ui-tristate-switch__option { height: 32px; min-height: 32px; padding: 5px; width: 32px; }
 .ui-slider { appearance: none; background: linear-gradient(to right, var(--accent) 0 var(--ui-slider-progress), var(--surface-3) var(--ui-slider-progress) 100%); border-radius: 999px; cursor: pointer; height: 6px; }
 .ui-slider::-webkit-slider-thumb { appearance: none; background: var(--accent); border: 0; border-radius: 50%; box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 45%, transparent); height: 18px; width: 18px; }
 .ui-slider::-moz-range-thumb { background: var(--accent); border: 0; border-radius: 50%; height: 18px; width: 18px; }

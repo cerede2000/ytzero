@@ -37,10 +37,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 export interface IconButtonProps extends Omit<ButtonProps, "iconOnly" | "leadingIcon" | "trailingIcon"> {
   label: string;
   icon?: ReactNode;
+  showTitle?: boolean;
 }
 
-export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({ label, icon, children, title, ...props }, ref) {
-  return <Button ref={ref} iconOnly aria-label={label} title={title ?? label} {...props}>{icon ?? children}</Button>;
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({ label, icon, children, showTitle = true, title, ...props }, ref) {
+  return <Button ref={ref} iconOnly aria-label={label} title={showTitle ? title ?? label : undefined} {...props}>{icon ?? children}</Button>;
 });
 
 export interface ButtonLinkProps extends LinkProps {

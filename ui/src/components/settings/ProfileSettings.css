@@ -1,23 +1,40 @@
 /* ---------- Profiles in settings ---------- */
-.profiles-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
-.profile-card {
-  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  background: var(--surface); border: 1px solid var(--surface-2);
-  border-radius: var(--radius); padding: 14px 16px;
-}
-.profile-card.active { border-color: var(--accent); }
-.profile-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.profile-card-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
-.profile-card-meta { color: var(--text-2); font-size: 13px; }
-.profile-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
-/* Card-level actions sit on the right; the expanded editor wraps onto its own row. */
-.profile-card > .profile-card-actions { margin-left: auto; }
+.profile-management-toolbar { margin: 0 0 14px; }
+.profile-management-toolbar__access { display: flex; flex-wrap: wrap; gap: 8px; }
+.profile-management-list { display: grid; gap: 10px; }
+.profile-management-item { background: var(--surface-2); border: 1px solid var(--surface-3); border-radius: 12px; min-width: 0; overflow: hidden; }
+.profile-management-item--active { border-color: color-mix(in srgb,var(--accent) 72%,var(--surface-3)); }
+.profile-management-item__summary { align-items: center; display: grid; gap: 14px; grid-template-columns: auto minmax(150px,1fr) minmax(190px,260px) auto; min-width: 0; padding: 13px 14px; }
+.profile-management-item__identity { display: grid; gap: 5px; min-width: 0; }
+.profile-management-item__name { align-items: center; display: flex; font-size: 14px; font-weight: 650; gap: 7px; min-width: 0; }
+.profile-management-item__name svg { color: var(--accent); }
+.profile-management-item__meta { align-items: center; color: var(--text-2); display: flex; flex-wrap: wrap; font-size: 11.5px; gap: 5px 8px; min-width: 0; }
+.profile-management-item__role { display: grid; gap: 5px; min-width: 0; }
+.profile-management-item__role > span:first-child { color: var(--text-2); font-size: 10.5px; font-weight: 650; }
+.profile-management-item__role > .ui-badge { justify-self: start; }
+.profile-management-item__role .ui-select-menu__trigger { max-width: 100%; width: 100%; }
+.profile-management-item__editor { border-top: 1px solid var(--surface-3); padding: 16px; }
+.profile-creation-panel { align-items: start; background: var(--surface-2); border: 1px solid var(--surface-3); border-radius: 12px; display: grid; gap: 14px; grid-template-columns: auto minmax(0,1fr) auto; margin-top: 12px; padding: 14px; }
+.profile-creation-panel__fields { display: grid; gap: 12px; min-width: 0; }
+.profile-creation-panel__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .profile-edit-grid { display: flex; flex-direction: column; gap: 16px; }
 .profile-edit-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .profile-password-fields { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .profile-password-feedback { margin-top: 12px; }
 @container settings-section (max-width: 700px) {
   .profile-password-fields { grid-template-columns: minmax(0, 1fr); }
+  .profile-management-item__summary { grid-template-columns: auto minmax(0,1fr) auto; }
+  .profile-management-item__role { grid-column: 2 / -1; grid-row: 2; }
+}
+@container settings-section (max-width: 460px) {
+  .profile-management-toolbar, .profile-management-toolbar__access { align-items: stretch; flex-direction: column; }
+  .profile-management-toolbar .ui-button { width: 100%; }
+  .profile-management-item__summary { align-items: start; grid-template-columns: auto minmax(0,1fr); }
+  .profile-management-item__edit { grid-column: 1 / -1; width: 100%; }
+  .profile-management-item__role { grid-column: 1 / -1; }
+  .profile-creation-panel { grid-template-columns: auto minmax(0,1fr); }
+  .profile-creation-panel__actions { grid-column: 1 / -1; }
+  .profile-creation-panel__actions .ui-button { flex: 1; }
 }
 
 /* Avatar + name side by side */
@@ -47,5 +64,3 @@
 }
 .profile-color-swatch.selected { border-color: var(--text); }
 .profile-edit-row input.input-error { border-color: var(--live); }
-
-

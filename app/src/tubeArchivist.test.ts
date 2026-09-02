@@ -33,7 +33,16 @@ describe("TubeArchivist source plugin", () => {
   });
   test("proxies range playback and syncs completion without leaking the token", () => {
     expect(result.streamStatus).toBe(206);
-    expect(result.forwardedRange).toBe("bytes=0-3");
+    expect(result.streamContentRange).toBe("bytes 0-3/12");
+    expect(result.mediaRanges).toEqual([
+      "bytes=0-3",
+      "bytes=4-8388611",
+      "bytes=0-8388607",
+    ]);
+    expect(result.openEndedStreamStatus).toBe(206);
+    expect(result.openEndedStreamContentRange).toBe("bytes 4-11/12");
+    expect(result.rangeLessStreamStatus).toBe(206);
+    expect(result.invalidStreamStatus).toBe(416);
     expect(JSON.parse(result.watchedCall)).toEqual({ id: "taVideo01", is_watched: true });
     expect(result.everyUpstreamCallAuthenticated).toBe(true);
     expect(result.statusLeaksToken).toBe(false);

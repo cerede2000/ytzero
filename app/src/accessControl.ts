@@ -15,6 +15,7 @@ export interface PermissionGroup {
   portable_uuid: string;
   name: string;
   is_system: boolean;
+  sort_order: number;
   permissions: ProfilePermissionArea[];
 }
 
@@ -30,9 +31,10 @@ const all = () => [...PROFILE_PERMISSION_AREAS];
 const placeholders = (items: readonly unknown[]) => items.map(() => "?").join(",");
 
 async function createGroup(name: string, permissions: readonly ProfilePermissionArea[], system: boolean) {
+  const nextOrder = Number((await database.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS value FROM permission_groups").get() as { value: number }).value);
   const result = await database.prepare(
-    "INSERT INTO permission_groups(portable_uuid,name,is_system) VALUES(?,?,?) RETURNING id,portable_uuid,name,is_system",
-  ).get(crypto.randomUUID(), name, system ? 1 : 0) as { id: number; portable_uuid: string; name: string; is_system: number };
+    "INSERT INTO permission_groups(portable_uuid,name,is_system,sort_order) VALUES(?,?,?,?) RETURNING id,portable_uuid,name,is_system,sort_order",
+  ).get(crypto.randomUUID(), name, system ? 1 : 0, nextOrder) as { id: number; portable_uuid: string; name: string; is_system: number; sort_order: number };
   for (const permission of permissions) {
     await database.prepare("INSERT INTO permission_group_permissions(group_id,permission,allowed) VALUES(?,?,1)").run(result.id, permission);
   }
@@ -79,12 +81,20 @@ export async function assignDefaultPermissionGroup(userId: number): Promise<void
   await assignProfile(userId, policy.default_group_id);
 }
 
-export async function effectivePermissions(userId: number, administrator = false): Promise<ProfileAccess> {
-  const assignment = await database.prepare("SELECT group_id FROM profile_permission_groups WHERE user_id=?").get(userId) as { group_id: number } | null;
+export async function effectivePermissions(userId: number, administrator = false, externalGroupUuid?: string | null): Promise<ProfileAccess> {
+  const external = externalGroupUuid
+    ? await database.prepare("SELECT id AS group_id FROM permission_groups WHERE portable_uuid=?").get(externalGroupUuid) as { group_id: number } | null
+    : null;
+  const assignment = external ?? await database.prepare("SELECT group_id FROM profile_permission_groups WHERE user_id=?").get(userId) as { group_id: number } | null;
   if (!assignment) await assignDefaultPermissionGroup(userId);
   const groupId = assignment?.group_id ?? (await database.prepare("SELECT group_id FROM profile_permission_groups WHERE user_id=?").get(userId) as { group_id: number }).group_id;
   const grants = await database.prepare("SELECT permission FROM permission_group_permissions WHERE group_id=? AND allowed=1").all(groupId) as Array<{ permission: string }>;
-  const overrides = await database.prepare("SELECT permission,allowed FROM profile_permission_overrides WHERE user_id=?").all(userId) as Array<{ permission: string; allowed: number }>;
+  // An externally mapped role is authoritative for the session. Manual
+  // per-profile overrides belong to the stored role selection and must not
+  // silently weaken or broaden the role chosen by an identity provider.
+  const overrides = external
+    ? []
+    : await database.prepare("SELECT permission,allowed FROM profile_permission_overrides WHERE user_id=?").all(userId) as Array<{ permission: string; allowed: number }>;
   const map: Partial<Record<ProfilePermissionArea, Exclude<PermissionOverride, "inherit">>> = {};
   const allowed = new Set<ProfilePermissionArea>(grants.map((row) => row.permission).filter((key): key is ProfilePermissionArea => (PROFILE_PERMISSION_AREAS as readonly string[]).includes(key)));
   for (const row of overrides) {
@@ -97,8 +107,8 @@ export async function effectivePermissions(userId: number, administrator = false
   return { profile_id: userId, group_id: groupId, overrides: map, effective, admin_only_areas: PROFILE_PERMISSION_AREAS.filter((permission) => !effective.includes(permission)) };
 }
 
-export async function hasPermission(userId: number, permission: ProfilePermissionArea, administrator = false): Promise<boolean> {
-  return administrator || (await effectivePermissions(userId)).effective.includes(permission);
+export async function hasPermission(userId: number, permission: ProfilePermissionArea, administrator = false, externalGroupUuid?: string | null): Promise<boolean> {
+  return administrator || (await effectivePermissions(userId, false, externalGroupUuid)).effective.includes(permission);
 }
 
 export async function accessControlSnapshot() {
@@ -108,7 +118,7 @@ export async function accessControlSnapshot() {
     policy = await database.prepare("SELECT default_group_id,revision FROM permission_policy WHERE singleton=1").get() as { default_group_id: number; revision: number } | null;
   }
   if (!policy) throw new Error("access-control policy is not initialized");
-  const groups = await database.prepare("SELECT id,portable_uuid,name,is_system FROM permission_groups ORDER BY is_system DESC, name COLLATE NOCASE, id").all() as Array<{ id: number; portable_uuid: string; name: string; is_system: number }>;
+  const groups = await database.prepare("SELECT id,portable_uuid,name,is_system,sort_order FROM permission_groups ORDER BY sort_order,id").all() as Array<{ id: number; portable_uuid: string; name: string; is_system: number; sort_order: number }>;
   const rows = await database.prepare("SELECT group_id,permission FROM permission_group_permissions WHERE allowed=1").all() as Array<{ group_id: number; permission: string }>;
   return {
     revision: policy.revision,

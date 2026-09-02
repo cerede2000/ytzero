@@ -660,6 +660,7 @@ export interface PermissionGroup {
   portable_uuid: string;
   name: string;
   is_system: boolean;
+  sort_order: number;
   permissions: ProfilePermissionArea[];
 }
 
@@ -667,16 +668,20 @@ export interface AccessControlProfile {
   id: number;
   name: string;
   avatar_color: string;
+  is_primary: boolean;
   is_child: boolean;
   is_admin: boolean;
   access: ProfilePermissions;
 }
 
-export interface AccessControlSnapshot {
+export interface AccessControlPolicySnapshot {
   revision: number;
   default_group_id: number;
-  permissions: ProfilePermissionArea[];
   groups: PermissionGroup[];
+}
+
+export interface AccessControlSnapshot extends AccessControlPolicySnapshot {
+  permissions: ProfilePermissionArea[];
   profiles: AccessControlProfile[];
 }
 
@@ -784,9 +789,18 @@ export interface AuthConfig {
     logout_url: string;
     groups_claim: string;
     admin_group: string;
+    role_mappings: ExternalRoleMappingConfig;
     redirect_uri: string;
   };
-  proxy: { header: string; logout_url: string; current_header_value: string };
+  proxy: {
+    header: string;
+    groups_header: string;
+    logout_url: string;
+    current_header_value: string;
+    current_groups_header_value: string;
+    role_mappings: ExternalRoleMappingConfig;
+  };
+  roles: { uuid: string; name: string; is_system: boolean }[];
   profiles: { id: number; name: string; username: string; has_password: boolean; has_passkey: boolean; oidc_subject: string; proxy_match: string }[];
 }
 
@@ -794,8 +808,13 @@ export interface AuthConfigUpdate {
   hide_other_profiles?: boolean;
   shared?: { username?: string; password?: string };
   oidc?: Partial<AuthConfig["oidc"]> & { client_secret?: string };
-  proxy?: { header?: string; logout_url?: string };
+  proxy?: { header?: string; groups_header?: string; logout_url?: string; role_mappings?: ExternalRoleMappingConfig };
   profiles?: { id: number; oidc_subject?: string; proxy_match?: string }[];
+}
+
+export interface ExternalRoleMappingConfig {
+  mappings: { group: string; role_uuid: string }[];
+  fallback_role_uuid: string | null;
 }
 
 export interface TemporaryProfileCredential {

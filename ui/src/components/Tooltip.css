@@ -19,6 +19,7 @@
 .tooltip-tip--portal {
   opacity: 1;
   position: fixed;
+  z-index: 1100;
 }
 .tooltip-wrap--delayed .tooltip-tip { transition-delay: 0ms; }
 .tooltip-wrap--delayed:hover .tooltip-tip { transition-delay: var(--tooltip-delay); }

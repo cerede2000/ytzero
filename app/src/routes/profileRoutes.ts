@@ -159,7 +159,6 @@ api.put("/profiles/visibility", async (c) => {
 
 api.put("/profiles/:id/admin", async (c) => {
   if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
-  if (!canDelegateProfileAdmins()) return c.json({ error: "profile administrator delegation requires identity-bound login" }, 409);
   const id = Number(c.req.param("id"));
   if (!Number.isSafeInteger(id) || id < 1) return c.json({ error: "invalid profile id" }, 400);
   if (id === primaryUserId()) return c.json({ error: "the primary profile owner cannot be changed" }, 400);
@@ -168,6 +167,9 @@ api.put("/profiles/:id/admin", async (c) => {
   if (profile.is_child === 1) return c.json({ error: "a child profile cannot be an administrator" }, 400);
   const body = await c.req.json().catch(() => ({}));
   if (typeof body.is_admin !== "boolean") return c.json({ error: "is_admin must be a boolean" }, 400);
+  // Promotion requires a profile-bound identity. Revocation remains available
+  // after authentication changes so the primary owner can remove stale admins.
+  if (body.is_admin && !canDelegateProfileAdmins()) return c.json({ error: "profile administrator delegation requires identity-bound login" }, 409);
   await database.prepare("UPDATE users SET is_admin = ? WHERE id = ?").run(body.is_admin ? 1 : 0, id);
   profile.is_admin = body.is_admin ? 1 : 0;
   log.info("profile.admin_changed", { id, is_admin: body.is_admin });

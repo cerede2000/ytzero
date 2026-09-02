@@ -36,14 +36,23 @@ existing external archive as a headless source for the normal feed and player;
 it intentionally adds no route or sidebar item. Shared plugin configuration and
 connection tests require administrator access.
 
-## Administrator-only access
+## Profile access
 
-The primary profile chooses which areas non-administrator profiles may change
-under **Settings → Profiles → Administrator-only access**. Permissions are split
-into channels, followed playlists, imports, tags and rules, filters, personal
-playlists, appearance, feed, navigation, playback, plugins, and profiles.
+The primary profile manages access under **Settings → Profiles**. Roles define
+the areas their non-administrator members may edit: channels, followed
+playlists, imports, tags and rules, filters, personal playlists, appearance,
+feed, navigation, playback, plugins, and profiles. Roles are created and edited
+in a dedicated dialog, and one role is the default for newly created profiles.
 
-The default keeps shared behavior and administration restricted while leaving
-personal tags, rules, filters, and playlists editable. The Child Lock PIN is a
-separate temporary gate: it does not grant administrator status or change these
-permissions. See [Profiles](Profiles) and [Child Lock](Child-Lock).
+The normal profile list assigns a role to each profile. Choosing **Custom** from
+the role picker opens the full permission matrix and unlocks that profile's
+granular cells; named roles keep those cells read-only. Each custom cell can
+inherit the base role, explicitly allow an area, or explicitly block it. The
+matrix keeps its profile and role columns pinned while the permission columns
+scroll horizontally. Administrators always have full access, regardless of
+stored roles or exceptions.
+
+The standard defaults keep shared behavior and administration restricted while
+leaving personal tags, rules, filters, and playlists editable. The Child Lock
+PIN is a separate temporary gate: it does not grant administrator status or
+change profile permissions. See [Profiles](Profiles) and [Child Lock](Child-Lock).

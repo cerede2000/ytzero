@@ -93,4 +93,15 @@
 .auth-generated-credentials { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
 .auth-generated-credential { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr) minmax(160px, 1fr); gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--surface-3); border-radius: 10px; background: var(--surface-2); }
 .auth-generated-credential code { user-select: all; overflow-wrap: anywhere; }
+.auth-role-mappings { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--surface-3); border-radius: var(--radius); background: var(--surface); }
+.auth-role-mappings-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.auth-role-mappings-head > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.auth-role-mapping-list { display: flex; flex-direction: column; gap: 8px; }
+.auth-role-mapping-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 8px; align-items: center; }
+.auth-role-mapping-actions { display: flex; align-items: center; gap: 4px; }
 @media (max-width: 640px) { .auth-generated-credential { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+  .auth-role-mappings-head { align-items: stretch; flex-direction: column; }
+  .auth-role-mapping-row { grid-template-columns: 1fr; }
+  .auth-role-mapping-actions { justify-content: flex-end; }
+}

@@ -189,10 +189,15 @@ below.
   it overrides this portable value at runtime and the saved value remains
   dormant for a future start without `TZ`. The environment override itself is
   never exported or restored.
-  Access-control groups, their granted capability keys and the configured
+  Access-control groups, their user-defined order, granted capability keys and the configured
   default group are portable instance configuration in the versioned
   `instance.access-control` section. They use stable group UUIDs. Administrator
   grants remain local and are never exported.
+  External identity mappings (OIDC group-to-role rules, trusted-proxy group
+  headers and their fallback roles) are instance-local authentication
+  configuration and are never exported. They reference access-control groups
+  by stable UUID at runtime, are removed when the referenced role is deleted,
+  and never overwrite a profile's portable manual role assignment.
   Enabling Child Lock and its PIN remain local and are never exported.
 - `user_settings`: registered settings for selected profiles.
   The interface language is portable per-profile presentation configuration. It

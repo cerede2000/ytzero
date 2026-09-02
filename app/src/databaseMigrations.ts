@@ -231,6 +231,40 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
       { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS permission_policy (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), default_group_id INTEGER NOT NULL REFERENCES permission_groups(id) ON DELETE RESTRICT, revision INTEGER NOT NULL DEFAULT 1)" },
     ],
   },
+  {
+    version: 102,
+    name: "permission-group-order",
+    schemaHashes: {
+      "app/src/schema.sql": "7ebc8a637ac2aa8c29630650b453b4432484dc32c4aff85f7a9b8824ccae9e49",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+    },
+    sqlite: [
+      { kind: "add-column", table: "permission_groups", column: "sort_order", definition: "INTEGER NOT NULL DEFAULT 0" },
+      { kind: "sql", statement: "UPDATE permission_groups SET sort_order=id WHERE sort_order=0" },
+    ],
+    postgres: [
+      { kind: "add-column", table: "permission_groups", column: "sort_order", definition: "INTEGER NOT NULL DEFAULT 0" },
+      { kind: "sql", statement: "UPDATE permission_groups SET sort_order=id WHERE sort_order=0" },
+    ],
+  },
+  {
+    version: 103,
+    name: "external-role-session",
+    schemaHashes: {
+      "app/src/schema.sql": "9b2cbec713410c5f3a5754205b137fde77a906725963f7353fa8ad1503a1986b",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+    },
+    sqlite: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS auth_sessions (token TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, scope TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0, permission_group_uuid TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), expires_at TEXT NOT NULL, last_seen TEXT)" },
+      { kind: "add-column", table: "auth_sessions", column: "permission_group_uuid", definition: "TEXT" },
+    ],
+    postgres: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS auth_sessions (token TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, scope TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0, permission_group_uuid TEXT, created_at TEXT NOT NULL DEFAULT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'), expires_at TEXT NOT NULL, last_seen TEXT)" },
+      { kind: "add-column", table: "auth_sessions", column: "permission_group_uuid", definition: "TEXT" },
+    ],
+  },
 ];
 
 function quoteIdentifier(identifier: string): string {

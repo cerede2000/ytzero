@@ -20,7 +20,16 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   });
   if (url.pathname.endsWith("/comment/")) return Response.json({ data: [{ comment_id: "c1", comment_text: "Archived comment", comment_author: "Viewer" }] });
   if (url.pathname === "/api/watched/") return Response.json({ ok: true });
-  if (url.pathname.endsWith(".mp4")) return new Response(new Uint8Array([1, 2, 3, 4]), { status: headers.has("range") ? 206 : 200, headers: { "Content-Type": "video/mp4", "Content-Length": "4", "Accept-Ranges": "bytes", ...(headers.has("range") ? { "Content-Range": "bytes 0-3/4" } : {}) } });
+  if (url.pathname.endsWith(".mp4")) {
+    const total = 12;
+    const match = headers.get("range")?.match(/^bytes=(\d+)-(\d+)$/);
+    if (!match) return new Response(null, { status: 400 });
+    const start = Number(match[1]);
+    if (start >= total) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${total}` } });
+    const end = Math.min(Number(match[2]), total - 1);
+    const body = new Uint8Array(end - start + 1).map((_, index) => start + index);
+    return new Response(body, { status: 206, headers: { "Content-Type": "video/mp4", "Content-Length": String(body.byteLength), "Accept-Ranges": "bytes", "Content-Range": `bytes ${start}-${end}/${total}` } });
+  }
   if (url.pathname.endsWith(".jpg")) return new Response(new Uint8Array([0xff, 0xd8, 0xff]), { headers: { "Content-Type": "image/jpeg" } });
   if (url.pathname.endsWith(".vtt")) return new Response("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nCześć", { headers: { "Content-Type": "text/vtt" } });
   if (url.pathname === "/api/ping/") return Response.json({ version: "v0.test" });
@@ -45,6 +54,11 @@ const comments = await (await request("/videos/taVideo01/comments")).json() as a
 const subtitles = await (await request("/videos/taVideo01/subtitles")).json() as any;
 const streamResponse = await request("/videos/taVideo01/stream", { headers: { Range: "bytes=0-3" } });
 await streamResponse.arrayBuffer();
+const openEndedStreamResponse = await request("/videos/taVideo01/stream", { headers: { Range: "bytes=4-" } });
+await openEndedStreamResponse.arrayBuffer();
+const rangeLessStreamResponse = await request("/videos/taVideo01/stream");
+await rangeLessStreamResponse.arrayBuffer();
+const invalidStreamResponse = await request("/videos/taVideo01/stream", { headers: { Range: "bytes=-4" } });
 await request("/videos/taVideo01/complete", { method: "POST", body: "{}" });
 await flushTubeArchivistWatched();
 const statusResponse = await request("/plugins/tubearchivist/config");
@@ -64,7 +78,12 @@ console.log("RESULT " + JSON.stringify({
   comments: comments.comments,
   subtitles: subtitles.subtitles,
   streamStatus: streamResponse.status,
-  forwardedRange: calls.find((call) => call.path.endsWith(".mp4"))?.range,
+  streamContentRange: streamResponse.headers.get("content-range"),
+  mediaRanges: calls.filter((call) => call.path.endsWith(".mp4")).map((call) => call.range),
+  openEndedStreamStatus: openEndedStreamResponse.status,
+  openEndedStreamContentRange: openEndedStreamResponse.headers.get("content-range"),
+  rangeLessStreamStatus: rangeLessStreamResponse.status,
+  invalidStreamStatus: invalidStreamResponse.status,
   watchedCall: calls.find((call) => call.path === "/api/watched/")?.body,
   everyUpstreamCallAuthenticated: calls.every((call) => call.authorization === "Token sentinel-secret-token"),
   statusLeaksToken: statusText.includes("sentinel-secret-token"),

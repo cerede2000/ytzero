@@ -25,6 +25,7 @@ export default function WatchPlayerModeToggle({
       variant={placement === "actions" ? "default" : "secondary"}
       className={`watch-player-mode-toggle watch-player-mode-toggle--${placement}`}
       label={label}
+      showTitle={false}
       icon={active ? <MonitorPlay /> : <Headphones />}
       onClick={(event) => {
         onToggle(!active);

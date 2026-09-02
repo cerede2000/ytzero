@@ -14,7 +14,7 @@ import TagChip from "../TagChip";
 import TagPickerMenu from "../TagPickerMenu";
 import Tooltip from "../Tooltip";
 import VideoCard from "../VideoCard";
-import { Badge, Button, Checkbox, Chip, ColorPicker, Divider, Field, IconButton, Inline, Input, Popover, SectionHeader, SelectMenu, SettingsSection, Switch, Text } from "../ui";
+import { Badge, Button, Checkbox, Chip, ColorPicker, Divider, Field, IconButton, Inline, Input, Popover, SectionHeader, SelectMenu, SettingRow, SettingsSection, Switch, Text } from "../ui";
 import "./SettingsEditors.css";
 
 export function PlaylistSettingsItem({
@@ -700,8 +700,7 @@ export function ChannelOwnership({ showToast }: { showToast: (m: string) => void
   };
 
   return (
-    <SettingsSection title={t("assignChannelsTitle")}>
-      <Text tone="secondary">{t("assignChannelsHint")}</Text>
+    <SettingRow label={t("assignChannelsTitle")} description={t("assignChannelsHint")} align="start">
       <div className="form-row">
         <SelectMenu label={t("assignChannelsSelect")} value={target} options={[{ value: "" as const, label: t("assignChannelsSelect") }, ...profiles.map((profile) => ({ value: profile.id, label: profile.name }))]} onChange={setTarget} />
         <Button variant="primary" disabled={typeof target !== "number" || busy} onClick={assign}>
@@ -709,6 +708,6 @@ export function ChannelOwnership({ showToast }: { showToast: (m: string) => void
           {t("assignChannelsButton")}
         </Button>
       </div>
-    </SettingsSection>
+    </SettingRow>
   );
 }

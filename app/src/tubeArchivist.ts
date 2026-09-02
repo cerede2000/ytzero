@@ -1,5 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { audioRangeHeader, parseAudioRange, parseAudioUnsatisfiedTotal, validateAudioRangeResponse } from "./audioRange";
 import { database } from "./database";
 import { DB_PATH, getSetting, setSetting } from "./db";
 import { log } from "./logger";
@@ -11,6 +12,10 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{6,20}$/;
 const CONFIG_DIR = process.env.TUBE_ARCHIVIST_CONFIG_DIR ?? resolve(dirname(DB_PATH), "../tubearchivist");
 const TOKEN_FILE = resolve(CONFIG_DIR, "token");
 const MAX_PAGES = 20_000;
+// Bun's HTTP client/server paths can eagerly buffer proxied streams. Keep each
+// media response bounded so a slow or abandoned player request cannot retain an
+// entire archived video in the YT Zero process.
+const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
 let syncPromise: Promise<TubeArchivistSyncResult> | null = null;
 let syncAbortController: AbortController | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -86,8 +91,14 @@ async function request(path: string, init: RequestInit = {}, query?: URLSearchPa
   } catch {
     throw new Error("TubeArchivist request failed");
   }
-  if (response.status >= 300 && response.status < 400) throw new Error("TubeArchivist redirect was rejected");
-  if (response.status === 401 || response.status === 403) throw new Error("TubeArchivist authentication failed");
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error("TubeArchivist redirect was rejected");
+  }
+  if (response.status === 401 || response.status === 403) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error("TubeArchivist authentication failed");
+  }
   return response;
 }
 
@@ -309,17 +320,58 @@ export async function tubeArchivistResource(videoId: string, kind: "media" | "th
   if (!item) return null;
   const url = storedResourceUrl(item, kind);
   if (!url) return null;
-  const headers: Record<string, string> = {};
-  if (range && /^bytes=(?:\d+-\d*|-\d+)$/.test(range)) headers.Range = range;
-  else if (range) return new Response(null, { status: 416 });
+  const requestedRange = kind === "media" ? parseAudioRange(range ?? null, MEDIA_CHUNK_BYTES) : null;
+  if (kind === "media" && !requestedRange) {
+    return new Response(null, { status: 416, headers: { "Accept-Ranges": "bytes", "Cache-Control": "no-store" } });
+  }
+  const headers: Record<string, string> = requestedRange ? { Range: audioRangeHeader(requestedRange) } : {};
   const response = await request(url.pathname + url.search, { headers, signal });
-  if (!response.ok && response.status !== 206) return new Response(null, { status: response.status === 416 ? 416 : 502 });
+  if (response.status === 416) {
+    const total = parseAudioUnsatisfiedTotal(response.headers.get("content-range"));
+    await response.body?.cancel().catch(() => {});
+    return new Response(null, { status: 416, headers: {
+      "Accept-Ranges": "bytes", "Cache-Control": "no-store",
+      ...(total != null ? { "Content-Range": `bytes */${total}` } : {}),
+    } });
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    return new Response(null, { status: 502 });
+  }
   const contentType = response.headers.get("content-type") ?? "";
-  if (kind === "media" && !/^(video\/(mp4|webm)|application\/octet-stream)(?:;|$)/i.test(contentType)) return new Response(null, { status: 502 });
-  if (kind === "thumbnail" && !/^image\//i.test(contentType)) return new Response(null, { status: 502 });
+  if (kind === "media" && !/^(video\/(mp4|webm)|application\/octet-stream)(?:;|$)/i.test(contentType)) {
+    await response.body?.cancel().catch(() => {});
+    return new Response(null, { status: 502 });
+  }
+  if (kind === "thumbnail" && !/^image\//i.test(contentType)) {
+    await response.body?.cancel().catch(() => {});
+    return new Response(null, { status: 502 });
+  }
+  if (kind === "media") {
+    const contentRange = validateAudioRangeResponse(
+      response.status,
+      response.headers.get("content-range"),
+      response.headers.get("content-length"),
+      requestedRange!,
+    );
+    if (!contentRange || !response.body) {
+      await response.body?.cancel().catch(() => {});
+      return new Response(null, { status: 502 });
+    }
+    const body = await response.arrayBuffer().catch(() => null);
+    const length = contentRange.end - contentRange.start + 1;
+    if (!body || body.byteLength !== length || signal?.aborted) return new Response(null, { status: 502 });
+    return new Response(body, { status: 206, headers: {
+      "Content-Type": contentType,
+      "Cache-Control": "no-store",
+      "Accept-Ranges": "bytes",
+      "Content-Length": String(length),
+      "Content-Range": `bytes ${contentRange.start}-${contentRange.end}/${contentRange.total}`,
+    } });
+  }
   const safe = new Headers({ "Content-Type": contentType, "Cache-Control": kind === "thumbnail" ? "private, max-age=3600" : "no-store" });
   for (const name of ["content-length", "content-range", "accept-ranges"]) { const value = response.headers.get(name); if (value) safe.set(name, value); }
-  return new Response(kind === "thumbnail" ? await response.arrayBuffer() : response.body, { status: response.status, headers: safe });
+  return new Response(await response.arrayBuffer(), { status: response.status, headers: safe });
 }
 
 export async function tubeArchivistComments(videoId: string): Promise<VideoCommentsResult | null> {

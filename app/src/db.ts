@@ -27,6 +27,9 @@ for (const stmt of [
   // is_admin grants primary-equivalent powers to OIDC sessions whose groups
   // claim contains the configured admin group (older DBs predate this column).
   "ALTER TABLE auth_sessions ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
+  // External identity groups can select an effective role for this session
+  // without overwriting the profile's manually assigned role.
+  "ALTER TABLE auth_sessions ADD COLUMN permission_group_uuid TEXT",
   // Child profile: restrictions are enforced server-side; only the primary
   // profile may toggle this flag.
   "ALTER TABLE users ADD COLUMN is_child INTEGER NOT NULL DEFAULT 0",
@@ -300,8 +303,11 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   // `admin_group` gets primary-equivalent powers. Empty admin_group disables it.
   auth_oidc_groups_claim: "groups",
   auth_oidc_admin_group: "",
+  auth_oidc_role_mappings: '{"mappings":[],"fallback_role_uuid":null}',
   // Configurable forward-auth header name (e.g. Remote-User, X-Authentik-Username).
   auth_proxy_header: "Remote-User",
+  auth_proxy_groups_header: "Remote-Groups",
+  auth_proxy_role_mappings: '{"mappings":[],"fallback_role_uuid":null}',
   auth_proxy_logout_url: "",
 };
 
@@ -327,7 +333,10 @@ export const GLOBAL_SETTING_KEYS = new Set([
   "auth_oidc_logout_url",
   "auth_oidc_groups_claim",
   "auth_oidc_admin_group",
+  "auth_oidc_role_mappings",
   "auth_proxy_header",
+  "auth_proxy_groups_header",
+  "auth_proxy_role_mappings",
   "auth_proxy_logout_url",
 ]);
 // Keys that live per profile (used for the /settings response and migration).

@@ -1,5 +1,5 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
-import { Check } from "lucide-react";
+import { Check, Minus, X } from "lucide-react";
 import { cx } from "./utils";
 import "./Controls.css";
 
@@ -15,6 +15,39 @@ export function Switch({ checked, onCheckedChange, label, description, disabled,
   const control = <button type="button" role="switch" aria-checked={checked} aria-label={ariaLabel} disabled={disabled} className={cx("ui-switch", !label && className, checked && "ui-switch--checked")} onClick={() => onCheckedChange(!checked)}><span className="ui-switch__thumb" /></button>;
   if (!label) return control;
   return <div className={cx("ui-labeled-control", className)}><span><span className="ui-control-label">{label}</span>{description && <span className="ui-control-description">{description}</span>}</span>{control}</div>;
+}
+
+export type TriStateSwitchValue = "inherit" | "allow" | "deny";
+
+/** A compact, explicit three-way control for an inherited boolean decision. */
+export function TriStateSwitch({ value, onChange, labels, disabled, className, ariaLabel, showLabels = true, showInherit = true }: {
+  value: TriStateSwitchValue;
+  onChange: (value: TriStateSwitchValue) => void;
+  labels: Record<TriStateSwitchValue, string>;
+  disabled?: boolean;
+  className?: string;
+  ariaLabel: string;
+  showLabels?: boolean;
+  showInherit?: boolean;
+}) {
+  const options = [
+    { value: "inherit", icon: <Minus /> },
+    { value: "allow", icon: <Check /> },
+    { value: "deny", icon: <X /> },
+  ] as const;
+  const visibleOptions = showInherit ? options : options.filter((option) => option.value !== "inherit");
+  return <div className={cx("ui-tristate-switch", !showInherit && "ui-tristate-switch--binary", className)} role="radiogroup" aria-label={ariaLabel}>
+    {visibleOptions.map((option) => <button
+      key={option.value}
+      type="button"
+      role="radio"
+      aria-checked={value === option.value}
+      disabled={disabled}
+      title={labels[option.value]}
+      className={cx("ui-tristate-switch__option", `ui-tristate-switch__option--${option.value}`, value === option.value && "ui-tristate-switch__option--active")}
+      onClick={() => onChange(option.value)}
+    >{option.icon}{showLabels && <span>{labels[option.value]}</span>}</button>)}
+  </div>;
 }
 
 export interface SliderProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "onChange"> {

@@ -42,7 +42,7 @@ export interface BackupSectionDefinition {
 const profilePath = (name: string) => (uuid = "") => `profiles/${uuid}/${name}`;
 export const BACKUP_SECTIONS: readonly BackupSectionDefinition[] = [
   { id: "instance.settings", schemaVersion: 1, scope: "instance", sensitivity: "normal", dependencies: [], category: "configuration", path: () => "instance/settings.json" },
-  { id: "instance.access-control", schemaVersion: 1, scope: "instance", sensitivity: "normal", dependencies: [], category: "configuration", path: () => "instance/access-control.json" },
+  { id: "instance.access-control", schemaVersion: 2, scope: "instance", sensitivity: "normal", dependencies: [], category: "configuration", path: () => "instance/access-control.json" },
   { id: "instance.plugins", schemaVersion: 1, scope: "instance", sensitivity: "normal", dependencies: [], category: "configuration", path: () => "instance/plugins.jsonl" },
   { id: "instance.downloads", schemaVersion: DOWNLOAD_INSTANCE_BACKUP_SCHEMA_VERSION, scope: "instance", sensitivity: "normal", dependencies: [], category: "configuration", path: () => "instance/downloads.json" },
   { id: "instance.channels", schemaVersion: 4, scope: "instance", sensitivity: "normal", dependencies: [], category: "organization", path: () => "instance/channels.jsonl" },
@@ -160,7 +160,7 @@ async function sectionData(id: string, profile: any | null, referenced: Set<stri
       const snapshot = await accessControlSnapshot();
       return {
         defaultGroup: snapshot.groups.find((group) => group.id === snapshot.default_group_id)?.portable_uuid ?? null,
-        groups: snapshot.groups.map((group) => ({ id: group.portable_uuid, name: group.name, system: group.is_system, permissions: group.permissions })),
+        groups: snapshot.groups.map((group) => ({ id: group.portable_uuid, name: group.name, system: group.is_system, order: group.sort_order, permissions: group.permissions })),
       };
     }
     case "instance.plugins": return Promise.all(PLUGINS.map(async (plugin) => {
@@ -373,8 +373,12 @@ export async function commitPortableRestore(adminId: number, id: string, revisio
         for (const source of Array.isArray(doc.groups) ? doc.groups : []) {
           if (typeof source?.id !== "string" || typeof source?.name !== "string" || !Array.isArray(source.permissions) || source.permissions.some((permission: unknown) => !isProfilePermissionArea(permission))) { counts.warnings.push("Invalid access-control group skipped"); continue; }
           let group = await database.prepare("SELECT id FROM permission_groups WHERE portable_uuid=?").get(source.id) as { id: number } | null;
-          if (!group) group = await database.prepare("INSERT INTO permission_groups(portable_uuid,name,is_system) VALUES(?,?,0) RETURNING id").get(source.id, source.name) as { id: number };
-          else await database.prepare("UPDATE permission_groups SET name=? WHERE id=? AND is_system=0").run(source.name, group.id);
+          const order = Number.isSafeInteger(source.order) ? source.order : Number((await database.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS value FROM permission_groups").get() as { value: number }).value);
+          if (!group) group = await database.prepare("INSERT INTO permission_groups(portable_uuid,name,is_system,sort_order) VALUES(?,?,0,?) RETURNING id").get(source.id, source.name, order) as { id: number };
+          else {
+            await database.prepare("UPDATE permission_groups SET name=? WHERE id=? AND is_system=0").run(source.name, group.id);
+            if (Number.isSafeInteger(source.order)) await database.prepare("UPDATE permission_groups SET sort_order=? WHERE id=?").run(order, group.id);
+          }
           await updateGroupPermissions(group.id, source.permissions);
         }
         if (typeof doc.defaultGroup === "string") { const group = await database.prepare("SELECT id FROM permission_groups WHERE portable_uuid=?").get(doc.defaultGroup) as { id: number } | null; if (group) await database.prepare("UPDATE permission_policy SET default_group_id=?,revision=revision+1 WHERE singleton=1").run(group.id); }

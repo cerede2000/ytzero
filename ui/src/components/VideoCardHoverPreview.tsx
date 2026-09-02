@@ -167,6 +167,7 @@ export function VideoCardHoverPreview({
         variant="ghost"
         size="sm"
         label={muted ? unmuteLabel : muteLabel}
+        showTitle={false}
         icon={muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
         onPointerDown={(event) => {
           event.preventDefault();

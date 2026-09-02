@@ -1,0 +1,28 @@
+.profile-groups-dialog { height: min(82vh,760px); width: min(96vw,1500px); }
+.profile-groups-dialog .ui-dialog__body > .ui-text, .profile-permissions-dialog .ui-dialog__body > .ui-text { margin: 0 0 14px; }
+.profile-groups-dialog .ui-dialog__body { display: flex; flex-direction: column; overflow: hidden; padding: 14px; }
+.profile-groups-dialog .ui-permission-matrix-wrap { flex: 1; max-height: none; }
+.profile-groups-dialog .ui-permission-matrix { --ui-matrix-identity-width: 270px; }
+.profile-role-toolbar { display: flex; justify-content: flex-end; margin: -2px 0 10px; }
+.profile-role-column-header { align-items: center; display: inline-flex; gap: 5px; }
+.profile-role-column-help { align-items: center; color: var(--text-3); cursor: help; display: inline-flex; }
+.profile-role-column-help svg { height: 14px; width: 14px; }
+.profile-role-order-item { align-items: center; display: flex; gap: 7px; min-height: 34px; }
+.profile-role-admin-name { align-items: center; color: var(--accent); display: inline-flex; font-weight: 700; gap: 7px; }
+.profile-role-admin-name svg { height: 16px; width: 16px; }
+.profile-role-admin-permission .ui-tristate-switch__option:disabled { opacity: 1; }
+.profile-role-name { font-weight: 650; }
+.profile-role-order-actions { display: flex; gap: 3px; margin-left: auto; }
+.profile-role-order-actions .ui-icon-button { height: 28px; min-height: 28px; width: 28px; }
+.profile-role-create-actions { align-items: center; display: flex; gap: 6px; justify-content: center; }
+.profile-permissions-dialog { height: min(90vh,900px); width: min(96vw,1500px); }
+.profile-permissions-dialog .ui-dialog__body { display: flex; flex-direction: column; overflow: hidden; padding: 14px; }
+.profile-permissions-dialog .ui-permission-matrix-wrap { flex: 1; max-height: none; }
+.profile-permission-user { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+.profile-permission-admin-role { align-items: center; color: var(--accent); display: inline-flex; font-size: 12px; font-weight: 600; gap: 5px; }
+.profile-permission-admin-role svg { height: 14px; width: 14px; }
+.profile-permissions-dialog .ui-tristate-switch { grid-template-columns: repeat(3,32px); }
+@media (max-width: 640px) {
+  .profile-groups-dialog, .profile-permissions-dialog { height: calc(100dvh - 16px); width: calc(100vw - 16px); }
+  .profile-groups-dialog .ui-dialog__body, .profile-permissions-dialog .ui-dialog__body { padding: 8px; }
+}

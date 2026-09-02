@@ -2,13 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { cx } from "./utils";
 import { Button, type ButtonSize } from "./Button";
-import { Menu, MenuItem } from "./Menu";
+import { Menu, MenuItem, MenuSeparator } from "./Menu";
 import { FloatingPopover } from "./FloatingPopover";
 import { Popover } from "./Popover";
 import { ScrollArea } from "./ScrollArea";
 import "./Selection.css";
 
-export function SelectMenu<T extends string | number>({ value, options, onChange, label, size = "md", disabled, searchable = false, searchPlaceholder = "Search…", emptyLabel = "—", placeholder, className, floating = false, align = "end" }: { value: T; options: readonly { value: T; label: ReactNode; icon?: ReactNode; disabled?: boolean; searchText?: string }[]; onChange: (value: T) => void; label: string; size?: ButtonSize; disabled?: boolean; searchable?: boolean; searchPlaceholder?: string; emptyLabel?: ReactNode; placeholder?: ReactNode; className?: string; /** Render above clipping ancestors. */ floating?: boolean; align?: "start" | "center" | "end" }) {
+export function SelectMenu<T extends string | number>({ value, options, onChange, label, size = "md", disabled, searchable = false, searchPlaceholder = "Search…", emptyLabel = "—", placeholder, className, floating = false, align = "end" }: { value: T; options: readonly { value: T; label: ReactNode; icon?: ReactNode; disabled?: boolean; searchText?: string; separatorBefore?: boolean }[]; onChange: (value: T) => void; label: string; size?: ButtonSize; disabled?: boolean; searchable?: boolean; searchPlaceholder?: string; emptyLabel?: ReactNode; placeholder?: ReactNode; className?: string; /** Render above clipping ancestors. */ floating?: boolean; align?: "start" | "center" | "end" }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selected = options.find((option) => option.value === value);
@@ -20,7 +20,7 @@ export function SelectMenu<T extends string | number>({ value, options, onChange
     {searchable && <input className="ui-input ui-input--sm ui-select-menu__search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} autoFocus />}
     <ScrollArea viewportClassName="ui-select-menu__options">
       {visibleOptions.length > 0 ? <Menu>
-        {visibleOptions.map((option) => <MenuItem key={option.value} icon={option.icon} selected={option.value === value} disabled={option.disabled} onClick={() => { onChange(option.value); setOpen(false); setQuery(""); }}>{option.label}</MenuItem>)}
+        {visibleOptions.map((option) => <div key={option.value}>{option.separatorBefore && <MenuSeparator />}<MenuItem icon={option.icon} selected={option.value === value} disabled={option.disabled} onClick={() => { onChange(option.value); setOpen(false); setQuery(""); }}>{option.label}</MenuItem></div>)}
       </Menu> : <div className="ui-select-menu__empty">{emptyLabel}</div>}
     </ScrollArea>
   </>;

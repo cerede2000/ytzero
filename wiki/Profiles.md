@@ -28,9 +28,10 @@ The **primary profile** is the first profile (the original "Default"). It is spe
 - With a profile-bound login method, it can promote a non-child profile to administrator. Delegated administrators can manage shared settings and non-primary profiles, but cannot change Authentication, administrator roles, or the primary profile.
 - It can mark a profile as a **[child profile](Child-Lock#child-profiles)** and manage its watch-time limit and content restrictions; leaving a child profile and granting more time are confirmed with the app-wide child lock PIN.
 
-The primary profile also chooses which settings areas require administrator
-access. By default, shared behavior stays restricted while personal tags,
-filters, and playlists remain editable. See [Settings](Settings#administrator-only-access).
+The primary profile also assigns roles and optional custom per-area exceptions
+to other profiles. By default, shared behavior stays restricted
+while personal tags, filters, and playlists remain editable. See
+[Settings](Settings#profile-access).
 
 Child profiles receive the same permission filtering as other profiles plus their server-enforced content restrictions. With the default administrator-only areas they see only personal organization sections; Authentication and system administration remain unavailable. See [Child Lock](Child-Lock#child-profiles).
 

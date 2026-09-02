@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./AuthSettings.css";
 import { startRegistration } from "@simplewebauthn/browser";
-import { Check, Copy, KeyRound, TriangleAlert, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, KeyRound, Plus, TriangleAlert, Trash2 } from "lucide-react";
 import { api, type AuthConfig, type AuthConfigUpdate, type AuthMethod, type TemporaryProfileCredential } from "../api";
 import { useI18n, type I18nKey } from "../i18n";
 import Popconfirm from "./Popconfirm";
@@ -27,8 +27,11 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
   const [oidc, setOidc] = useState<AuthConfig["oidc"] | null>(null);
   const [oidcSecret, setOidcSecret] = useState("");
   const [proxyHeader, setProxyHeader] = useState("");
+  const [proxyGroupsHeader, setProxyGroupsHeader] = useState("");
   const [proxyLogout, setProxyLogout] = useState("");
-  const [mapDraft, setMapDraft] = useState<Record<number, string>>({}); // oidc_subject or proxy_match
+  const [proxyRoleMappings, setProxyRoleMappings] = useState<AuthConfig["proxy"]["role_mappings"]>({ mappings: [], fallback_role_uuid: null });
+  const [oidcMapDraft, setOidcMapDraft] = useState<Record<number, string>>({});
+  const [proxyMapDraft, setProxyMapDraft] = useState<Record<number, string>>({});
   const [generatedCredentials, setGeneratedCredentials] = useState<TemporaryProfileCredential[]>([]);
   const [generatingProfileId, setGeneratingProfileId] = useState<number | null>(null);
   const [test, setTest] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -45,12 +48,11 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
         setSharedUser(c.shared.username);
         setOidc(c.oidc);
         setProxyHeader(c.proxy.header);
+        setProxyGroupsHeader(c.proxy.groups_header);
         setProxyLogout(c.proxy.logout_url);
-        setMapDraft(
-          Object.fromEntries(
-            c.profiles.map((p) => [p.id, c.method === "proxy_header" ? p.proxy_match : p.oidc_subject])
-          )
-        );
+        setProxyRoleMappings(c.proxy.role_mappings);
+        setOidcMapDraft(Object.fromEntries(c.profiles.map((p) => [p.id, p.oidc_subject])));
+        setProxyMapDraft(Object.fromEntries(c.profiles.map((p) => [p.id, p.proxy_match])));
       })
       .catch(() => setForbidden(true));
   }, []);
@@ -86,13 +88,14 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
       logout_url: oidc.logout_url,
       groups_claim: oidc.groups_claim,
       admin_group: oidc.admin_group,
+      role_mappings: oidc.role_mappings,
       ...(oidcSecret ? { client_secret: oidcSecret } : {}),
     },
-    proxy: { header: proxyHeader, logout_url: proxyLogout },
+    proxy: { header: proxyHeader, groups_header: proxyGroupsHeader, logout_url: proxyLogout, role_mappings: proxyRoleMappings },
     profiles: cfg.profiles.map((p) => ({
       id: p.id,
-      ...(selected === "oidc" ? { oidc_subject: mapDraft[p.id] ?? "" } : {}),
-      ...(selected === "proxy_header" ? { proxy_match: mapDraft[p.id] ?? "" } : {}),
+      ...(selected === "oidc" ? { oidc_subject: oidcMapDraft[p.id] ?? "" } : {}),
+      ...(selected === "proxy_header" ? { proxy_match: proxyMapDraft[p.id] ?? "" } : {}),
     })),
   });
 
@@ -163,7 +166,7 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
   const mappingIssues = (() => {
     if (!requiresMapping) return null;
     const valueOf = (id: number) =>
-      (selected === "per_profile" ? cfg.profiles.find((profile) => profile.id === id)?.username ?? "" : mapDraft[id] ?? "").trim();
+      (selected === "per_profile" ? cfg.profiles.find((profile) => profile.id === id)?.username ?? "" : selected === "proxy_header" ? proxyMapDraft[id] ?? "" : oidcMapDraft[id] ?? "").trim();
     const missing = cfg.profiles.filter((p) => !valueOf(p.id)).map((p) => p.name);
     const seen = new Map<string, true>();
     const dups = new Set<string>();
@@ -180,7 +183,11 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
     const ok = missing.length === 0 && dups.size === 0 && credMissing.length === 0;
     return { ok, missing, duplicates: [...dups], credMissing };
   })();
-  const blockActivate = Boolean(mappingIssues && !mappingIssues.ok);
+  const externalMappingDraft = selected === "proxy_header" ? proxyRoleMappings : selected === "oidc" && oidc.mode === "mapped" ? oidc.role_mappings : null;
+  const externalRoleMappingsInvalid = externalMappingDraft ? externalMappingDraft.mappings.some((mapping, index, mappings) =>
+    !mapping.group.trim() || !mapping.role_uuid || mappings.findIndex((candidate) => candidate.group.trim() === mapping.group.trim()) !== index
+  ) : false;
+  const blockActivate = Boolean(mappingIssues && !mappingIssues.ok) || externalRoleMappingsInvalid;
 
   return (
     <SettingsSection className="auth-settings">
@@ -268,15 +275,16 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
             <>
               <Field label={t("authOidcClaim")}><Input value={oidc.claim} onChange={(e) => setOidc({ ...oidc, claim: e.target.value })} /></Field>
               <Checkbox label={t("authOidcAutocreate")} checked={oidc.autocreate} onChange={(e) => setOidc({ ...oidc, autocreate: e.target.checked })} />
-              <MappingTable profiles={cfg.profiles} label={t("authOidcSubject")} draft={mapDraft} setDraft={setMapDraft} />
+              <MappingTable profiles={cfg.profiles} label={t("authOidcSubject")} draft={oidcMapDraft} setDraft={setOidcMapDraft} />
             </>
           )}
           <Field label={t("authOidcGroupsClaim")}><Input value={oidc.groups_claim} onChange={(e) => setOidc({ ...oidc, groups_claim: e.target.value })} placeholder="groups" /></Field>
           <Field label={t("authOidcAdminGroup")}><Input value={oidc.admin_group} onChange={(e) => setOidc({ ...oidc, admin_group: e.target.value })} /></Field>
           <Text tone="secondary">{t("authOidcAdminGroupHint")}</Text>
+          {oidc.mode === "mapped" && <ExternalRoleMappingEditor roles={cfg.roles} value={oidc.role_mappings} onChange={(role_mappings) => setOidc({ ...oidc, role_mappings })} />}
           <Field label={t("authOidcLogoutUrl")}><Input value={oidc.logout_url} onChange={(e) => setOidc({ ...oidc, logout_url: e.target.value })} /></Field>
           <div className="form-row">
-            <Button onClick={runTest}>{t("authTestConnection")}</Button>
+            <Button disabled={externalRoleMappingsInvalid} onClick={runTest}>{t("authTestConnection")}</Button>
             {test && <span className={test.ok ? "auth-test-ok" : "auth-test-fail"}>{test.msg}</span>}
           </div>
         </div>
@@ -287,13 +295,17 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
           <Field label={t("authProxyHeader")}><Input value={proxyHeader} onChange={(e) => setProxyHeader(e.target.value)} /></Field>
           <Text tone="secondary">{t("authProxyHeaderHint")}</Text>
           <Text tone="secondary">{t("authProxyCurrentValue")}: <code>{cfg.proxy.current_header_value || "—"}</code></Text>
-          <MappingTable profiles={cfg.profiles} label={t("authProxyMatch")} draft={mapDraft} setDraft={setMapDraft} />
+          <MappingTable profiles={cfg.profiles} label={t("authProxyMatch")} draft={proxyMapDraft} setDraft={setProxyMapDraft} />
+          <Field label={t("authProxyGroupsHeader")}><Input value={proxyGroupsHeader} onChange={(e) => setProxyGroupsHeader(e.target.value)} /></Field>
+          <Text tone="secondary">{t("authProxyGroupsHeaderHint")}</Text>
+          <Text tone="secondary">{t("authProxyCurrentGroupsValue")}: <code>{cfg.proxy.current_groups_header_value || "—"}</code></Text>
+          <ExternalRoleMappingEditor roles={cfg.roles} value={proxyRoleMappings} onChange={setProxyRoleMappings} />
           <Field label={t("authLogoutUrl")}><Input value={proxyLogout} onChange={(e) => setProxyLogout(e.target.value)} /></Field>
         </div>
       )}
 
       {/* Step 3 — save + activate */}
-      {blockActivate && mappingIssues && (
+      {mappingIssues && !mappingIssues.ok && (
         <div className="auth-lockout-warn">
           <div>{t("authMappingIncomplete")}</div>
           <ul className="auth-mapping-issues">
@@ -303,9 +315,10 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
           </ul>
         </div>
       )}
+      {externalRoleMappingsInvalid && <div className="auth-lockout-warn">{t("authRoleMappingIncomplete")}</div>}
       {selected !== "none" && (
         <FormActions className="auth-actions">
-          <Button onClick={save}>{t("authSave")}</Button>
+          <Button disabled={externalRoleMappingsInvalid} onClick={save}>{t("authSave")}</Button>
           <Button variant="primary" disabled={blockActivate} onClick={() => setConfirming(true)}>{t("authActivate")}</Button>
         </FormActions>
       )}
@@ -360,6 +373,64 @@ export default function AuthSettings({ showToast }: { showToast: (m: string) => 
       </Dialog>
     </SettingsSection>
   );
+}
+
+function ExternalRoleMappingEditor({
+  roles, value, onChange,
+}: {
+  roles: AuthConfig["roles"];
+  value: AuthConfig["oidc"]["role_mappings"];
+  onChange: (value: AuthConfig["oidc"]["role_mappings"]) => void;
+}) {
+  const { t } = useI18n();
+  const roleLabel = (role: AuthConfig["roles"][number]) => {
+    if (role.is_system && role.name === "Standard") return t("permissionGroupStandard");
+    if (role.is_system && role.name === "Restricted") return t("permissionGroupRestricted");
+    if (role.name === "Migrated policy") return t("permissionGroupMigrated");
+    return role.name;
+  };
+  const roleOptions = roles.map((role) => ({ value: role.uuid, label: roleLabel(role) }));
+  const updateMapping = (index: number, next: Partial<(typeof value.mappings)[number]>) => onChange({
+    ...value,
+    mappings: value.mappings.map((mapping, mappingIndex) => mappingIndex === index ? { ...mapping, ...next } : mapping),
+  });
+  const moveMapping = (index: number, offset: -1 | 1) => {
+    const target = index + offset;
+    if (target < 0 || target >= value.mappings.length) return;
+    const mappings = [...value.mappings];
+    [mappings[index], mappings[target]] = [mappings[target]!, mappings[index]!];
+    onChange({ ...value, mappings });
+  };
+  return <div className="auth-role-mappings">
+    <div className="auth-role-mappings-head">
+      <div>
+        <strong>{t("authRoleMappingsTitle")}</strong>
+        <Text tone="secondary">{t("authRoleMappingsHint")}</Text>
+      </div>
+      <Button leadingIcon={<Plus />} disabled={roles.length === 0} onClick={() => onChange({ ...value, mappings: [...value.mappings, { group: "", role_uuid: roles[0]?.uuid ?? "" }] })}>{t("authAddRoleMapping")}</Button>
+    </div>
+    {value.mappings.length === 0 ? <Text tone="secondary">{t("authNoRoleMappings")}</Text> : <div className="auth-role-mapping-list">
+      {value.mappings.map((mapping, index) => <div className="auth-role-mapping-row" key={index}>
+        <Input value={mapping.group} placeholder={t("authExternalGroupPlaceholder")} aria-label={t("authExternalGroup")} onChange={(event) => updateMapping(index, { group: event.target.value })} />
+        <SelectMenu value={mapping.role_uuid} options={roleOptions} label={t("authMappedRole")} align="start" floating onChange={(role_uuid) => updateMapping(index, { role_uuid })} />
+        <div className="auth-role-mapping-actions">
+          <IconButton label={t("moveUp")} icon={<ChevronUp />} disabled={index === 0} onClick={() => moveMapping(index, -1)} />
+          <IconButton label={t("moveDown")} icon={<ChevronDown />} disabled={index === value.mappings.length - 1} onClick={() => moveMapping(index, 1)} />
+          <IconButton label={t("authDeleteRoleMapping")} icon={<Trash2 />} onClick={() => onChange({ ...value, mappings: value.mappings.filter((_, mappingIndex) => mappingIndex !== index) })} />
+        </div>
+      </div>)}
+    </div>}
+    <Field label={t("authRoleMappingFallback")}>
+      <SelectMenu
+        value={value.fallback_role_uuid ?? "manual"}
+        options={[{ value: "manual", label: t("authRoleMappingManualFallback") }, ...roleOptions]}
+        label={t("authRoleMappingFallback")}
+        align="start"
+        floating
+        onChange={(next) => onChange({ ...value, fallback_role_uuid: next === "manual" ? null : next })}
+      />
+    </Field>
+  </div>;
 }
 
 function MappingTable({

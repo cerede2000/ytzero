@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./ProfileSettings.css";
-import { AlertTriangle, Camera, Check, CheckCircle2, Info, KeyRound, LoaderCircle, Pencil, Trash2, UserPlus, X } from "lucide-react";
+import { AlertTriangle, Camera, Check, CheckCircle2, Info, KeyRound, LoaderCircle, Pencil, SlidersHorizontal, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { api, type AuthMethod, type ChildConfig, type Profile } from "../../api";
 import { emit } from "../../events";
 import { useI18n } from "../../i18n";
 import Popconfirm from "../Popconfirm";
 import { ProfileAvatar } from "../ProfileMenu";
-import { Alert, Button, Dialog, Field, FormActions, IconButton, Input, SettingRow, SettingsSection, Switch, Text } from "../ui";
+import { Alert, Badge, Button, Dialog, Field, FormActions, IconButton, Input, List, SelectMenu, SettingRow, SettingsSection, Switch, Text } from "../ui";
+import { CUSTOM_PERMISSION_ROLE, ProfileAccessDialogs, useProfileAccessControl } from "./ProfileAccessSettings";
 
 const PROFILE_COLORS = ["#f2293a", "#7c5cff", "#3ea6ff", "#00b894", "#e17055", "#fdcb6e", "#e84393", "#636e72"];
 
@@ -389,6 +390,9 @@ export default function ProfilesSettings({ showToast, isAdmin, canManageAdminist
   const [temporaryCredentials, setTemporaryCredentials] = useState<{ name: string; username: string; password: string } | null>(null);
   const [hideOtherProfiles, setHideOtherProfiles] = useState(false);
   const [savingProfileVisibility, setSavingProfileVisibility] = useState(false);
+  const [permissionGroupsOpen, setPermissionGroupsOpen] = useState(false);
+  const [permissionMatrixOpen, setPermissionMatrixOpen] = useState(false);
+  const accessControl = useProfileAccessControl(showToast, isAdmin, canManageAdministrators && adminDelegationAvailable);
 
   // Reload the list and tell the topbar picker to refresh too.
   const refresh = useCallback(() => {
@@ -398,8 +402,9 @@ export default function ProfilesSettings({ showToast, isAdmin, canManageAdminist
       setCanCreate(r.can_create);
       setHideOtherProfiles(r.hide_other_profiles);
     }).catch(() => {});
+    void accessControl.reload();
     emit("profiles-changed");
-  }, []);
+  }, [accessControl.reload]);
   useEffect(() => { refresh(); }, [refresh]);
 
   const supportsPrivatePicker = activeAuthMethod !== "none" && activeAuthMethod !== "shared";
@@ -463,36 +468,45 @@ export default function ProfilesSettings({ showToast, isAdmin, canManageAdminist
           />
         </SettingRow>
       )}
-      <div className="profiles-list">
+      <FormActions align="between" className="profile-management-toolbar">
+        <div className="profile-management-toolbar__access">
+          {isAdmin && <Button leadingIcon={<UsersRound size={15} />} onClick={() => setPermissionGroupsOpen(true)}>{t("managePermissionGroups")}</Button>}
+          {isAdmin && <Button leadingIcon={<SlidersHorizontal size={15} />} onClick={() => setPermissionMatrixOpen(true)}>{t("customPermissions")}</Button>}
+        </div>
+        {canCreate && !creating && <Button variant="primary" leadingIcon={<UserPlus size={15} />} onClick={() => setCreating(true)}>{t("addProfile")}</Button>}
+      </FormActions>
+      <List divided={false} className="profile-management-list">
         {profiles.map((p) => {
           const canEdit = p.active || isAdmin;
+          const accessProfile = accessControl.data?.profiles?.find((profile) => profile.id === p.id);
           return (
-          <div key={p.id} className={`profile-card${p.active ? " active" : ""}`}>
-            <ProfileAvatar profile={p} size={44} />
-            <div className="profile-card-main">
-              <div className="profile-card-name">
-                {p.name}
-                {p.active && <Check size={15} style={{ color: "var(--accent)" }} />}
+          <div key={p.id} role="listitem" className={`profile-management-item${p.active ? " profile-management-item--active" : ""}`}>
+            <div className="profile-management-item__summary">
+              <ProfileAvatar profile={p} size={44} />
+              <div className="profile-management-item__identity">
+                <div className="profile-management-item__name">
+                  {p.name}
+                  {p.active && <Check size={15} aria-label={t("activeProfile")} />}
+                </div>
+                <div className="profile-management-item__meta">
+                  {p.is_primary && <Badge variant="accent" size="sm">{t("primaryProfile")}</Badge>}
+                  {p.is_admin && !p.is_primary && <Badge variant="accent" size="sm">{t("profileAdministrator")}</Badge>}
+                  {p.is_child && <Badge size="sm">{t("childProfile")}</Badge>}
+                  {p.oidc_identity && <span>{oidcMapping?.claim.toLowerCase() === "email" ? p.oidc_identity : `${oidcMapping?.claim}: ${p.oidc_identity}`}</span>}
+                  {p.has_pin && <span>{t("profilePin")} ••••••</span>}
+                </div>
               </div>
-              <div className="profile-card-meta">
-                {[
-                  p.is_primary && t("primaryProfile"),
-                  p.is_admin && !p.is_primary && t("profileAdministrator"),
-                  p.is_child && t("childProfile"),
-                  p.oidc_identity && (oidcMapping?.claim.toLowerCase() === "email" ? p.oidc_identity : `${oidcMapping?.claim}: ${p.oidc_identity}`),
-                  p.has_pin && t("profilePin") + " ••••••",
-                ].filter(Boolean).join(" · ") || "—"}
-              </div>
+              {isAdmin && <div className="profile-management-item__role">
+                <span>{t("permissionRole")}</span>
+                {accessProfile?.is_primary ? <Badge variant="accent">{t("profileAdministrator")}</Badge> : accessProfile ? <SelectMenu
+                  value={accessControl.roleValue(accessProfile)} options={accessControl.roleOptions} label={`${t("permissionRole")}: ${p.name}`} floating align="start"
+                  onChange={(value) => void accessControl.setProfileRole(accessProfile, value).then(() => { if (value === CUSTOM_PERMISSION_ROLE) setPermissionMatrixOpen(true); })}
+                /> : <Text tone="muted" size="sm">—</Text>}
+              </div>}
+              {canEdit && <Button className="profile-management-item__edit" leadingIcon={<Pencil size={15} />} onClick={() => setExpanded(expanded === p.id ? null : p.id)}>{t("edit")}</Button>}
             </div>
-            {canEdit && (
-              <div className="profile-card-actions">
-                <Button onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
-                  <Pencil size={15} /> {t("edit")}
-                </Button>
-              </div>
-            )}
             {canEdit && expanded === p.id && (
-              <div style={{ flexBasis: "100%", marginTop: 12 }}>
+              <div className="profile-management-item__editor">
                 <ProfileEditor
                   profile={p}
                   showToast={showToast}
@@ -512,7 +526,15 @@ export default function ProfilesSettings({ showToast, isAdmin, canManageAdminist
           </div>
           );
         })}
-      </div>
+      </List>
+
+      <ProfileAccessDialogs
+        controller={accessControl}
+        groupsOpen={permissionGroupsOpen}
+        onGroupsOpenChange={setPermissionGroupsOpen}
+        matrixOpen={permissionMatrixOpen}
+        onMatrixOpenChange={setPermissionMatrixOpen}
+      />
 
       <Dialog
         open={Boolean(temporaryCredentials)}
@@ -526,9 +548,9 @@ export default function ProfilesSettings({ showToast, isAdmin, canManageAdminist
       </Dialog>
 
       {creating ? (
-        <div className="profile-card">
+        <div className="profile-creation-panel">
           <ProfileAvatar profile={{ name: newName || "?", avatar: "", avatar_color: newColor }} size={44} />
-          <div className="profile-card-main">
+          <div className="profile-creation-panel__fields">
             <Input value={newName} placeholder={t("profileName")} autoFocus onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
             {oidcMapping && (
               <Field
@@ -558,14 +580,12 @@ export default function ProfilesSettings({ showToast, isAdmin, canManageAdminist
               ))}
             </div>
           </div>
-          <div className="profile-card-actions">
+          <div className="profile-creation-panel__actions">
             <Button variant="primary" onClick={create} disabled={!newName.trim() || Boolean(oidcMapping?.required && !newOidcIdentity.trim())}>{t("create")}</Button>
             <Button onClick={() => { setCreating(false); setNewOidcIdentity(""); setNewIsChild(false); }}>{t("cancel")}</Button>
           </div>
         </div>
-      ) : (
-        canCreate && <Button onClick={() => setCreating(true)}><UserPlus size={15} /> {t("addProfile")}</Button>
-      )}
+      ) : null}
     </SettingsSection>
   );
 }

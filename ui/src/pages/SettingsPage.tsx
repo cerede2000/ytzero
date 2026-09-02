@@ -31,7 +31,6 @@ import { FollowedPlaylistSettingsList } from "../components/settings/FollowedPla
 import { scheduleSettingWrite } from "../settingsWriteQueue";
 import ProfilesSettings, { ProfilePasswordSettings } from "../components/settings/ProfileSettings";
 import { ChannelOwnership, FilterRuleGroups, PlaylistSettingsItem, PluginMultiselect, RuleRow, SidebarNavEditor, TagRow } from "../components/settings/SettingsEditors";
-import ProfileAccessSettings from "../components/settings/ProfileAccessSettings";
 import { ChangelogNote, LogLine, SettingsLoadingState } from "../components/settings/SettingsSupport";
 import { SettingsSearch } from "../components/settings/SettingsSearch";
 import ChannelSettingsDialog, { hasCustomChannelSettings } from "../components/settings/ChannelSettingsDialog";
@@ -453,9 +452,6 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
 
           </SettingsSection>}
 
-          {isPrimary && <ProfileAccessSettings showToast={showToast} />}
-
-          {isPrimary && canManageArea("profiles") && <ChannelOwnership showToast={showToast} />}
         </>
       )}
 
@@ -1042,6 +1038,7 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
               <SettingRow label={t("backupRestore")} description={t("backupRestoreHint")}>
                 <ButtonLink to="/restore" leadingIcon={<ArchiveRestore size={16} />}>{t("backupRestoreOpen")}</ButtonLink>
               </SettingRow>
+              <ChannelOwnership showToast={showToast} />
               <DatabaseSettings showToast={showToast} />
             </>
           )}

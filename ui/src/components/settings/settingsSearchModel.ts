@@ -51,6 +51,7 @@ const CATALOG: CatalogEntry[] = [
   { view: "auth", label: "authTab" },
   { view: "advanced", label: "automaticUpdateChecks", description: "automaticUpdateChecksHint" },
   { view: "advanced:dangerous", label: "backupRestore", description: "backupRestoreHint" },
+  { view: "advanced:dangerous", label: "assignChannelsTitle", description: "assignChannelsHint" },
 ];
 
 export function staticSettingsSearchEntries(t: Translate, sectionLabels: Map<string, string>): SettingsSearchEntry[] {

@@ -29,6 +29,7 @@ import {
   environmentAuthPasswordConfigured,
   verifyEnvironmentAuthPassword,
 } from "./authEnvironment";
+import { externalRoleMappingConfig, matchedExternalRoleUuid, normalizeExternalGroups } from "./externalRoleMappings";
 
 export type AuthMethod = "none" | "shared" | "per_profile" | "oidc" | "proxy_header";
 
@@ -107,29 +108,29 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export type SessionScope = "account" | "profile";
 
-export async function createSession(userId: number | null, scope: SessionScope, isAdmin = false): Promise<string> {
+export async function createSession(userId: number | null, scope: SessionScope, isAdmin = false, permissionGroupUuid: string | null = null): Promise<string> {
   const token = crypto.randomUUID();
   const expires = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   await database.prepare(
-    "INSERT INTO auth_sessions (token, user_id, scope, is_admin, expires_at, last_seen) VALUES (?, ?, ?, ?, ?, datetime('now'))"
-  ).run(token, userId, scope, isAdmin ? 1 : 0, expires);
+    "INSERT INTO auth_sessions (token, user_id, scope, is_admin, permission_group_uuid, expires_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"
+  ).run(token, userId, scope, isAdmin ? 1 : 0, permissionGroupUuid, expires);
   return token;
 }
 
 export async function validateSession(
   token: string | undefined
-): Promise<{ user_id: number | null; scope: SessionScope; is_admin: boolean } | null> {
+): Promise<{ user_id: number | null; scope: SessionScope; is_admin: boolean; permission_group_uuid: string | null } | null> {
   if (!token) return null;
   const row = await database
-    .prepare("SELECT user_id, scope, is_admin, expires_at FROM auth_sessions WHERE token = ?")
-    .get<{ user_id: number | null; scope: SessionScope; is_admin: number; expires_at: string }>(token);
+    .prepare("SELECT user_id, scope, is_admin, permission_group_uuid, expires_at FROM auth_sessions WHERE token = ?")
+    .get<{ user_id: number | null; scope: SessionScope; is_admin: number; permission_group_uuid: string | null; expires_at: string }>(token);
   if (!row) return null;
   if (new Date(row.expires_at).getTime() <= Date.now()) {
     await database.prepare("DELETE FROM auth_sessions WHERE token = ?").run(token);
     return null;
   }
   await database.prepare("UPDATE auth_sessions SET last_seen = datetime('now') WHERE token = ?").run(token);
-  return { user_id: row.user_id, scope: row.scope, is_admin: row.is_admin === 1 };
+  return { user_id: row.user_id, scope: row.scope, is_admin: row.is_admin === 1, permission_group_uuid: row.permission_group_uuid ?? null };
 }
 
 export async function destroySession(token: string | undefined) {
@@ -375,11 +376,9 @@ export async function oidcAuthUrl(c: any): Promise<{ url: string; flowId: string
   return { url: url.href, flowId };
 }
 
-// Admin if the configured groups claim (from the id_token, or userinfo as a
-// fallback) contains the configured admin group. Empty admin_group disables it.
-async function resolveOidcAdmin(config: oidc.Configuration, tokens: any, claims: any): Promise<boolean> {
-  const adminGroup = (getSetting("auth_oidc_admin_group") || "").trim();
-  if (!adminGroup) return false;
+// Read the configured groups claim from the ID token, or userinfo as a
+// fallback. The same normalized list feeds admin and role mappings.
+async function resolveOidcGroups(config: oidc.Configuration, tokens: any, claims: any): Promise<string[]> {
   const groupsClaim = getSetting("auth_oidc_groups_claim") || "groups";
   let groups = claims?.[groupsClaim];
   if (groups === undefined && tokens?.access_token && claims?.sub) {
@@ -390,17 +389,16 @@ async function resolveOidcAdmin(config: oidc.Configuration, tokens: any, claims:
       // userinfo unavailable — fall through with no groups
     }
   }
-  const list = Array.isArray(groups) ? groups.map(String) : typeof groups === "string" ? [groups] : [];
-  return list.includes(adminGroup);
+  return normalizeExternalGroups(groups);
 }
 
-// Returns the mapped/auto-created profile id (null for gateway mode) plus whether
-// the identity's groups grant admin.
+// Returns the mapped/auto-created profile id (null for gateway mode), whether
+// the identity's groups grant admin, and the session-only mapped role.
 export async function oidcCallback(
   c: any,
   flowId: string | undefined,
   currentUrl: string
-): Promise<{ user_id: number | null; mode: "mapped" | "gateway"; is_admin: boolean }> {
+): Promise<{ user_id: number | null; mode: "mapped" | "gateway"; is_admin: boolean; permission_group_uuid: string | null }> {
   const flow = takeFlow(flowId);
   if (!flow) throw new Error("login flow expired");
   const { codeVerifier, state } = JSON.parse(flow.value) as { codeVerifier: string; state: string };
@@ -412,9 +410,11 @@ export async function oidcCallback(
   });
   const claims = tokens.claims() ?? {};
   const mode = (getSetting("auth_oidc_mode") || "mapped") as "mapped" | "gateway";
-  const is_admin = await resolveOidcAdmin(config, tokens, claims);
+  const groups = await resolveOidcGroups(config, tokens, claims);
+  const adminGroup = (getSetting("auth_oidc_admin_group") || "").trim();
+  const is_admin = Boolean(adminGroup) && groups.includes(adminGroup);
 
-  if (mode === "gateway") return { user_id: null, mode, is_admin };
+  if (mode === "gateway") return { user_id: null, mode, is_admin, permission_group_uuid: null };
 
   // mapped: resolve the configured claim to a profile.
   const claimName = getSetting("auth_oidc_claim") || "preferred_username";
@@ -436,7 +436,8 @@ export async function oidcCallback(
       throw new Error("no profile mapped to this identity");
     }
   }
-  return { user_id: row.id, mode, is_admin };
+  const permission_group_uuid = matchedExternalRoleUuid(externalRoleMappingConfig("auth_oidc_role_mappings"), groups);
+  return { user_id: row.id, mode, is_admin, permission_group_uuid };
 }
 
 // ---------- proxy header ----------
@@ -452,4 +453,16 @@ export async function resolveProxyUser(c: any): Promise<number | null> {
 export function proxyHeaderValue(c: any): string | null {
   const headerName = (getSetting("auth_proxy_header") || "Remote-User").toLowerCase();
   return c.req.header(headerName) ?? null;
+}
+
+export function proxyGroupsHeaderValue(c: any): string | null {
+  const headerName = (getSetting("auth_proxy_groups_header") || "Remote-Groups").toLowerCase();
+  return c.req.header(headerName) ?? null;
+}
+
+export function resolveProxyPermissionGroupUuid(c: any): string | null {
+  return matchedExternalRoleUuid(
+    externalRoleMappingConfig("auth_proxy_role_mappings"),
+    normalizeExternalGroups(proxyGroupsHeaderValue(c)),
+  );
 }

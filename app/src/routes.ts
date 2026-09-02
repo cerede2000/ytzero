@@ -16,6 +16,7 @@ import {
   AUTH_SESSION_COOKIE,
   validateSession,
   resolveProxyUser,
+  resolveProxyPermissionGroupUuid,
 } from "./auth";
 import { registerSystemRoutes } from "./routes/systemRoutes";
 import { registerSocialRoutes } from "./routes/socialRoutes";
@@ -51,7 +52,7 @@ import {
 export { importTakeoutHistory } from "./routes/importRoutes";
 await migrateDownloadsFromPlugin();
 await ensureAccessControl();
-export const api = new Hono<{ Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } }>();
+export const api = new Hono<{ Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean; permissionGroupUuid?: string } }>();
 registerRequestDiagnostics(api);
 
 // ---------- helpers ----------
@@ -181,6 +182,10 @@ function currentUserId(c: any): number {
   return c.get("userId");
 }
 
+function externalPermissionGroupUuid(c: any): string | undefined {
+  return c.get("permissionGroupUuid");
+}
+
 // Falls back to the cookie-selected profile (or the first profile). Used by the
 // 'none' method and by any session whose scope allows free profile switching.
 async function profileFromCookie(c: any): Promise<number> {
@@ -220,6 +225,8 @@ api.use("*", async (c, next) => {
     const uid = await resolveProxyUser(c);
     if (uid) {
       c.set("userId", uid);
+      const permissionGroupUuid = resolveProxyPermissionGroupUuid(c);
+      if (permissionGroupUuid) c.set("permissionGroupUuid", permissionGroupUuid);
       await setDelegatedProfileAdmin(c, uid);
       return next();
     }
@@ -234,6 +241,7 @@ api.use("*", async (c, next) => {
     const userId = session.scope === "account" ? await profileFromCookie(c) : session.user_id ?? 0;
     c.set("userId", userId);
     c.set("sessionAdmin", session.is_admin);
+    if (session.permission_group_uuid) c.set("permissionGroupUuid", session.permission_group_uuid);
     if (session.scope === "profile") await setDelegatedProfileAdmin(c, userId);
     return next();
   }
@@ -306,7 +314,7 @@ api.use("*", async (c, next) => {
     : path === "/settings"
       ? permissionAreasForSettings(settingsBody)
       : [permissionAreaForMutation(path)].filter((area): area is ProfilePermissionArea => area != null);
-  if (!isAdmin(c) && (await Promise.all(areas.map((area) => hasPermission(currentUserId(c), area)))).some((allowed) => !allowed)) {
+  if (!isAdmin(c) && (await Promise.all(areas.map((area) => hasPermission(currentUserId(c), area, false, c.get("permissionGroupUuid"))))).some((allowed) => !allowed)) {
     return c.json({ error: "admin only" }, 403);
   }
   // Child Lock keeps its original role: a temporary PIN gate for shared
@@ -411,6 +419,7 @@ registerSettingsRoutes(api, {
   childLockStatus,
   clearChildLockSession,
   currentUserId,
+  externalPermissionGroupUuid,
   hashChildLockPin,
   isAdmin,
   isPrimaryUser,

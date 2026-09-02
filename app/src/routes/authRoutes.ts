@@ -21,12 +21,15 @@ import {
   passkeyRegisterOptions,
   passkeyRegisterVerify,
   proxyHeaderValue,
+  proxyGroupsHeaderValue,
   requestOrigin,
   resolveProxyUser,
   sharedAuth,
   testOidc,
   validateSession,
 } from "../auth";
+import { accessControlSnapshot } from "../accessControl";
+import { externalRoleMappingConfig, type ExternalRoleMappingConfig } from "../externalRoleMappings";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
@@ -224,9 +227,9 @@ api.get("/auth/oidc/login", async (c) => {
 api.get("/auth/oidc/callback", async (c) => {
   try {
     const flowId = parseCookies(c.req.header("cookie"))[OIDC_FLOW_COOKIE];
-    const { user_id, mode, is_admin } = await oidcCallback(c, flowId, c.req.url);
+    const { user_id, mode, is_admin, permission_group_uuid } = await oidcCallback(c, flowId, c.req.url);
     const scope = mode === "gateway" ? "account" : "profile";
-    c.header("Set-Cookie", authSessionCookie(await createSession(scope === "account" ? null : user_id, scope, is_admin)));
+    c.header("Set-Cookie", authSessionCookie(await createSession(scope === "account" ? null : user_id, scope, is_admin, permission_group_uuid)));
     if (user_id !== null) c.header("Set-Cookie", profileCookie(user_id), { append: true });
     c.header("Set-Cookie", `${OIDC_FLOW_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly`, { append: true });
     log.info("auth.login", { method: "oidc", scope, id: user_id, admin: is_admin });
@@ -257,6 +260,7 @@ api.get("/auth/config", async (c) => {
     oidc_subject: u.oidc_subject ?? "",
     proxy_match: u.proxy_match ?? "",
   })));
+  const accessControl = await accessControlSnapshot();
   return c.json({
     method: authMethod(),
     hide_other_profiles: getSetting("auth_hide_other_profiles") === "1",
@@ -276,20 +280,50 @@ api.get("/auth/config", async (c) => {
       logout_url: getSetting("auth_oidc_logout_url") || "",
       groups_claim: getSetting("auth_oidc_groups_claim") || "groups",
       admin_group: getSetting("auth_oidc_admin_group") || "",
+      role_mappings: externalRoleMappingConfig("auth_oidc_role_mappings"),
       redirect_uri: `${requestOrigin(c)}/api/auth/oidc/callback`,
     },
     proxy: {
       header: getSetting("auth_proxy_header") || "Remote-User",
+      groups_header: getSetting("auth_proxy_groups_header") || "Remote-Groups",
       logout_url: getSetting("auth_proxy_logout_url") || "",
       current_header_value: proxyHeaderValue(c) ?? "",
+      current_groups_header_value: proxyGroupsHeaderValue(c) ?? "",
+      role_mappings: externalRoleMappingConfig("auth_proxy_role_mappings"),
     },
+    roles: accessControl.groups.map((group) => ({ uuid: group.portable_uuid, name: group.name, is_system: group.is_system })),
     profiles,
   });
 });
 
+async function validatedRoleMappings(value: unknown): Promise<ExternalRoleMappingConfig | null> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (!Array.isArray(raw.mappings) || raw.mappings.length > 100) return null;
+  const roles = await database.prepare("SELECT portable_uuid FROM permission_groups").all() as Array<{ portable_uuid: string }>;
+  const known = new Set(roles.map((role) => role.portable_uuid));
+  const seen = new Set<string>();
+  const mappings: ExternalRoleMappingConfig["mappings"] = [];
+  for (const item of raw.mappings) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const group = typeof (item as any).group === "string" ? (item as any).group.trim() : "";
+    const role_uuid = typeof (item as any).role_uuid === "string" ? (item as any).role_uuid.trim() : "";
+    if (!group || group.length > 200 || !known.has(role_uuid) || seen.has(group)) return null;
+    seen.add(group);
+    mappings.push({ group, role_uuid });
+  }
+  const fallbackRaw = raw.fallback_role_uuid;
+  const fallback_role_uuid = fallbackRaw == null || fallbackRaw === "" ? null : typeof fallbackRaw === "string" ? fallbackRaw.trim() : "invalid";
+  if (fallback_role_uuid && !known.has(fallback_role_uuid)) return null;
+  return { mappings, fallback_role_uuid };
+}
+
 api.put("/auth/config", async (c) => {
   if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
   const body = await c.req.json().catch(() => ({}));
+  const oidcRoleMappings = body.oidc?.role_mappings === undefined ? undefined : await validatedRoleMappings(body.oidc.role_mappings);
+  const proxyRoleMappings = body.proxy?.role_mappings === undefined ? undefined : await validatedRoleMappings(body.proxy.role_mappings);
+  if (oidcRoleMappings === null || proxyRoleMappings === null) return c.json({ error: "invalid external role mappings" }, 400);
 
   if (body.hide_other_profiles !== undefined) {
     if (typeof body.hide_other_profiles !== "boolean") return c.json({ error: "invalid profile visibility setting" }, 400);
@@ -314,11 +348,14 @@ api.put("/auth/config", async (c) => {
     if (o.logout_url !== undefined) await setSetting("auth_oidc_logout_url", String(o.logout_url).trim());
     if (o.groups_claim !== undefined) await setSetting("auth_oidc_groups_claim", String(o.groups_claim).trim() || "groups");
     if (o.admin_group !== undefined) await setSetting("auth_oidc_admin_group", String(o.admin_group).trim());
+    if (oidcRoleMappings) await setSetting("auth_oidc_role_mappings", JSON.stringify(oidcRoleMappings));
     invalidateOidcConfig();
   }
 
   if (body.proxy) {
     if (body.proxy.header !== undefined) await setSetting("auth_proxy_header", String(body.proxy.header).trim() || "Remote-User");
+    if (body.proxy.groups_header !== undefined) await setSetting("auth_proxy_groups_header", String(body.proxy.groups_header).trim() || "Remote-Groups");
+    if (proxyRoleMappings) await setSetting("auth_proxy_role_mappings", JSON.stringify(proxyRoleMappings));
     if (body.proxy.logout_url !== undefined) await setSetting("auth_proxy_logout_url", String(body.proxy.logout_url).trim());
   }
 

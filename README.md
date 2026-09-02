@@ -329,3 +329,7 @@ Audio mode works thanks to **[@cerede2000](https://github.com/cerede2000)**, who
 ## Development note
 
 AI-assisted coding tools have been used selectively to support development tasks such as code exploration, prototyping, and review. Project direction, architectural decisions, validation, and responsibility for the final code remain with the maintainers.
+
+<div align="center">
+  <img src="docs/assets/ai-generated.svg" width="160" alt="AI-generated content">
+</div>

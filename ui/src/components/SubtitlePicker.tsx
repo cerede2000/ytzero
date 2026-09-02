@@ -65,7 +65,6 @@ export default function SubtitlePicker({
             className={`lp-btn${selectedLanguage ? " active" : ""}`}
             aria-label={t("subtitles")}
             aria-pressed={Boolean(selectedLanguage)}
-            title={t("subtitles")}
           >
             {loadingLanguage ? <LoaderCircle className="spin" size={19} /> : <Captions size={20} />}
           </button>

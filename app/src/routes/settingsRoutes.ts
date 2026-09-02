@@ -9,6 +9,7 @@ import { computeShowFrom, SCHEDULE_BUCKETS } from "../scheduleTime";
 import { configuredTimeZone, isValidTimeZone, timeZoneIsEnvironmentLocked } from "../timeZone";
 import { normalizeKeyboardShortcutSetting } from "../keyboardShortcutSettings";
 import { isLanguage } from "../../../shared/uiLanguages";
+import { removeRoleFromExternalMappings } from "../externalRoleMappings";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>; type ApiContext = Context<ApiEnvironment>;
@@ -17,6 +18,7 @@ interface SettingsRouteAccess {
   childLockStatus: (context: ApiContext) => unknown;
   clearChildLockSession: (context: ApiContext) => void;
   currentUserId: (context: ApiContext) => number;
+  externalPermissionGroupUuid: (context: ApiContext) => string | undefined;
   hashChildLockPin: (pin: string) => Promise<string>;
   isAdmin: (context: ApiContext) => boolean;
   isPrimaryUser: (context: ApiContext) => boolean;
@@ -31,6 +33,7 @@ export function registerSettingsRoutes(api: Api, access: SettingsRouteAccess): v
     childLockStatus,
     clearChildLockSession,
     currentUserId,
+    externalPermissionGroupUuid,
     hashChildLockPin,
     isAdmin,
     isPrimaryUser,
@@ -47,7 +50,7 @@ api.get("/child-lock", (c) => {
 });
 
 api.get("/profile-permissions", async (c) => {
-  return c.json({ permissions: await effectivePermissions(currentUserId(c), isAdmin(c)) });
+  return c.json({ permissions: await effectivePermissions(currentUserId(c), isAdmin(c), externalPermissionGroupUuid(c)) });
 });
 
 api.get("/access-control", async (c) => {
@@ -57,12 +60,17 @@ api.get("/access-control", async (c) => {
   return c.json({
     ...snapshot,
     permissions: PROFILE_PERMISSION_AREAS,
-    profiles: await Promise.all(profiles.map(async (profile) => ({
-      ...profile,
-      is_child: profile.is_child === 1,
-      is_admin: profile.is_admin === 1,
-      access: await effectivePermissions(profile.id, profile.id === currentUserId(c) && isAdmin(c)),
-    }))),
+    profiles: await Promise.all(profiles.map(async (profile) => {
+      const isPrimary = profile.id === currentUserId(c);
+      const isAdministrator = isPrimary || profile.is_admin === 1;
+      return {
+        ...profile,
+        is_primary: isPrimary,
+        is_child: profile.is_child === 1,
+        is_admin: isAdministrator,
+        access: await effectivePermissions(profile.id, isAdministrator),
+      };
+    })),
   });
 });
 
@@ -83,10 +91,27 @@ api.post("/access-control/groups", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name || !Array.isArray(body.permissions) || body.permissions.some((permission: unknown) => !isProfilePermissionArea(permission))) return c.json({ error: "invalid permission group" }, 400);
-  const group = await database.prepare("INSERT INTO permission_groups(portable_uuid,name,is_system) VALUES(?,?,0) RETURNING id").get(crypto.randomUUID(), name) as { id: number };
+  const nextOrder = Number((await database.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS value FROM permission_groups").get() as { value: number }).value);
+  const group = await database.prepare("INSERT INTO permission_groups(portable_uuid,name,is_system,sort_order) VALUES(?,?,0,?) RETURNING id").get(crypto.randomUUID(), name, nextOrder) as { id: number };
   await updateGroupPermissions(group.id, [...new Set(body.permissions as ProfilePermissionArea[])]);
   await database.prepare("UPDATE permission_policy SET revision=revision+1 WHERE singleton=1").run();
   return c.json(await accessControlSnapshot(), 201);
+});
+
+api.put("/access-control/group-order", async (c) => {
+  if (!isPrimaryUser(c)) return c.json({ error: "primary only" }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const groupIds: number[] = Array.isArray(body.group_ids) ? body.group_ids.map((id: unknown) => Number(id)) : [];
+  const existing = await database.prepare("SELECT id FROM permission_groups").all() as Array<{ id: number }>;
+  const expected = new Set(existing.map((group) => group.id));
+  if (groupIds.length !== expected.size || new Set(groupIds).size !== groupIds.length || groupIds.some((id) => !Number.isSafeInteger(id) || !expected.has(id))) {
+    return c.json({ error: "invalid permission group order" }, 400);
+  }
+  for (const [sortOrder, groupId] of groupIds.entries()) {
+    await database.prepare("UPDATE permission_groups SET sort_order=? WHERE id=?").run(sortOrder, groupId);
+  }
+  await database.prepare("UPDATE permission_policy SET revision=revision+1 WHERE singleton=1").run();
+  return c.json(await accessControlSnapshot());
 });
 
 api.put("/access-control/default-group", async (c) => {
@@ -116,13 +141,25 @@ api.delete("/access-control/groups/:id", async (c) => {
   const groupId = Number(c.req.param("id"));
   const replacementId = Number(c.req.query("replacement_group_id"));
   const snapshot = await accessControlSnapshot();
-  if (!Number.isSafeInteger(groupId) || groupId === snapshot.default_group_id) return c.json({ error: "default group cannot be deleted" }, 409);
-  if (await groupMemberCount(groupId) > 0) {
-    if (!Number.isSafeInteger(replacementId) || !await database.prepare("SELECT id FROM permission_groups WHERE id=?").get(replacementId)) return c.json({ error: "replacement group required" }, 409);
-    await database.prepare("UPDATE profile_permission_groups SET group_id=? WHERE group_id=?").run(replacementId, groupId);
+  const group = snapshot.groups.find((item) => item.id === groupId);
+  if (!Number.isSafeInteger(groupId) || !group) return c.json({ error: "not found" }, 404);
+  if (group.is_system) return c.json({ error: "system group cannot be deleted" }, 409);
+  const memberCount = await groupMemberCount(groupId);
+  const requiresReplacement = memberCount > 0 || groupId === snapshot.default_group_id;
+  if (requiresReplacement && (!Number.isSafeInteger(replacementId) || replacementId === groupId || !await database.prepare("SELECT id FROM permission_groups WHERE id=?").get(replacementId))) {
+    return c.json({ error: "replacement group required" }, 409);
   }
-  await database.prepare("DELETE FROM permission_groups WHERE id=?").run(groupId);
-  await database.prepare("UPDATE permission_policy SET revision=revision+1 WHERE singleton=1").run();
+  await database.transaction(async () => {
+    if (groupId === snapshot.default_group_id) {
+      await database.prepare("UPDATE permission_policy SET default_group_id=? WHERE singleton=1").run(replacementId);
+    }
+    if (memberCount > 0) {
+      await database.prepare("UPDATE profile_permission_groups SET group_id=? WHERE group_id=?").run(replacementId, groupId);
+    }
+    await database.prepare("DELETE FROM permission_groups WHERE id=?").run(groupId);
+    await database.prepare("UPDATE permission_policy SET revision=revision+1 WHERE singleton=1").run();
+  })();
+  await removeRoleFromExternalMappings(group.portable_uuid);
   return c.json(await accessControlSnapshot());
 });
 

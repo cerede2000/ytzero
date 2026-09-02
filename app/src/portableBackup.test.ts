@@ -19,6 +19,7 @@ process.env.AVATAR_DIR = avatarDir;
 process.env.TUBE_ARCHIVIST_CONFIG_DIR = resolve(root, "tubearchivist-secrets");
 
 const backup = await import("./portableBackup");
+const accessControl = await import("./accessControl");
 const permissions = await import("./profilePermissions");
 const plugins = await import("./plugins");
 const videoCardActions = await import("./videoCardActions");
@@ -255,6 +256,8 @@ describe("portable backup classification and restore", () => {
     setSetting("auth_oidc_client_secret", "DO-NOT-EXPORT-THIS");
     setSetting("auth_shared_password_hash", "HASH-DO-NOT-EXPORT");
     setSetting("auth_hide_other_profiles", "1");
+    setSetting("auth_oidc_role_mappings", '{"mappings":[{"group":"BACKUP-EXTERNAL-GROUP-DO-NOT-EXPORT","role_uuid":"role"}],"fallback_role_uuid":null}');
+    setSetting("auth_proxy_groups_header", "BACKUP-GROUPS-HEADER-DO-NOT-EXPORT");
     setSetting("child_lock_enabled", "1");
     setSetting("child_lock_pin_hash", "CHILD-PIN-HASH-DO-NOT-EXPORT");
     setSetting("profile_admin_only_areas", '["settings","profiles"]');
@@ -269,6 +272,8 @@ describe("portable backup classification and restore", () => {
     expect(serialized).not.toContain("DO-NOT-EXPORT-THIS");
     expect(serialized).not.toContain("HASH-DO-NOT-EXPORT");
     expect(serialized).not.toContain("auth_hide_other_profiles");
+    expect(serialized).not.toContain("BACKUP-EXTERNAL-GROUP-DO-NOT-EXPORT");
+    expect(serialized).not.toContain("BACKUP-GROUPS-HEADER-DO-NOT-EXPORT");
     expect(serialized).not.toContain("CHILD-PIN-HASH-DO-NOT-EXPORT");
     expect(serialized).not.toContain("child_lock_enabled");
     expect(serialized).toContain("instance.access-control");
@@ -282,6 +287,28 @@ describe("portable backup classification and restore", () => {
     expect(serialized).not.toContain("POST-SYNC-ERROR-DO-NOT-EXPORT");
     expect(serialized).not.toContain("auth_sessions");
     expect(serialized).not.toContain("download_cookie");
+  });
+
+  test("round-trips the user-defined permission role order", async () => {
+    await accessControl.ensureAccessControl();
+    const originalIds = (await accessControl.accessControlSnapshot()).groups.map((group) => group.id);
+    const desiredIds = [...originalIds].reverse();
+    for (const [order, id] of desiredIds.entries()) db.prepare("UPDATE permission_groups SET sort_order=? WHERE id=?").run(order, id);
+
+    const zip = await backup.createPortableBackup({ preset: "configuration" });
+    const entries = backup.readPortableZip(zip);
+    const manifest = JSON.parse(decoder.decode(entries.get("manifest.json")!));
+    const section = manifest.sections.find((item: any) => item.id === "instance.access-control");
+    expect(section.schemaVersion).toBe(2);
+    const document = JSON.parse(decoder.decode(entries.get(section.path)!));
+    expect(document.groups.map((group: any) => group.order)).toEqual(desiredIds.map((_, index) => index));
+
+    for (const [order, id] of originalIds.entries()) db.prepare("UPDATE permission_groups SET sort_order=? WHERE id=?").run(order, id);
+    const analyzed = await backup.analyzePortableBackup(1, zip);
+    const mappings = Object.fromEntries(analyzed.manifest.profiles.map((profile: any) => [profile.id, { action: "skip" as const }]));
+    const plan = await backup.planPortableRestore(1, analyzed.sessionId, { mappings, sections: ["instance.access-control"], strategy: "merge" });
+    await backup.commitPortableRestore(1, analyzed.sessionId, plan.planRevision);
+    expect((db.prepare("SELECT id FROM permission_groups ORDER BY sort_order,id").all() as Array<{ id: number }>).map((group) => group.id)).toEqual(desiredIds);
   });
 
   test("round-trips the opt-in Watch together setting and accepts a v2 Social payload", async () => {
