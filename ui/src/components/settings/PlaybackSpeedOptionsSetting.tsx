@@ -8,6 +8,7 @@ import {
   normalizePlaybackSpeed,
 } from "../../../../shared/playbackSpeeds";
 import { useI18n } from "../../i18n";
+import Tooltip from "../Tooltip";
 import { Button, Field, IconButton, Input, InputGroup } from "../ui";
 import "./PlaybackSpeedOptionsSetting.css";
 
@@ -23,6 +24,7 @@ export default function PlaybackSpeedOptionsSetting({ value, onChange }: {
   const alreadyAvailable = normalized != null && ([...DEFAULT_PLAYBACK_SPEEDS, ...value] as readonly string[]).includes(normalized);
   const invalid = input.trim() !== "" && normalized == null;
   const limitReached = value.length >= MAX_CUSTOM_PLAYBACK_SPEEDS;
+  const errorText = saveError || (invalid ? t("customPlaybackSpeedRange") : alreadyAvailable ? t("customPlaybackSpeedDuplicate") : limitReached ? t("customPlaybackSpeedLimit", { count: MAX_CUSTOM_PLAYBACK_SPEEDS }) : "");
 
   const update = async (next: string[]): Promise<boolean> => {
     setSaving(true);
@@ -44,23 +46,26 @@ export default function PlaybackSpeedOptionsSetting({ value, onChange }: {
   };
 
   return <div className="playback-speed-options-setting">
-    <Field error={saveError || (invalid ? t("customPlaybackSpeedRange") : alreadyAvailable ? t("customPlaybackSpeedDuplicate") : limitReached ? t("customPlaybackSpeedLimit", { count: MAX_CUSTOM_PLAYBACK_SPEEDS }) : undefined)}>
+    <Field className="playback-speed-options-setting__field">
       <div className="playback-speed-options-setting__entry">
-        <InputGroup suffix="×">
-          <Input
-            type="number"
-            inputMode="decimal"
-            min={MIN_PLAYBACK_SPEED}
-            max={MAX_PLAYBACK_SPEED}
-            step="0.01"
-            value={input}
-            placeholder="2.3"
-            aria-label={t("customPlaybackSpeedValue")}
-            disabled={saving || limitReached}
-            onChange={(event) => { setInput(event.target.value); setSaveError(""); }}
-            onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void add(); } }}
-          />
-        </InputGroup>
+        <Tooltip text={errorText} pos="left" portal open={Boolean(errorText)} className="playback-speed-options-setting__error-tooltip">
+          <InputGroup>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min={MIN_PLAYBACK_SPEED}
+              max={MAX_PLAYBACK_SPEED}
+              step="0.01"
+              value={input}
+              placeholder="2.3"
+              aria-label={t("customPlaybackSpeedValue")}
+              aria-invalid={Boolean(errorText)}
+              disabled={saving || limitReached}
+              onChange={(event) => { setInput(event.target.value); setSaveError(""); }}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void add(); } }}
+            />
+          </InputGroup>
+        </Tooltip>
         <Button size="sm" leadingIcon={<Plus />} disabled={!normalized || alreadyAvailable || saving || limitReached} onClick={() => void add()}>
           {t("addPlaybackSpeed")}
         </Button>

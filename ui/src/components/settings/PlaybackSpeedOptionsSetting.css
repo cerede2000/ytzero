@@ -1,24 +1,40 @@
-.playback-speed-options-setting {
+.ui-setting-row.playback-speed-options-setting-row {
   display: grid;
-  gap: 8px;
-  min-width: min(100%, 280px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 16px;
 }
+
+.playback-speed-options-setting-row > .ui-setting-row__copy { grid-column: 1; }
+.playback-speed-options-setting-row > .ui-setting-row__control { display: contents; }
+.playback-speed-options-setting { display: contents; }
+
+.playback-speed-options-setting__field { grid-column: 2; justify-self: end; min-width: 0; width: min(100%, 240px); }
+.playback-speed-options-setting__field .ui-field__hint { max-width: 100%; overflow-wrap: anywhere; }
 
 .playback-speed-options-setting__entry {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
 
 .playback-speed-options-setting__entry .ui-input-group {
-  width: 112px;
+  flex: 1 1 112px;
+  max-width: 150px;
+  min-width: 0;
 }
+
+.playback-speed-options-setting__entry > .tooltip-wrap { flex: 1 1 112px; min-width: 0; }
+.playback-speed-options-setting__entry > .tooltip-wrap .ui-input-group { max-width: 150px; width: 100%; }
+.playback-speed-options-setting__error-tooltip .ui-input { border-color: #ff6b76; }
+.playback-speed-options-setting__error-tooltip-tip { max-width: 280px; text-align: left; white-space: normal; }
 
 .playback-speed-options-setting__values {
   display: flex;
   flex-wrap: wrap;
+  grid-column: 1 / -1;
   justify-content: flex-end;
   gap: 6px;
+  padding-top: 2px;
 }
 
 .playback-speed-options-setting__value {
@@ -27,7 +43,7 @@
   gap: 2px;
   min-height: 30px;
   padding-left: 10px;
-  border: 1px solid var(--surface-3);
+  border: 0;
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--text);
@@ -42,8 +58,12 @@
   border-radius: 999px;
 }
 
-@media (max-width: 640px) {
-  .playback-speed-options-setting__values {
-    justify-content: flex-start;
-  }
+.playback-speed-options-setting__value .ui-button svg { height: 14px; width: 14px; }
+
+@container settings-section (max-width: 520px) {
+  .ui-setting-row.playback-speed-options-setting-row { grid-template-columns: minmax(0, 1fr); }
+  .playback-speed-options-setting-row > .ui-setting-row__copy,
+  .playback-speed-options-setting__field,
+  .playback-speed-options-setting__values { grid-column: 1; }
+  .playback-speed-options-setting__field { justify-self: stretch; width: 100%; }
 }

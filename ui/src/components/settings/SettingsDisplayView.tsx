@@ -354,7 +354,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
             />
           </SettingRow>
 
-          <SettingRow label={t("customPlaybackSpeeds")} description={t("customPlaybackSpeedsHint")} align="start">
+          <SettingRow className="playback-speed-options-setting-row" label={t("customPlaybackSpeeds")} description={t("customPlaybackSpeedsHint")} align="start">
             <PlaybackSpeedOptionsSetting
               value={playerSpeedOptions}
               onChange={async (next) => {

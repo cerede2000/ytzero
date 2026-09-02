@@ -212,7 +212,7 @@ below.
   `profile.settings` schema v8; schemas 1–7 remain readable and retain the
   default when the key is absent.
   The custom playback-speed option list is bounded portable per-profile
-  presentation configuration. It stores at most 16 unique values from 0.25 to
+  presentation configuration. It stores at most 16 unique values from 0.1 to
   4 with up to two decimal places; built-in speeds are omitted from the stored
   list. Restore normalizes invalid data to an empty list. This setting is
   recorded by `profile.settings` schema v9; schemas 1–8 remain readable and use

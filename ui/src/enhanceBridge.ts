@@ -215,7 +215,7 @@ export function createEnhanceConfiguration(settings: Partial<AppSettings>) {
       replaceControls: booleanSetting(settings.enhance_replace_controls, true),
       language: settings.player_hl || "en",
       preferredQuality: settings.player_quality || "auto",
-      defaultPlaybackRate: numberSetting(settings.player_speed, 1, 0.25, 4),
+      defaultPlaybackRate: numberSetting(settings.player_speed, 1, 0.1, 4),
       keyboardSeekSeconds: numberSetting(settings.keyboard_seek_seconds, 5, 1, 120),
       frameStepFps: numberSetting(settings.enhance_frame_fps, 30, 1, 120),
       autoFullscreenLandscape: booleanSetting(settings.auto_fullscreen_landscape, false),

@@ -10,6 +10,8 @@ import {
 describe("custom playback speeds", () => {
   test("accepts bounded values with up to two decimal places", () => {
     expect(normalizePlaybackSpeed("2,3")).toBe("2.3");
+    expect(normalizePlaybackSpeed("0.1")).toBe("0.1");
+    expect(normalizePlaybackSpeed("0.09")).toBe(null);
     expect(normalizePlaybackSpeed("4.00")).toBe("4");
     expect(normalizePlaybackSpeed("2.345")).toBe(null);
     expect(normalizePlaybackSpeed("4.01")).toBe(null);

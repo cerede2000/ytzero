@@ -1,5 +1,5 @@
 export const DEFAULT_PLAYBACK_SPEEDS = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"] as const;
-export const MIN_PLAYBACK_SPEED = 0.25;
+export const MIN_PLAYBACK_SPEED = 0.1;
 export const MAX_PLAYBACK_SPEED = 4;
 export const MAX_CUSTOM_PLAYBACK_SPEEDS = 16;
 
