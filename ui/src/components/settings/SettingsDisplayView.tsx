@@ -221,7 +221,7 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
                 </button>
               ))}
             </div>
-          </div>}
+          </div>
           </SettingsSection>
           }
           {displaySubTab === "feed" && canManageArea("feed") && <SettingsSection title={t("displayFeed")} className="settings-display-group">

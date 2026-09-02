@@ -15,6 +15,14 @@ export const DEFAULT_VIDEO_CARD_ACTION_CONFIG: VideoCardActionConfig = {
   actions: VIDEO_CARD_ACTION_IDS.map((id) => ({ id, hidden: id === "playlist" || id === "download" || id === "otherPlaybackMode" })),
 };
 
+/**
+ * An action added after somebody saved their layout has to land somewhere. The
+ * two that belong beside scheduling go there, in their own order, rather than
+ * at the end behind everything a reader once hid — playing a video is not an
+ * afterthought on a card.
+ */
+const AFTER_SCHEDULE: VideoCardActionId[] = ["play", "sessionQueue"];
+
 export function parseVideoCardActionConfig(value: unknown): VideoCardActionConfig | null {
   if (typeof value === "string") {
     try { return parseVideoCardActionConfig(JSON.parse(value)); } catch { return null; }
@@ -33,8 +41,10 @@ export function parseVideoCardActionConfig(value: unknown): VideoCardActionConfi
   }
   for (const action of DEFAULT_VIDEO_CARD_ACTION_CONFIG.actions) if (!seen.has(action.id)) {
     const missing = { ...action };
-    if (missing.id === "sessionQueue") actions.splice(Math.max(1, actions.findIndex((entry) => entry.id === "schedule") + 1), 0, missing);
-    else actions.push(missing);
+    if (AFTER_SCHEDULE.includes(missing.id)) {
+      const anchors: VideoCardActionId[] = ["schedule", ...AFTER_SCHEDULE.slice(0, AFTER_SCHEDULE.indexOf(missing.id))];
+      actions.splice(Math.max(1, ...anchors.map((id) => actions.findIndex((entry) => entry.id === id) + 1)), 0, missing);
+    } else actions.push(missing);
   }
   return { version: 1, actions: [actions.find((action) => action.id === "schedule")!, ...actions.filter((action) => action.id !== "schedule")] };
 }

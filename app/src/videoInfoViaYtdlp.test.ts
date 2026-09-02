@@ -82,7 +82,7 @@ describe("audio track taken from the same answer", () => {
     const source = audioSourceFromPrinted(printed);
     expect(source?.url).toContain("googlevideo.com/audio");
     expect(source?.mime).toBe("audio/mp4");
-    expect(source?.headers).toEqual({ "User-Agent": "Chrome/149" });
+    expect(source?.httpHeaders).toEqual({ "User-Agent": "Chrome/149" });
     expect(source?.expiresAt).toBeGreaterThan(Date.now());
   });
 
@@ -95,15 +95,17 @@ describe("audio track taken from the same answer", () => {
     expect(audioSourceFromPrinted({})).toBeNull();
   });
 
-  test("carries on without headers rather than not at all", () => {
-    expect(audioSourceFromPrinted({ ...printed, headers: "NA" })?.headers).toBeUndefined();
+  test("says nothing rather than a track nothing can fetch", () => {
+    // A signed URL is asked for the way the client it was minted for would
+    // ask; without that much, offering the track would only earn a 403.
+    expect(audioSourceFromPrinted({ ...printed, headers: "NA" })).toBeNull();
   });
 });
 
 describe("both playable tracks taken from the same answer", () => {
   const FIELDS = 6;
   const block = (url: string, acodec: string, vcodec: string, ext: string) =>
-    [`{"id":"abc"}`, url, "NA", acodec, vcodec, ext].join("\n");
+    [`{"id":"abc"}`, url, `{"User-Agent":"Chrome/149"}`, acodec, vcodec, ext].join("\n");
   const audio = block("https://r1.googlevideo.com/audio?expire=9999999999", "mp4a.40.2", "none", "m4a");
   const progressive = block("https://r1.googlevideo.com/muxed?expire=9999999999", "mp4a.40.2", "avc1.42001E", "mp4");
 
@@ -126,7 +128,7 @@ describe("both playable tracks taken from the same answer", () => {
 
   test("takes only a file the video element can play on its own", () => {
     const muxed = printedFormats(progressive, FIELDS)[0]!;
-    expect(progressiveVideoFromPrinted(muxed)?.mime).toBe("video/mp4");
+    expect(progressiveVideoFromPrinted(muxed)?.url).toContain("googlevideo.com");
     // Video with no sound, or sound with no video, is what the HLS path
     // assembles from two streams — not something to hand a <video> element.
     expect(progressiveVideoFromPrinted({ ...muxed, acodec: "none" })).toBeNull();
@@ -142,6 +144,6 @@ describe("both playable tracks taken from the same answer", () => {
     });
     // A URL resolved with a profile's cookies is refused to a caller that does
     // not look like the client it was minted for.
-    expect(source?.headers).toEqual({ "User-Agent": "Chrome/146 (yt-dlp)" });
+    expect(source?.httpHeaders).toEqual({ "User-Agent": "Chrome/146 (yt-dlp)" });
   });
 });

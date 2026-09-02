@@ -1,13 +1,13 @@
 import { AudioSourceCache, audioSourceKey } from "./audioSourceCache";
 import { defaultAudioDiagnostic, type AudioDiagnostic } from "./audioDiagnostics";
-import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";
-import { recordVideoGone } from "./videoGoneOnPlayback";
-import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
-import { downloadCookieAttempts } from "./downloadStrategy";
+import { downloadCookieAttempts, isAnonymousAddressRefusal, recordDownloadAttempt, redactYtdlpDiagnostic } from "./downloadStrategy";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { ytdlpAttemptArgs } from "./downloadConfig";
 import { parseYtdlpHttpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
+import { askingHeadersOnly } from "./ytdlpAskingHeaders";
+import { audioLanguageFor, audioSelectorFor } from "./audioTrackLanguage";
 import { potArgsFor } from "./ytdlpPotProvider";
+import { recordVideoGone } from "./videoGoneOnPlayback";
 
 export interface AudioSource {
   url: string;
@@ -58,9 +58,7 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     videoId: string,
     useCookies: boolean,
     signal: AbortSignal,
-    /** Filled in when YouTube turned the caller away rather than the request. */
-    refusedRef: { refused: boolean } = { refused: false },
-  ): Promise<AudioSource | null> {
+  ): Promise<{ source: AudioSource | null; anonymousRefused: boolean }> {
     const reportFailure = (reason: string, extra: Record<string, number | string> = {}) => {
       audioDiagnostic("warn", "audio.source_attempt_failed", {
         userId, videoId, reason, usedCookies: useCookies, ...extra,
@@ -75,15 +73,14 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
       "--print", "%(http_headers)j",
       ...potArgsFor(useCookies),
     ];
-    if (useCookies) args.push("--cookies", downloadCookiesFile(userId));
-    if (signal.aborted) return null;
+    if (signal.aborted) return { source: null, anonymousRefused: false };
 
     let process: ReturnType<typeof Bun.spawn>;
     try {
-      process = spawn([YTDLP, ...args], { stdout: "pipe", stderr: "pipe" });
+      process = spawn([YTDLP, ...ytdlpAttemptArgs(args, useCookies, useCookies ? downloadCookiesFile(userId) : null)], { stdout: "pipe", stderr: "pipe" });
     } catch {
       reportFailure("spawn_failed");
-      return null;
+      return { source: null, anonymousRefused: false };
     }
 
     let timedOut = false;
@@ -97,40 +94,37 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
         new Response(process.stderr as ReadableStream<Uint8Array>).text(),
         process.exited,
       ]);
-      if (signal.aborted) return null;
+      if (signal.aborted) return { source: null, anonymousRefused: false };
       if (timedOut) {
         reportFailure("timeout");
-        return null;
+        return { source: null, anonymousRefused: false };
       }
       if (exitCode !== 0) {
-        // The last line yt-dlp printed is the one that names the problem, and
-        // reading it is the difference between "it failed" and knowing why.
-        const said = stderr.trim().split(/\r?\n/).filter(Boolean).at(-1)?.slice(0, 300);
-        refusedRef.refused = callerWasRefused(stderr);
-        reportFailure("ytdlp_exit", said ? { exitCode, said } : { exitCode });
+        reportFailure("ytdlp_exit", { exitCode, detail: redactYtdlpDiagnostic(stderr.split(/\r?\n/).filter(Boolean).at(-1) ?? "") });
+        const anonymousRefused = !useCookies && isAnonymousAddressRefusal(stderr);
         // The reader has just been told the video is gone. Keeping that answer
         // saves offering them the same video tomorrow — the availability sync
         // re-asks each one at most once a day. A refusal is not this, and
         // recordVideoGone declines to act on one.
-        if (!refusedRef.refused) void recordVideoGone(videoId, new Error(stderr)).catch(() => {});
-        return null;
+        if (!anonymousRefused) void recordVideoGone(videoId, new Error(stderr)).catch(() => {});
+        return { source: null, anonymousRefused };
       }
       const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
       const url = safeGoogleVideoUrl(lines[0] ?? "");
       const extension = lines[1] ?? "m4a";
-      const httpHeaders = parseYtdlpHttpHeaders(lines[2] ?? "");
+      const httpHeaders = askingHeadersOnly(parseYtdlpHttpHeaders(lines[2] ?? ""));
       if (!url || !httpHeaders) {
         reportFailure("missing_or_rejected_url");
-        return null;
+        return { source: null, anonymousRefused: false };
       }
       if (extension !== "m4a" && extension !== "mp4") {
         reportFailure("unsupported_extension");
-        return null;
+        return { source: null, anonymousRefused: false };
       }
       return { source: { url, mime: "audio/mp4", expiresAt: audioUrlExpiry(url), issuedAt: Date.now(), httpHeaders }, anonymousRefused: false };
     } catch {
       if (!signal.aborted) reportFailure("process_io_failed");
-      return null;
+      return { source: null, anonymousRefused: false };
     } finally {
       clearTimeout(timer);
       signal.removeEventListener("abort", onAbort);
@@ -146,24 +140,20 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
       return null;
     }
     let attempts = 0;
-    const cookiesConfigured = downloadCookiesConfigured(userId);
-    const order = cookiesConfigured
-      ? cookieAttemptMemory.order(userId, true, videoInfoRefusalQuiet.quiet())
-      : downloadCookieAttempts(false);
-    for (const useCookies of order) {
+    let anonymousRefused = false;
+    for (const useCookies of downloadCookieAttempts(downloadCookiesConfigured(userId), userId)) {
       attempts++;
-      const refusal = { refused: false };
-      const source = await runResolverAttempt(userId, videoId, useCookies, signal, refusal);
-      if (signal.aborted) return null;
-      cookieAttemptMemory.record({
-        userId, useCookies, resolved: Boolean(source), refused: refusal.refused,
-      });
+      const result = await runResolverAttempt(userId, videoId, useCookies, signal);
+      anonymousRefused ||= result.anonymousRefused;
+      const source = result.source;
       if (source) {
+        recordDownloadAttempt(userId, useCookies, true, anonymousRefused);
         audioDiagnostic("info", "audio.source_resolved", {
           userId, videoId, attempts, usedCookies: useCookies, mime: source.mime, ms: Date.now() - startedAt,
         });
         return source;
       }
+      if (signal.aborted) return null;
     }
     audioDiagnostic("warn", "audio.source_resolution_failed", {
       userId, videoId, reason: "no_compatible_source", attempts, ms: Date.now() - startedAt,
@@ -234,14 +224,6 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     return resolveAudioSource(userId, videoId, signal);
   }
 
-  /**
-   * Hand the resolver a source someone else already paid for.
-   *
-   * Importing a video runs yt-dlp over the whole video, formats included, and
-   * the audio one is right there in the answer. Resolving it again seconds
-   * later costs another six seconds of the same work, in front of a listener
-   * waiting for a track to start.
-   */
   function primeAudioSource(userId: number, videoId: string, source: AudioSource): void {
     if (audioSources.get(userId, videoId)) return;
     audioSources.set(userId, videoId, source);
@@ -276,8 +258,5 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     }
   }
 
-  return {
-    discardAudioSource, invalidateAudioSources, primeAudioSource,
-    refreshAudioSource, resolveAudioSource, retryAudioSource,
-  };
+  return { discardAudioSource, invalidateAudioSources, primeAudioSource, refreshAudioSource, resolveAudioSource, retryAudioSource };
 }

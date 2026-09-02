@@ -922,6 +922,14 @@ export const {
 } = createYoutubeSearch({
   requestHeaders: youtubeRequestHeaders,
   resolveCacheKey: (userId) => resolveYouTubeLanguage(userId).cacheKey,
+  // A search walk is one reader's, so its pages are asked for in one language
+  // from beginning to end — the jar's own preference rewritten to match, since
+  // that preference outranks both the header and the `hl` in the body.
+  fetchHeaders: (language?: PanelLanguage) => {
+    const base = youtubeRequestHeaders();
+    return { ...base, ...languageHeaders(base.Cookie, language ?? libraryLanguage()) };
+  },
+  countLanguage: libraryLanguage,
   cleanSubscriberCount,
   deepCollect,
   extractInitialData,

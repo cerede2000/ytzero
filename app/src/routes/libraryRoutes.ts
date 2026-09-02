@@ -130,7 +130,9 @@ api.get("/search/youtube", async (c) => {
   const q = c.req.query("q");
   if (!q?.trim()) return c.json({ results: [] });
   try {
-    const search = await searchYouTube(q.trim(), uid);
+    // Answered in the language the page says it is reading in, so a card in a
+    // list is named the same way whichever half of the search produced it.
+    const search = await searchYouTube(q.trim(), askedLanguage(c, uid));
     const watched = await attachWatchedState(uid, search.results, (result) => result.videoId);
     const ids = watched.map((result) => result.videoId);
     const placeholders = ids.map(() => "?").join(",");
