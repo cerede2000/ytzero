@@ -101,6 +101,75 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  native-release:
+    name: Publish native release archive
+    if: needs.prepare.outputs.is_release == 'true'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+
+      - name: Restore the prepared changelog
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-changelog
+          path: ui/public
+
+      - name: Stamp the build version and commit
+        run: |
+          echo "${{ needs.prepare.outputs.version }}" > app/src/build-version.txt
+          echo "${{ needs.prepare.outputs.commit }}" > app/src/build-commit.txt
+
+      - name: Set up the Bun runtime
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build the production web client
+        run: |
+          set -euo pipefail
+          cd ui
+          bun install --frozen-lockfile
+          bun run build:prepared
+
+      - name: Package the native release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${{ needs.prepare.outputs.version }}"
+          stage="ytzero-${version}"
+          archive="${stage}.tar.gz"
+
+          mkdir -p "${stage}/public"
+          cp -r app/src "${stage}/src"
+          cp app/package.json app/bun.lock "${stage}/"
+          cp -r ui/dist/. "${stage}/public/"
+          cp app/src/build-version.txt "${stage}/VERSION"
+
+          tar -czf "${archive}" "${stage}"
+          sha256sum "${archive}" > "${archive}.sha256"
+
+      # gh creates a draft internally, uploads both assets, and only then
+      # publishes it. This is required because published releases are immutable.
+      - name: Publish the GitHub release with native assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          version="${{ needs.prepare.outputs.version }}"
+          archive="ytzero-${version}.tar.gz"
+          gh release create "${version}" \
+            --generate-notes \
+            --latest \
+            --verify-tag \
+            "${archive}" \
+            "${archive}.sha256"
+
   build:
     name: Build the Linux image for ${{ matrix.platform }}
     needs: prepare
