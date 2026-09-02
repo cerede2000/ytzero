@@ -1,5 +1,9 @@
 /* ── Local player (downloaded files) ─────────────────────────────────── */
 .lp-root {
+  --lp-controls-bottom-padding: 8px;
+  --lp-controls-buttons-height: 34px;
+  --lp-controls-timeline-height: 16px;
+  --lp-controls-row-gap: 2px;
   position: relative;
   width: 100%;
   height: 100%;
@@ -59,7 +63,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 26px 12px 8px;
+  padding: 26px 12px var(--lp-controls-bottom-padding);
   background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.4) 60%, transparent);
   opacity: 0;
   transition: opacity 0.2s ease;
@@ -84,7 +88,17 @@
   transition: bottom 0.2s ease;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
-.lp-subtitles.raised { bottom: 13%; }
+/* Keep captions just above the timeline. A percentage of the player height
+   drifts away from the fixed-height controls, especially in fullscreen. */
+.lp-subtitles.raised {
+  bottom: calc(
+    var(--lp-controls-bottom-padding)
+    + var(--lp-controls-buttons-height)
+    + var(--lp-controls-row-gap)
+    + var(--lp-controls-timeline-height)
+    + 8px
+  );
+}
 .lp-subtitles span {
   background: var(--lp-sub-bg, rgba(0, 0, 0, 0.75));
   padding: 3px 10px;
@@ -136,7 +150,7 @@
 
 .lp-bar {
   position: relative;
-  height: 16px;
+  height: var(--lp-controls-timeline-height);
   display: flex;
   align-items: center;
   cursor: pointer;
@@ -277,7 +291,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 2px;
+  height: var(--lp-controls-buttons-height);
+  margin-top: var(--lp-controls-row-gap);
 }
 .lp-btn {
   width: 38px;

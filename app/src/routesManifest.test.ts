@@ -47,9 +47,10 @@ describe("HTTP route manifest", () => {
     const clearVideoBookmarksRoute = "DELETE /videos/:id/bookmark";
     const accessControlRoutes = [
       "GET /access-control", "PUT /access-control/groups/:id", "POST /access-control/groups",
-      "PUT /access-control/default-group", "PUT /access-control/profiles/:id", "DELETE /access-control/groups/:id",
+      "PUT /access-control/group-order", "PUT /access-control/default-group", "PUT /access-control/profiles/:id",
+      "DELETE /access-control/groups/:id",
     ];
-    expect(routes).toHaveLength(244);
+    expect(routes).toHaveLength(245);
     expect(routes).toContain(transcriptRoute);
     expect(routes).toContain(playbackAdjacentRoute);
     expect(routes).toContain(liveAudioRoute);
