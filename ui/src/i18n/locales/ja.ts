@@ -1,8 +1,10 @@
 import type { Locale } from "../types";
 import { localeFormats } from "../localeFormats";
+import { surfaceMessages } from "./surfaceMessages";
 
 export const ja: Locale = {
   messages: {
+    ...surfaceMessages.ja,
     "navToday": "メインページ",
     "navSocial": "社会招聘",
     "navDiscovery": "ディスカバリー",
@@ -1039,7 +1041,7 @@ export const ja: Locale = {
     "authHideOtherProfiles": "プロファイルピッカーで他のプロファイルを非表示",
     "authHideOtherProfilesHint": "署名されたプロフィールのみがリストされています。 プロファイル、OIDC、およびプロキシヘッダーごとにログインできます。管理者は、設定内のすべてのプロファイルを管理できます。",
     "authProfileVisibilitySaved": "プロファイルピッカー可視性保存",
-    "authLockoutWarn": "アクティベートする前に設定を終了します。そうしないと自分でロックすることができます。 回復: YTZERO AUTH DISABLE=1 を設定し、再起動します。",
+    "authLockoutWarn": "アクティベートする前に設定を終了します。そうしないと自分でロックすることができます。 回復: YTZERO_AUTH_DISABLE=1 を設定し、再起動します。",
     "authOidcRedirectUriHint": "プロバイダの許可されたリダイレクトURI(厳密に一致する)にこの正確なURLを追加します。 http:// を表示しているが、サイトが https 上で配信されると、APP URL 環境変数をパブリック https URL に設定します。",
     "authOidcIssuerHint": "全発行者 URL. Authentik は、末尾のスラッシュ(例: https://id.example.com/application/o/<slug>/ — Pocket ID と Keycloak が通常 root または realm URL を使用します。 「テスト接続」を使用して検証します。",
     "authMappingIncomplete": "活動化する前にプロフィールを割り当てる終わり:",

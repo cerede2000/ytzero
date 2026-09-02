@@ -1,9 +1,10 @@
 import { SUBTITLE_LANGUAGES } from "./subtitleLanguages";
-import { normalizeLanguage, type Language } from "../../shared/uiLanguages";
+import type { BaseLocalizedText } from "./serverMessages";
+import { localizeServerMessage } from "./serverMessages";
 
 export type DownloadSettingValue = number | string;
 export type DownloadSettingType = "slider" | "select" | "toggle" | "text" | "time" | "multiselect";
-type LocalizedText = { en: string } & Partial<Record<Language, string>>;
+type LocalizedText = BaseLocalizedText;
 
 export interface DownloadSettingSource {
   key: string;
@@ -341,12 +342,11 @@ export const DOWNLOADS_ADMIN_SETTING_KEYS = new Set([
 ]);
 
 export function localizeDownloadSettings(language: string | null | undefined): DownloadSettingDefinition[] {
-  const selected = normalizeLanguage(language);
   return DOWNLOADS_SETTINGS.map((definition) => ({
     ...definition,
     type: definition.type ?? "slider",
-    label: definition.label[selected] ?? definition.label.en,
-    description: definition.description[selected] ?? definition.description.en,
-    options: definition.options?.map((option) => ({ value: option.value, label: option.label[selected] ?? option.label.en })),
+    label: localizeServerMessage(definition.label, language),
+    description: localizeServerMessage(definition.description, language),
+    options: definition.options?.map((option) => ({ value: option.value, label: localizeServerMessage(option.label, language) })),
   }));
 }

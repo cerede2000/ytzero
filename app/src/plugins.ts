@@ -32,7 +32,7 @@ import {
   type PluginSettingValue,
   type PluginTermState,
 } from "./pluginCatalog";
-import { normalizeLanguage } from "../../shared/uiLanguages";
+import { localizeServerMessage } from "./serverMessages";
 export { PLUGINS } from "./pluginCatalog";
 export type { PluginManifest, PluginSettingDef, PluginSettingOption, PluginSettingType, PluginSettingValue, PluginTermState } from "./pluginCatalog";
 
@@ -50,7 +50,7 @@ if (getSetting("plugin_social_enabled_reactions") != null) {
 }
 
 function text(value: LocalizedText, language: string | null | undefined) {
-  return value[normalizeLanguage(language)] ?? value.en;
+  return localizeServerMessage(value, language);
 }
 
 function localizeSetting(def: PluginSettingSource, language: string | null | undefined): PluginSettingDef {

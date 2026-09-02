@@ -647,7 +647,7 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
           open={tagMenuOpen}
           onOpenChange={setTagMenuOpen}
           trigger={<Button variant="ghost" size="sm" title={t("addTag")}>
-            <Plus size={13} /> Tag
+            <Plus size={13} /> {t("Tag")}
           </Button>}
           className="tag-picker-popover"
         >
@@ -662,7 +662,7 @@ export default function ChannelPage({ onPlay, shortsEnabled }: { onPlay: (v: Vid
 
       {liveStreams.length > 0 && (
         <section className="channel-live-section">
-          <SectionHeader title="LIVE" icon={<Radio />} variant="uppercase" className="channel-live-title" />
+          <SectionHeader title={t("liveBadge")} icon={<Radio />} variant="uppercase" className="channel-live-title" />
           <div className="video-grid">
             {liveStreams.map((v) => (
               <VideoCard key={v.video_id} video={v} onPlay={onPlay} onChanged={reload} showChannelAvatar={false} />

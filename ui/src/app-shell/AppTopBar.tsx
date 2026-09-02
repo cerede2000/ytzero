@@ -107,7 +107,7 @@ export default function AppTopBar({
       className={`topbar${solid ? " topbar--solid" : ""}${incognito ? " topbar--incognito" : ""}${feedRefreshing ? " topbar--feed-refreshing" : ""}`}
       aria-busy={feedRefreshing}
     >
-      <button className="sidebar-toggle-btn" aria-label="Menu" onClick={toggleSidebar}>
+      <button className="sidebar-toggle-btn" aria-label={t("Menu")} onClick={toggleSidebar}>
         <Menu size={20} />
       </button>
       <Link

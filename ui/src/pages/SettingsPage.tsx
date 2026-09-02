@@ -608,7 +608,7 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
                           open={tagMenuChannelId === ch.channel_id}
                           onOpenChange={(open) => setTagMenuChannelId(open ? ch.channel_id : null)}
                           trigger={<Button variant="ghost" size="sm" title={t("manageChannelTags")}>
-                            <Plus size={13} /> Tag
+                            <Plus size={13} /> {t("Tag")}
                           </Button>}
                         >
                           <TagPickerMenu tags={tags} selectedTagIds={(ch.tags ?? []).map((tag) => tag.id)} onToggle={(tag) => void toggleChannelTag(ch.channel_id, tag)}>

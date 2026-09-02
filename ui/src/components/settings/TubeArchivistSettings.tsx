@@ -4,8 +4,7 @@ import { tubeArchivistApi, type TubeArchivistStatus } from "../../tubeArchivistA
 import { Alert, Button, Field, FormActions, Input, SettingRow, SettingsSection } from "../ui";
 
 export function TubeArchivistSettings({ canManage }: { canManage: boolean }) {
-  const { language } = useI18n();
-  const pl = language === "pl";
+  const { t, locale } = useI18n();
   const [status, setStatus] = useState<TubeArchivistStatus | null>(null);
   const [baseUrl, setBaseUrl] = useState("");
   const [token, setToken] = useState("");
@@ -25,48 +24,48 @@ export function TubeArchivistSettings({ canManage }: { canManage: boolean }) {
       if (kind === "save") {
         const next = await tubeArchivistApi.updateConfig({ baseUrl, ...(token.trim() ? { token } : {}) });
         setStatus(next); setToken("");
-        setMessage(pl ? "Konfiguracja zapisana." : "Configuration saved.");
+        setMessage(t("Configuration saved."));
       } else if (kind === "clear") {
         const next = await tubeArchivistApi.updateConfig({ clearToken: true });
         setStatus(next); setToken("");
-        setMessage(pl ? "Token został usunięty." : "Token removed.");
+        setMessage(t("Token removed."));
       } else if (kind === "test") {
         const result = await tubeArchivistApi.test();
-        setMessage(`${pl ? "Połączenie działa" : "Connection works"}${result.version ? ` — TubeArchivist ${result.version}` : "."}`);
+        setMessage(`${t("Connection works")}${result.version ? ` — TubeArchivist ${result.version}` : "."}`);
       } else {
         const result = await tubeArchivistApi.sync();
         await reload();
-        setMessage(pl ? `Zaimportowano ${result.imported} filmów.` : `Imported ${result.imported} videos.`);
+        setMessage(t("Imported {count} videos.", { count: result.imported }));
       }
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(null); }
   };
 
   return <SettingsSection
-    title={pl ? "Połączenie z TubeArchivist" : "TubeArchivist connection"}
-    description={pl ? "Biblioteka pojawi się automatycznie w istniejącym feedzie — plugin nie dodaje osobnej strony." : "The library appears automatically in the existing feed; the plugin does not add a separate page."}
+    title={t("TubeArchivist connection")}
+    description={t("The library appears automatically in the existing feed; the plugin does not add a separate page.")}
   >
     {message && <Alert variant="info">{message}</Alert>}
-    <SettingRow label={pl ? "Adres serwera" : "Server URL"} description="http(s)://host:port">
+    <SettingRow label={t("Server URL")} description="http(s)://host:port">
       <Field>
-        <Input aria-label={pl ? "Adres TubeArchivist" : "TubeArchivist URL"} type="url" value={baseUrl} disabled={!canManage || busy !== null} onChange={(event) => setBaseUrl(event.target.value)} placeholder="http://tubearchivist:8000" />
+        <Input aria-label={t("TubeArchivist URL")} type="url" value={baseUrl} disabled={!canManage || busy !== null} onChange={(event) => setBaseUrl(event.target.value)} placeholder="http://tubearchivist:8000" />
       </Field>
     </SettingRow>
-    <SettingRow label="API token" description={status?.tokenConfigured ? (pl ? "Token jest skonfigurowany. Puste pole zachowa obecną wartość." : "A token is configured. Leaving this blank preserves it.") : (pl ? "Token nie jest jeszcze skonfigurowany." : "No token is configured yet.")}>
+    <SettingRow label={t("TubeArchivist API token")} description={status?.tokenConfigured ? t("A token is configured. Leaving this blank preserves it.") : t("No token is configured yet.")}>
       <Field>
-        <Input aria-label="TubeArchivist API token" type="password" value={token} disabled={!canManage || busy !== null} onChange={(event) => setToken(event.target.value)} autoComplete="new-password" />
+        <Input aria-label={t("TubeArchivist API token")} type="password" value={token} disabled={!canManage || busy !== null} onChange={(event) => setToken(event.target.value)} autoComplete="new-password" />
       </Field>
     </SettingRow>
     {status?.configured && <Alert variant={status.lastError ? "warning" : "info"}>
-      {pl ? "Filmy lokalne" : "Local videos"}: {status.itemCount}
-      {status.lastSyncedAt ? ` · ${pl ? "ostatnia synchronizacja" : "last sync"}: ${new Date(status.lastSyncedAt).toLocaleString()}` : ""}
+      {t("Local videos")}: {status.itemCount}
+      {status.lastSyncedAt ? ` · ${t("last sync")}: ${new Date(status.lastSyncedAt).toLocaleString(locale)}` : ""}
       {status.lastError ? ` · ${status.lastError}` : ""}
     </Alert>}
     <FormActions>
-      {status?.tokenConfigured && <Button variant="danger" disabled={!canManage || busy !== null} onClick={() => void run("clear")}>{busy === "clear" ? "…" : (pl ? "Usuń token" : "Remove token")}</Button>}
-      <Button disabled={!canManage || busy !== null || !status?.configured} onClick={() => void run("test")}>{busy === "test" ? "…" : (pl ? "Testuj połączenie" : "Test connection")}</Button>
-      <Button disabled={!canManage || busy !== null || !status?.configured} onClick={() => void run("sync")}>{busy === "sync" ? "…" : (pl ? "Synchronizuj teraz" : "Sync now")}</Button>
-      <Button variant="primary" disabled={!canManage || busy !== null || !baseUrl.trim()} onClick={() => void run("save")}>{busy === "save" ? "…" : (pl ? "Zapisz" : "Save")}</Button>
+      {status?.tokenConfigured && <Button variant="danger" disabled={!canManage || busy !== null} onClick={() => void run("clear")}>{busy === "clear" ? "…" : t("Remove token")}</Button>}
+      <Button disabled={!canManage || busy !== null || !status?.configured} onClick={() => void run("test")}>{busy === "test" ? "…" : t("Test connection")}</Button>
+      <Button disabled={!canManage || busy !== null || !status?.configured} onClick={() => void run("sync")}>{busy === "sync" ? "…" : t("Sync now")}</Button>
+      <Button variant="primary" disabled={!canManage || busy !== null || !baseUrl.trim()} onClick={() => void run("save")}>{busy === "save" ? "…" : t("save")}</Button>
     </FormActions>
   </SettingsSection>;
 }

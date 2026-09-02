@@ -47,6 +47,7 @@ function FeedOnboarding() {
 }
 
 function ChannelAvatarRow({ selectedTags }: { selectedTags: number[] }) {
+  const { t } = useI18n();
   const [channels, setChannels] = useState<AvatarChannel[]>([]);
   const scroll = useHScroll();
 
@@ -79,7 +80,7 @@ function ChannelAvatarRow({ selectedTags }: { selectedTags: number[] }) {
               ) : (
                 <div className="channel-avatar-img channel-avatar-placeholder" />
               )}
-              {ch.is_live === 1 && <span className="channel-avatar-live">LIVE</span>}
+              {ch.is_live === 1 && <span className="channel-avatar-live">{t("liveBadge")}</span>}
             </div>
             <span className="channel-avatar-name">{ch.title}</span>
             {ch.subscriber_count && (

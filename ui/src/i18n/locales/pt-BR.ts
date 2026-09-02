@@ -1,8 +1,10 @@
 import type { Locale } from "../types";
 import { localeFormats } from "../localeFormats";
+import { surfaceMessages } from "./surfaceMessages";
 
 export const ptBR: Locale = {
   messages: {
+    ...surfaceMessages["pt-BR"],
     "navToday": "Principal",
     "navSocial": "Social",
     "navDiscovery": "Descoberta",
@@ -1039,7 +1041,7 @@ export const ptBR: Locale = {
     "authHideOtherProfiles": "Ocultar outros perfis no seletor de perfil",
     "authHideOtherProfilesHint": "Apenas o perfil assinado está listado. Disponível para Login por perfil, cabeçalho OIDC e Proxy; os administradores ainda podem gerenciar cada perfil em Configurações.",
     "authProfileVisibilitySaved": "Visibilidade do seletor de perfil salva",
-    "authLockoutWarn": "Terminar a configuração antes de ativar - caso contrário, você pode bloquear-se para fora. Recuperação: definir YTZERO AUTH DISABLE=1 e reiniciar.",
+    "authLockoutWarn": "Terminar a configuração antes de ativar - caso contrário, você pode bloquear-se para fora. Recuperação: definir YTZERO_AUTH_DISABLE=1 e reiniciar.",
     "authOidcRedirectUriHint": "Adicione esta URL exata aos URIs permitidos pelo seu provedor (fornecedores correspondem estritamente). Se mostrar http:// mas o seu site for servido sobre https, defina a variável de ambiente APP URL para o seu URL https público.",
     "authOidcIssuerHint": "O URL completo do emissor. Authentik usa um caminho por aplicação com uma barra de rastreamento, por exemplo: https://id.example.com/aplication/o/<slug>/ — Pocket ID e Keycloak normalmente usam a raiz ou uma URL de reino. Use \"Teste conexão\" para verificar.",
     "authMappingIncomplete": "Terminar a atribuição de cada perfil antes de activar:",

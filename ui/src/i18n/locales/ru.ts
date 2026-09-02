@@ -1,8 +1,10 @@
 import type { Locale } from "../types";
 import { localeFormats } from "../localeFormats";
+import { surfaceMessages } from "./surfaceMessages";
 
 export const ru: Locale = {
   messages: {
+    ...surfaceMessages.ru,
     "navToday": "Главная",
     "navSocial": "Общение",
     "navDiscovery": "Открытия",
@@ -1039,7 +1041,7 @@ export const ru: Locale = {
     "authHideOtherProfiles": "Скрыть другие профили в фильтре профиля",
     "authHideOtherProfilesHint": "В списке указан только зарегистрированный профиль. Доступен для входа в профиль, OIDC и заголовка Proxy; администраторы все еще могут управлять каждым профилем в настройках.",
     "authProfileVisibilitySaved": "Видимость пикера профиля сохранена",
-    "authLockoutWarn": "Заканчивайте конфигурацию перед активацией — в противном случае вы можете заблокировать себя. Восстановление: установите YTZERO AUTH DISABLE=1 и перезапустите.",
+    "authLockoutWarn": "Заканчивайте конфигурацию перед активацией — в противном случае вы можете заблокировать себя. Восстановление: установите YTZERO_AUTH_DISABLE=1 и перезапустите.",
     "authOidcRedirectUriHint": "Добавьте этот точный URL-адрес к разрешенному перенаправлению URI вашего провайдера (поставщики строго соответствуют ему). Если он показывает http://, но ваш сайт обслуживается через https, установите переменную среды APP URL на ваш общедоступный URL https.",
     "authOidcIssuerHint": "Полный URL эмитента. Authentik использует путь для каждого приложения с вырезом, например, https://id.example.com/application/o/<slug>/ — Pocket ID и Keycloak обычно используют корень или URL-адрес сферы. Используйте «Тестовое соединение» для проверки.",
     "authMappingIncomplete": "Завершите назначение каждого профиля перед активацией:",

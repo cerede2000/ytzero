@@ -1,8 +1,10 @@
 import { localeFormats } from "../localeFormats";
 import { featureMessages } from "./featureMessages";
+import { surfaceMessages } from "./surfaceMessages";
 // English defines the message keys; `pl` and `de` are type-checked against them.
 export const en = {
   messages: {
+    ...surfaceMessages.en,
     navToday: "Main",
     navSocial: "Social",
     navDiscovery: "Discovery",

@@ -295,7 +295,7 @@ export default function ShortsPlayer({
 
   return (
     <div className="sp-overlay">
-      <button className="sp-close" onClick={onClose} aria-label="Zamknij"><X size={22} /></button>
+      <button className="sp-close" onClick={onClose} aria-label={t("close")}><X size={22} /></button>
       <div className="sp-actions">
         <button
           className={`sp-action sp-like${isLiked ? " sp-like--active" : ""}`}
@@ -347,10 +347,10 @@ export default function ShortsPlayer({
 
       {/* Fixed nav buttons */}
       <div className="sp-nav">
-        <button className="sp-nav-btn" onClick={() => navigate(-1)} disabled={!canPrev} aria-label="Poprzedni">
+        <button className="sp-nav-btn" onClick={() => navigate(-1)} disabled={!canPrev} aria-label={t("shortcutPreviousVideo")}>
           <ChevronUp size={26} />
         </button>
-        <button className="sp-nav-btn" onClick={() => navigate(1)} disabled={!canNext} aria-label="Następny">
+        <button className="sp-nav-btn" onClick={() => navigate(1)} disabled={!canNext} aria-label={t("shortcutNextVideo")}>
           <ChevronDown size={26} />
         </button>
       </div>

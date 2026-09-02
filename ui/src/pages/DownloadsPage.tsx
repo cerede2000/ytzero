@@ -180,7 +180,7 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
     <>
       <PageHeader title={t("downloadsTitle")} actions={<div className="dl-header-actions">
         {data.can_view_all && <Switch
-          label={language === "pl" ? "Wszystkie profile" : language === "de" ? "Alle Profile" : "All profiles"}
+          label={t("All profiles")}
           checked={showAllProfiles}
           onCheckedChange={setShowAllProfiles}
         />}
@@ -205,9 +205,9 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
         value={view}
         onChange={setView}
         options={[
-          { value: "library", label: language === "pl" ? "Biblioteka" : language === "de" ? "Bibliothek" : "Library", icon: <Download /> },
-          { value: "automation", label: language === "pl" ? "Automatyzacja" : language === "de" ? "Automatisierung" : "Automation", icon: <Sparkles /> },
-          { value: "configuration", label: language === "pl" ? "Konfiguracja" : language === "de" ? "Konfiguration" : "Configuration", icon: <Settings2 /> },
+          { value: "library", label: t("Library"), icon: <Download /> },
+          { value: "automation", label: t("Automation"), icon: <Sparkles /> },
+          { value: "configuration", label: t("Configuration"), icon: <Settings2 /> },
         ]}
       />
 

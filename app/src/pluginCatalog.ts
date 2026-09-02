@@ -12,9 +12,9 @@ export interface PluginManifest {
   settingsScope?: "user" | "global";
 }
 
-import type { Language } from "../../shared/uiLanguages";
+import type { BaseLocalizedText } from "./serverMessages";
 
-export type LocalizedText = { en: string } & Partial<Record<Language, string>>;
+export type LocalizedText = BaseLocalizedText;
 
 export type PluginSettingType = "slider" | "select" | "toggle" | "text" | "multiselect";
 

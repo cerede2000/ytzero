@@ -1,9 +1,11 @@
 import { localeFormats } from "../localeFormats";
 import { featureMessages } from "./featureMessages";
+import { surfaceMessages } from "./surfaceMessages";
 import type { Locale } from "../types";
 
 export const hu: Locale = {
   messages: {
+    ...surfaceMessages.hu,
     navToday: "Kezdőlap",
     navSocial: "Közösség",
     navDiscovery: "Felfedezés",
@@ -109,7 +111,7 @@ export const hu: Locale = {
     socialSettingsHowHint: "Az ezen a felületen regisztrált felhasználók megoszthatják a könyvtár videóit, bármilyen emoji-reakciót hozzáadhatnak, helyi lájkolással ellátott hozzászólásokkal vitathatják meg azokat, valamint az @felhasználónév beírásával megemlíthetik más felhasználókat. Az adminisztrációs beállítások mindenkire vonatkoznak; az értesítési beállítások viszont csak a saját profilodra vonatkoznak.",
     socialResetHint: "Visszaállítás az alapértelmezett beállításokra, és véglegesen törli az összes közösségi média-bejegyzést, hozzászólást, reakciót, lájkot és említést.",
     socialResetConfirm: "Visszaállítod a közösségi beállításokat, és véglegesen törölni minden megosztott bejegyzést, hozzászólást, reakciót, lájkolást és említést az összes profil esetében?",
-    ...featureMessages.en,
+    ...featureMessages.hu,
     insightsEyebrow: "Elemzések megtekintése",
     insightsTitle: "Impulzus",
     insightsView: "Megtekintés",
