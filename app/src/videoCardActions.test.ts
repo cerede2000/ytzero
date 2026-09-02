@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isVideoCardActionMode, isVideoCardPreviewMode, normalizeVideoCardActionConfig, normalizeVideoCardActionMode, normalizeVideoCardSetting, normalizeVideoCardSwipeConfig, parseVideoCardActionConfig, parseVideoCardSwipeConfig, validateVideoCardSettings, VIDEO_CARD_ACTION_MODES } from "./videoCardActions";
+import { DEFAULT_VIDEO_CARD_ACTION_CONFIG, isVideoCardActionMode, isVideoCardPreviewMode, normalizeVideoCardActionConfig, normalizeVideoCardActionMode, normalizeVideoCardSetting, normalizeVideoCardSwipeConfig, parseVideoCardActionConfig, parseVideoCardSwipeConfig, validateVideoCardSettings, VIDEO_CARD_ACTION_IDS, VIDEO_CARD_ACTION_MODES } from "./videoCardActions";
 
 describe("video card action modes", () => {
   test("accepts every persisted mode", () => {
@@ -25,6 +25,7 @@ describe("video card action configuration", () => {
     expect(parseVideoCardActionConfig({ version: 1, actions: [{ id: "playlist", hidden: true }] })?.actions).toEqual([
       { id: "schedule", hidden: false },
       { id: "playlist", hidden: true },
+      { id: "sessionQueue", hidden: false },
       { id: "download", hidden: true },
       { id: "archive", hidden: false },
       { id: "watched", hidden: false },
@@ -40,8 +41,26 @@ describe("video card action configuration", () => {
 
   test("normalizes malformed backup values to the default", () => {
     const actions = JSON.parse(normalizeVideoCardActionConfig("bad json")).actions;
-    expect(actions).toHaveLength(7);
+    expect(actions).toHaveLength(8);
     expect(actions.filter((action: { hidden: boolean }) => action.hidden).map((action: { id: string }) => action.id)).toEqual(["playlist", "download"]);
+  });
+
+  test("accepts and preserves a browser save containing sessionQueue", () => {
+    const browserConfig = {
+      version: 1,
+      actions: VIDEO_CARD_ACTION_IDS.map((id) => ({ id, hidden: id === "archive" })).reverse(),
+    } as const;
+    const browserValue = JSON.stringify(browserConfig);
+
+    expect(validateVideoCardSettings({ video_card_action_buttons: browserValue })).toBeNull();
+    expect(parseVideoCardActionConfig(browserValue)?.actions.map((action) => action.id)).toEqual([
+      "schedule", "remove", "restore", "watched", "archive", "download", "playlist", "sessionQueue",
+    ]);
+    expect(JSON.parse(normalizeVideoCardActionConfig(browserValue)).actions.find((action: { id: string }) => action.id === "archive")?.hidden).toBe(true);
+  });
+
+  test("uses the shared complete default", () => {
+    expect(DEFAULT_VIDEO_CARD_ACTION_CONFIG.actions.map((action) => action.id)).toEqual([...VIDEO_CARD_ACTION_IDS]);
   });
 
   test("keeps required actions visible", () => {

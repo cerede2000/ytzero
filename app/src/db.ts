@@ -9,6 +9,7 @@ import { ensureChannelPostsPostgresSchema } from "./channelPostsSchema";
 import { migrateSQLiteToPostgres } from "./postgresMigration";
 import { applyDatabaseMigrations } from "./databaseMigrations";
 import { applyCanonicalSQLiteSchema } from "./canonicalSchema";
+import { DEFAULT_VIDEO_CARD_ACTION_CONFIG } from "../../shared/videoCardActions";
 export const DB_PATH = process.env.DB_PATH ?? resolve(import.meta.dir, "../../data/db/ytzero.db");
 mkdirSync(dirname(DB_PATH), { recursive: true });
 export const db = new Database(DB_PATH, { create: true });
@@ -239,7 +240,7 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   grid_size: "sm",
   // Portable per-profile UI preference; hover preserves the historical behaviour.
   video_card_actions: "hover", video_card_preview: "all", // Portable card hover controls and preview source policy.
-  video_card_action_buttons: '{"version":1,"actions":[{"id":"schedule","hidden":false},{"id":"playlist","hidden":true},{"id":"download","hidden":true},{"id":"archive","hidden":false},{"id":"watched","hidden":false},{"id":"restore","hidden":false},{"id":"remove","hidden":false}]}', // Portable ordered card controls.
+  video_card_action_buttons: JSON.stringify(DEFAULT_VIDEO_CARD_ACTION_CONFIG), // Portable ordered card controls.
   video_card_swipe_devices: '{"version":1,"devices":["desktop","tablet","mobile"]}', // Portable per-device swipe availability.
   // Portable per-profile presentation preference for the child activity
   // shortcut. Live viewing activity remains transient and is never exported.
