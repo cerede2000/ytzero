@@ -541,6 +541,7 @@ export default function WatchPage() {
             <Popover
               rootClassName="watch-action-desktop watch-action-medium"
               align="end"
+              placement="auto"
               surface="menu"
               open={speedOpen}
               onOpenChange={(open) => { if (!watchTogetherTransportLocked) setSpeedOpen(open); }}
@@ -565,6 +566,7 @@ export default function WatchPage() {
             <div className="watch-action-desktop watch-action-medium watch-schedule-anchor">
               <Popover
                 align="start"
+                placement="auto"
                 surface="menu"
                 open={scheduleOpen}
                 onOpenChange={setScheduleOpen}
@@ -580,6 +582,7 @@ export default function WatchPage() {
             <Popover
               rootClassName="watch-action-desktop watch-action-wide"
               align="end"
+              placement="auto"
               surface="menu"
               open={playlistOpen}
               onOpenChange={(open) => void setDesktopPlaylistOpen(open)}
@@ -603,6 +606,7 @@ export default function WatchPage() {
             <div className="share-btn-wrap">
               <Popover
                 align="end"
+                placement="auto"
                 surface="menu"
                 open={shareOpen}
                 onOpenChange={setShareOpen}
@@ -639,6 +643,7 @@ export default function WatchPage() {
             <Popover
               rootClassName="watch-action-overflow"
               align="end"
+              placement="auto"
               surface="menu"
               open={moreOpen}
               onOpenChange={setMoreOpen}

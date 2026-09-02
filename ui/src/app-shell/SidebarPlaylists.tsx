@@ -1,22 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, NavLink } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { api, type UserPlaylist } from "../api";
-import { emit, subscribe } from "../events";
+import { subscribe } from "../events";
 import { useI18n } from "../i18n";
-import { PlaylistIcon, PlaylistIconPicker } from "../components/PlaylistIcon";
-import { Button } from "../components/ui";
+import { PlaylistIcon } from "../components/PlaylistIcon";
+import { Input } from "../components/ui";
+import { filterPlaylistsByName } from "../playlistSearch";
+import "./SidebarPlaylists.css";
 
 export default function SidebarPlaylists() {
   const { t } = useI18n();
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState("ListMusic");
+  const [query, setQuery] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const [shadowTop, setShadowTop] = useState(false);
   const [shadowBottom, setShadowBottom] = useState(false);
+  const filteredPlaylists = useMemo(() => filterPlaylistsByName(playlists, query), [playlists, query]);
 
   const load = useCallback(() => {
     api.userPlaylists()
@@ -46,26 +47,25 @@ export default function SidebarPlaylists() {
       element.removeEventListener("scroll", updateShadows);
       resizeObserver.disconnect();
     };
-  }, [playlists, loading, updateShadows]);
-
-  const create = async () => {
-    if (!name.trim()) return;
-    await api.createUserPlaylist({ name: name.trim(), icon });
-    setName("");
-    setIcon("ListMusic");
-    setCreating(false);
-    load();
-    emit("playlists-changed");
-  };
+  }, [filteredPlaylists, loading, updateShadows]);
 
   return (
     <div className="sidebar-playlists">
       <div className="sidebar-section-title">
         <span>{t("myPlaylists")}</span>
-        <button className="sidebar-add-btn" title={t("newPlaylist")} onClick={() => setCreating((value) => !value)}>
+        <Link className="sidebar-add-btn" title={t("newPlaylist")} aria-label={t("newPlaylist")} to="/settings?tab=playlists">
           <Plus size={15} />
-        </button>
+        </Link>
       </div>
+      <Input
+        className="sidebar-playlist-search"
+        size="sm"
+        type="search"
+        value={query}
+        placeholder={t("playlistSearchPlaceholder")}
+        aria-label={t("playlistSearchPlaceholder")}
+        onChange={(event) => setQuery(event.target.value)}
+      />
       <div className={`sidebar-playlists-scroll-wrap${shadowTop ? " shadow-top" : ""}${shadowBottom ? " shadow-bot" : ""}`}>
         <div className="sidebar-playlists-scroll" ref={listRef}>
           {loading && playlists.length === 0 && (
@@ -78,7 +78,10 @@ export default function SidebarPlaylists() {
               ))}
             </div>
           )}
-          {playlists.map((playlist) => (
+          {!loading && filteredPlaylists.length === 0 && (
+            <div className="sidebar-playlists-empty">{query.trim() ? t("noMatchingPlaylists") : t("noPlaylists")}</div>
+          )}
+          {filteredPlaylists.map((playlist) => (
             <NavLink key={playlist.id} to={`/playlists/${playlist.id}`} className={({ isActive }) => `sidebar-playlist-item${isActive ? " active" : ""}`}>
               <span className="sidebar-playlist-icon"><PlaylistIcon icon={playlist.icon} /></span>
               <span className="sidebar-sub-name">{playlist.name}</span>
@@ -87,20 +90,6 @@ export default function SidebarPlaylists() {
           ))}
         </div>
       </div>
-      {creating && (
-        <div className="sidebar-playlist-form">
-          <div className="sidebar-playlist-fields">
-            <PlaylistIconPicker value={icon} onChange={setIcon} compact />
-            <input
-              value={name}
-              placeholder={t("playlistName")}
-              onChange={(event) => setName(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && create()}
-            />
-          </div>
-          <Button variant="primary" onClick={create} disabled={!name.trim()}>{t("create")}</Button>
-        </div>
-      )}
     </div>
   );
 }

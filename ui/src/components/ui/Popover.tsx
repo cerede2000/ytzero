@@ -1,13 +1,15 @@
-import { cloneElement, isValidElement, useContext, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { cloneElement, isValidElement, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { cx } from "./utils";
 import { isInPopoverBranch, PopoverBranchContext } from "./PopoverTree";
+import { chooseVerticalPopoverPlacement, type VerticalPopoverPlacement } from "./popoverPlacement";
 import "./Popover.css";
 
-export function Popover({ trigger, children, title, align = "end", open, onOpenChange, className, rootClassName, surface = "default" }: {
+export function Popover({ trigger, children, title, align = "end", placement = "bottom", open, onOpenChange, className, rootClassName, surface = "default" }: {
   trigger: ReactElement;
   children: ReactNode;
   title?: ReactNode;
   align?: "start" | "center" | "end";
+  placement?: VerticalPopoverPlacement | "auto";
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   className?: string;
@@ -24,7 +26,40 @@ export function Popover({ trigger, children, title, align = "end", open, onOpenC
   const actualOpen = open ?? internalOpen;
   const [present, setPresent] = useState(actualOpen);
   const [closing, setClosing] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [resolvedPlacement, setResolvedPlacement] = useState<VerticalPopoverPlacement>(placement === "top" ? "top" : "bottom");
   const setOpen = (next: boolean) => { if (open === undefined) setInternalOpen(next); onOpenChange?.(next); };
+
+  const updatePlacement = useCallback(() => {
+    if (placement !== "auto") {
+      setResolvedPlacement(placement);
+      return;
+    }
+    const rootRect = rootRef.current?.getBoundingClientRect();
+    const content = contentRef.current;
+    if (!rootRect || !content) return;
+    const viewportMargin = 8;
+    const gap = 6;
+    setResolvedPlacement(chooseVerticalPopoverPlacement({
+      spaceAbove: Math.max(0, rootRect.top - gap - viewportMargin),
+      spaceBelow: Math.max(0, window.innerHeight - rootRect.bottom - gap - viewportMargin),
+      contentHeight: content.offsetHeight,
+    }));
+  }, [placement]);
+
+  useLayoutEffect(() => { if (present) updatePlacement(); }, [present, updatePlacement]);
+  useEffect(() => {
+    if (!actualOpen || placement !== "auto" || !contentRef.current) return;
+    const resizeObserver = new ResizeObserver(updatePlacement);
+    resizeObserver.observe(contentRef.current);
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [actualOpen, placement, present, updatePlacement]);
 
   useEffect(() => {
     if (actualOpen) {
@@ -61,7 +96,7 @@ export function Popover({ trigger, children, title, align = "end", open, onOpenC
   return <PopoverBranchContext.Provider value={branch}>
     <div className={cx("ui-popover", rootClassName)} ref={rootRef} data-popover-branch={branch.join(" ")}>
       {triggerElement}
-      {present && <div className={cx("ui-popover__content", `ui-popover__content--${align}`, `ui-popover__content--${surface}`, className)} role="dialog" data-state={closing ? "closed" : "open"}>
+      {present && <div ref={contentRef} className={cx("ui-popover__content", `ui-popover__content--${align}`, `ui-popover__content--${surface}`, className)} role="dialog" data-placement={resolvedPlacement} data-state={closing ? "closed" : "open"}>
         {title && <div className="ui-popover__title">{title}</div>}
         {children}
       </div>}

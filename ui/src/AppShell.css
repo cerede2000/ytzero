@@ -449,27 +449,6 @@ body.sidebar-hidden .sidebar { width: 0; padding: 0; }
   font-size: 12px;
   margin-left: auto;
 }
-.sidebar-playlist-form {
-  padding: 8px 10px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sidebar-playlist-fields {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 6px;
-}
-.sidebar-playlist-fields input {
-  min-width: 0;
-  height: 32px;
-  background: var(--bg);
-  border: 1px solid var(--surface-3);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 0 8px;
-}
-
 /* ---------- main & topbar ---------- */
 .main { flex: 1; min-width: 0; overflow-x: clip; }
 .content { padding: 18px calc(32px + var(--safe-right)) calc(80px + var(--safe-bottom)) calc(32px + var(--safe-left)); }

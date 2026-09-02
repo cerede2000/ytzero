@@ -4,7 +4,7 @@ import { useSettingsPageController } from "./useSettingsPageController";
 import { SettingsDisplayView } from "../components/settings/SettingsDisplayView";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { AlertTriangle, ArchiveRestore, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Download, ExternalLink, Eye, EyeOff, FileText, Filter, FolderUp, GripVertical, Info, LoaderCircle, Pencil, Play, Plug, Plus, RefreshCw, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Tv, UserMinus, UserPlus, UsersRound, Wrench, X, Zap } from "lucide-react";
+import { AlertTriangle, ArchiveRestore, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Download, ExternalLink, Eye, EyeOff, FileText, Filter, FolderUp, GripVertical, Info, LoaderCircle, Pencil, Play, Plug, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Tv, UserMinus, UserPlus, UsersRound, Wrench, X, Zap } from "lucide-react";
 import { api, type AppChangelog, type AppLogs, type AppLogStreamEvent, type AppVersion, type AuthMethod, type Channel, type ChildLockStatus, type FilterRule, type MembersOnlyVisibility, type PluginManifest, type PluginSettingsResponse, type Profile, type ProfilePermissionArea, type ProfilePermissions, type Rule, type Tag, type UpdateCheck, type UserPlaylist, type UserPlaylistRule, type Video, SB_CATEGORIES, PLAYBACK_SPEEDS } from "../api";
 import { NAV_ITEMS, normalizeNav, parseNavConfig, type NavConfigEntry } from "../nav";
 import { img } from "../img";
@@ -34,6 +34,7 @@ import { ChannelOwnership, FilterRuleGroups, PlaylistSettingsItem, PluginMultise
 import { ChangelogNote, LogLine, SettingsLoadingState } from "../components/settings/SettingsSupport";
 import { SettingsSearch } from "../components/settings/SettingsSearch";
 import ChannelSettingsDialog, { hasCustomChannelSettings } from "../components/settings/ChannelSettingsDialog";
+import { filterPlaylistsByName } from "../playlistSearch";
 
 const AuthSettings = lazy(() => import("../components/AuthSettings"));
 const TubeArchivistSettings = lazy(() => import("../components/settings/TubeArchivistSettings")
@@ -88,6 +89,8 @@ function isFeedMaxAgeUnit(value: unknown): value is FeedMaxAgeUnit {
 export default function SettingsPage({ showToast }: { showToast: (m: string) => void }) {
   const [pluginSearchTarget, setPluginSearchTarget] = useState<string | null>(null);
   const [settingsChannel, setSettingsChannel] = useState<Channel | null>(null);
+  const [playlistQuery, setPlaylistQuery] = useState("");
+  const [playlistCreateOpen, setPlaylistCreateOpen] = useState(false);
   const controller = useSettingsPageController({ showToast });
   const {
     activeAuthMethod,
@@ -299,6 +302,12 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
     watchShowRelated,
     watchedStyle,
   } = controller;
+  const filteredPlaylists = useMemo(() => filterPlaylistsByName(playlists, playlistQuery), [playlists, playlistQuery]);
+  const createPlaylistFromSettings = async () => {
+    if (!playlistName.trim()) return;
+    await addPlaylist();
+    setPlaylistCreateOpen(false);
+  };
 
   if (!settingsReady) return <>
     <PageHeader title={t("settingsTitle")} />
@@ -766,15 +775,47 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
       )}
 
       {!isCurrentTabLocked && tab === "playlists" && (
-        <SettingsSection>
-          <Text tone="secondary">
-            {t("playlistHint")}
-          </Text>
+        <SettingsSection className="playlist-settings-section" title={<>{t("playlists")}<Badge size="sm">{playlists.length}</Badge></>} description={t("playlistHint")}>
+          <div className="playlist-settings-toolbar">
+            <Input
+              size="sm"
+              className="playlist-settings-search"
+              type="search"
+              value={playlistQuery}
+              placeholder={t("playlistSearchPlaceholder")}
+              aria-label={t("playlistSearchPlaceholder")}
+              onChange={(event) => setPlaylistQuery(event.target.value)}
+            />
+            <div className="playlist-settings-toolbar-actions">
+              <Button size="sm" variant={playlistCreateOpen ? "secondary" : "primary"} leadingIcon={playlistCreateOpen ? <X /> : <Plus />} onClick={() => setPlaylistCreateOpen((value) => !value)}>
+                {playlistCreateOpen ? t("cancel") : t("newPlaylist")}
+              </Button>
+              <Button size="sm" leadingIcon={<FolderUp />} title={t("importTakeoutHint")} onClick={() => navigate("/import")}>{t("importTakeout")}</Button>
+            </div>
+          </div>
+          {playlistCreateOpen && <form className="playlist-settings-create" onSubmit={(event) => { event.preventDefault(); void createPlaylistFromSettings(); }}>
+            <Field label={t("newPlaylist")} htmlFor="playlist-settings-new-name">
+              <div className="playlist-settings-create-fields">
+                <PlaylistIconPicker value={playlistIcon} onChange={setPlaylistIcon} />
+                <Input
+                  id="playlist-settings-new-name"
+                  autoFocus
+                  type="text"
+                  placeholder={t("newPlaylistName")}
+                  value={playlistName}
+                  onChange={(event) => setPlaylistName(event.target.value)}
+                />
+              </div>
+            </Field>
+            <FormActions>
+              <Button size="sm" variant="primary" type="submit" disabled={!playlistName.trim()} leadingIcon={<Plus />}>{t("create")}</Button>
+            </FormActions>
+          </form>}
           {loading && playlists.length === 0 ? (
             <TableSkeleton rows={4} columns={2} />
           ) : (
             <div className="playlist-settings-list">
-              {playlists.map((p) => (
+              {filteredPlaylists.map((p) => (
                 <PlaylistSettingsItem
                   key={p.id}
                   playlist={p}
@@ -785,23 +826,7 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
               ))}
             </div>
           )}
-          <div className="form-row" style={{ marginTop: 16 }}>
-            <PlaylistIconPicker value={playlistIcon} onChange={setPlaylistIcon} />
-            <Input
-              type="text"
-              placeholder={t("newPlaylistName")}
-              value={playlistName}
-              onChange={(e) => setPlaylistName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addPlaylist()}
-            />
-            <Button variant="primary" onClick={addPlaylist}>
-              <Plus /> {t("newPlaylist")}
-            </Button>
-            <Button onClick={() => navigate("/import")}>
-              <FolderUp /> {t("importTakeout")}
-            </Button>
-          </div>
-          <Text tone="secondary">{t("importTakeoutHint")}</Text>
+          {!loading && filteredPlaylists.length === 0 && <EmptyState compact icon={<Search />} title={playlistQuery.trim() ? t("noMatchingPlaylists") : t("noPlaylists")} />}
         </SettingsSection>
       )}
 

@@ -84,3 +84,25 @@
   .video-card-action-tray { min-height: 84px; }
   .video-card-action-tray__items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.playlist-settings-item { background: color-mix(in srgb, var(--surface-2) 72%, transparent); border-radius: 10px; min-width: 0; padding: 9px 10px; }
+.playlist-settings-main { align-items: center; display: flex; gap: 8px; min-width: 0; }
+.playlist-settings-name { flex: 1 1 180px; min-width: 100px; }
+.playlist-settings-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 4px; }
+.playlist-rules { border-top: 1px solid var(--surface-3); margin-top: 9px; min-width: 0; padding-top: 10px; }
+.playlist-rules > .ui-section-header { margin-bottom: 9px; }
+.playlist-rule-composer { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+.playlist-rule-composer > .ui-input { flex: 1 1 190px; }
+.playlist-rule-composer > .ui-popover:has(.ui-select-menu__trigger) { flex: 0 1 auto; }
+.playlist-rule-list { margin-top: 8px; }
+.playlist-rule-list .ui-list-row { padding-block: 8px; }
+.playlist-rule-list code { color: var(--accent); overflow-wrap: anywhere; }
+
+@container settings-section (max-width: 560px) {
+  .playlist-settings-main { align-items: stretch; flex-wrap: wrap; }
+  .playlist-settings-name { flex-basis: calc(100% - 48px); }
+  .playlist-settings-main > .ui-badge { align-self: center; }
+  .playlist-settings-actions { margin-left: auto; }
+  .playlist-rule-composer > .ui-input, .playlist-rule-composer > .ui-popover:has(.ui-select-menu__trigger), .playlist-rule-composer > .ui-button { flex: 1 1 100%; width: 100%; }
+  .playlist-rule-composer .ui-select-menu__trigger { width: 100%; }
+}

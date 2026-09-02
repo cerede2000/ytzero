@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ArrowDownToLine, Ban, BookmarkPlus, Check, ChevronDown, ChevronUp, Clock, Eye, EyeOff, Filter, GripHorizontal, GripVertical, ListMusic, ListPlus, LoaderCircle, Lock, Pencil, Plus, RotateCcw, Trash2, Tv, Undo2, X, Zap } from "lucide-react";
+import { Archive, ArrowDownToLine, Ban, BookmarkPlus, Check, ChevronDown, ChevronUp, Clock, Eye, EyeOff, Filter, GripHorizontal, GripVertical, ListFilter, ListMusic, ListPlus, LoaderCircle, Lock, Pencil, Plus, RotateCcw, Trash2, Tv, Undo2, X, Zap } from "lucide-react";
 import { api, type Channel, type FilterRule, type Profile, type Rule, type Tag, type UserPlaylist, type UserPlaylistRule, type Video } from "../../api";
 import { emit } from "../../events";
 import { formatVideoCount, useI18n, type I18nKey } from "../../i18n";
@@ -14,7 +14,7 @@ import TagChip from "../TagChip";
 import TagPickerMenu from "../TagPickerMenu";
 import Tooltip from "../Tooltip";
 import VideoCard from "../VideoCard";
-import { Badge, Button, Checkbox, Chip, ColorPicker, Divider, Field, IconButton, Inline, Input, Popover, SectionHeader, SelectMenu, SettingRow, SettingsSection, Switch, Text } from "../ui";
+import { Badge, Button, Checkbox, Chip, ColorPicker, Divider, Field, IconButton, Inline, Input, List, ListRow, Popover, SectionHeader, SelectMenu, SettingRow, SettingsSection, Switch, Text } from "../ui";
 import "./SettingsEditors.css";
 
 export function PlaylistSettingsItem({
@@ -34,6 +34,9 @@ export function PlaylistSettingsItem({
   const [pattern, setPattern] = useState("");
   const [matchType, setMatchType] = useState("contains");
   const [field, setField] = useState("title");
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const rulesId = useId();
+  const hasChanges = name.trim() !== playlist.name || icon !== playlist.icon;
 
   const save = async () => {
     if (!name.trim()) return;
@@ -63,59 +66,58 @@ export function PlaylistSettingsItem({
     <div className="playlist-settings-item">
       <div className="playlist-settings-main">
         <PlaylistIconPicker value={icon} onChange={setIcon} />
-        <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
-        <span className="muted">{formatVideoCount(playlist.video_count, language)}</span>
-        <Button onClick={save}>{t("save")}</Button>
-        <Popconfirm
-          message={t("confirmDelete", { name: playlist.name })}
-          onConfirm={() => api.deleteUserPlaylist(playlist.id).then(() => { reload(); emit("playlists-changed"); })}
-        >
-          <IconButton label={t("deletePlaylist")}>
-            <Trash2 />
+        <Input size="sm" className="playlist-settings-name" aria-label={t("playlistName")} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
+        <Badge size="sm">{formatVideoCount(playlist.video_count, language)}</Badge>
+        <div className="playlist-settings-actions">
+          <IconButton size="sm" label={t("save")} disabled={!name.trim() || !hasChanges} onClick={save}><Check /></IconButton>
+          <Popconfirm
+            message={t("confirmDelete", { name: playlist.name })}
+            onConfirm={() => api.deleteUserPlaylist(playlist.id).then(() => { reload(); emit("playlists-changed"); })}
+          >
+            <IconButton size="sm" label={t("deletePlaylist")} variant="danger"><Trash2 /></IconButton>
+          </Popconfirm>
+          <IconButton
+            size="sm"
+            label={t("rules")}
+            variant={rulesOpen ? "secondary" : "default"}
+            aria-expanded={rulesOpen}
+            aria-controls={rulesId}
+            onClick={() => setRulesOpen((value) => !value)}
+          >
+            <ListFilter />
           </IconButton>
-        </Popconfirm>
+        </div>
       </div>
-      <div className="playlist-rules">
-        <div className="form-row">
+      {rulesOpen && <div className="playlist-rules" id={rulesId}>
+        <SectionHeader level={3} variant="subtle" title={t("rules")} actions={<Badge size="sm">{rules.length}</Badge>} />
+        <div className="playlist-rule-composer">
           <Input
+            size="sm"
             type="text"
             placeholder={t("patternPlaceholder")}
+            aria-label={t("patternPlaceholder")}
             value={pattern}
             onChange={(e) => setPattern(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addRule()}
           />
           <SelectMenu label={t("contains")} value={matchType} options={[{ value: "contains", label: t("contains") }, { value: "regex", label: "regex" }]} onChange={setMatchType} />
           <SelectMenu label={t("inTitle")} value={field} options={[{ value: "title", label: t("inTitle") }, { value: "description", label: t("inDescription") }, { value: "both", label: t("titleOrDescription") }]} onChange={setField} />
-          <Button variant="primary" onClick={addRule}>
+          <Button size="sm" variant="primary" disabled={!pattern.trim()} onClick={addRule}>
             <Plus /> {t("addRule")}
           </Button>
-          <Button onClick={applyRules}>
+          <Button size="sm" variant="ghost" onClick={applyRules}>
             <Zap /> {t("applyToDatabase")}
           </Button>
         </div>
-        {rules.length > 0 && (
-          <table className="list-table">
-            <tbody>
-              {rules.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <code style={{ color: "var(--accent)" }}>{r.pattern}</code>{" "}
-                    <span className="muted">
-                      ({r.match_type === "regex" ? "regex" : t("contains")},{" "}
-                      {r.field === "title" ? t("inTitle") : r.field === "description" ? t("inDescription") : t("titleOrDescription")})
-                    </span>
-                  </td>
-                  <td className="shrink">
-                    <IconButton label={t("delete")} onClick={() => api.removeUserPlaylistRule(playlist.id, r.id).then(reload)}>
-                      <Trash2 />
-                    </IconButton>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+        {rules.length > 0 ? <List className="playlist-rule-list">
+          {rules.map((rule) => <ListRow
+            key={rule.id}
+            title={<code>{rule.pattern}</code>}
+            description={`${rule.match_type === "regex" ? "regex" : t("contains")} · ${rule.field === "title" ? t("inTitle") : rule.field === "description" ? t("inDescription") : t("titleOrDescription")}`}
+            actions={<IconButton size="sm" variant="danger" label={t("delete")} onClick={() => api.removeUserPlaylistRule(playlist.id, rule.id).then(reload)}><Trash2 /></IconButton>}
+          />)}
+        </List> : null}
+      </div>}
     </div>
   );
 }

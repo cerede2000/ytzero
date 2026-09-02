@@ -2,6 +2,7 @@ import { cloneElement, createElement, isValidElement, useContext, useEffect, use
 import { createPortal } from "react-dom";
 import { cx } from "./utils";
 import { isInPopoverBranch, PopoverBranchContext } from "./PopoverTree";
+import { chooseVerticalPopoverPlacement, type VerticalPopoverPlacement } from "./popoverPlacement";
 import "./FloatingPopover.css";
 
 export function FloatingPopover({ trigger, children, open, onOpenChange, align = "start", className, triggerClassName, gap = 8, toggleOnTriggerClick = true }: { trigger: ReactElement; children: ReactNode; open: boolean; onOpenChange: (open: boolean) => void; align?: "start" | "center" | "end"; className?: string; triggerClassName?: string; gap?: number; /** Inputs can control visibility from their value without clicks toggling the surface. */ toggleOnTriggerClick?: boolean }) {
@@ -13,6 +14,7 @@ export function FloatingPopover({ trigger, children, open, onOpenChange, align =
   const [style, setStyle] = useState<CSSProperties>({ visibility: "hidden" });
   const [present, setPresent] = useState(open);
   const [closing, setClosing] = useState(false);
+  const [placement, setPlacement] = useState<VerticalPopoverPlacement>("bottom");
 
   const position = () => {
     const triggerRect = triggerRef.current?.getBoundingClientRect();
@@ -23,8 +25,11 @@ export function FloatingPopover({ trigger, children, open, onOpenChange, align =
     const height = content.offsetHeight;
     const rawLeft = align === "end" ? triggerRect.right - width : align === "center" ? triggerRect.left + triggerRect.width / 2 - width / 2 : triggerRect.left;
     const left = Math.min(Math.max(margin, rawLeft), window.innerWidth - width - margin);
-    const below = triggerRect.bottom + gap;
-    const top = below + height <= window.innerHeight - margin ? below : Math.max(margin, triggerRect.top - gap - height);
+    const spaceAbove = Math.max(0, triggerRect.top - gap - margin);
+    const spaceBelow = Math.max(0, window.innerHeight - triggerRect.bottom - gap - margin);
+    const nextPlacement = chooseVerticalPopoverPlacement({ spaceAbove, spaceBelow, contentHeight: height });
+    const top = nextPlacement === "bottom" ? triggerRect.bottom + gap : Math.max(margin, triggerRect.top - gap - height);
+    setPlacement(nextPlacement);
     setStyle({ left, top, visibility: "visible" });
   };
 
@@ -34,7 +39,7 @@ export function FloatingPopover({ trigger, children, open, onOpenChange, align =
     const observer = new ResizeObserver(position);
     observer.observe(contentRef.current);
     return () => observer.disconnect();
-  }, [open]);
+  }, [open, present]);
   useEffect(() => {
     if (open) {
       setPresent(true);
@@ -62,6 +67,6 @@ export function FloatingPopover({ trigger, children, open, onOpenChange, align =
   const triggerElement = isValidElement(trigger) ? cloneElement(trigger as ReactElement<Record<string, unknown>>, { "aria-expanded": open }) : createElement("span", null, trigger);
   return <PopoverBranchContext.Provider value={branch}>
     <span className={cx("ui-floating-popover__trigger", triggerClassName)} ref={triggerRef} data-popover-branch={branch.join(" ")} onClick={() => { if (toggleOnTriggerClick) onOpenChange(!open); }}>{triggerElement}</span>
-    {present && createPortal(<div ref={contentRef} data-popover-branch={branch.join(" ")} className={cx("ui-floating-popover__content", className)} style={style} data-state={closing ? "closed" : "open"} onMouseDown={(event) => event.stopPropagation()}>{children}</div>, document.body)}
+    {present && createPortal(<div ref={contentRef} data-popover-branch={branch.join(" ")} className={cx("ui-floating-popover__content", className)} style={style} data-placement={placement} data-state={closing ? "closed" : "open"} onMouseDown={(event) => event.stopPropagation()}>{children}</div>, document.body)}
   </PopoverBranchContext.Provider>;
 }

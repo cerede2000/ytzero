@@ -1083,6 +1083,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
         ...(channelSubTabOptions.some((option) => option.value === "filters") ? [{ value: "channels:filters", label: t("filters"), count: filterRules.length }] : []),
         ...(tabIsVisible("tags") ? [{ value: "tags", label: t("tags"), count: tags.length }, { value: "tags:rules", label: t("rules"), count: rules.length }] : []),
         ...(tabIsVisible("playlists") ? [{ value: "playlists", label: t("playlists"), count: playlists.length }] : []),
+        { value: "downloads", label: t("downloadsTitle"), href: "/downloads?view=configuration", trailingIcon: <ExternalLink size={14} aria-hidden="true" /> },
       ],
     },
     {
