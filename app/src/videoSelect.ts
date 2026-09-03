@@ -33,6 +33,12 @@ export function videoSelect(uid: number): string {
           ORDER BY cpv.discovered_at DESC LIMIT 1) AS source_playlist_id,
          EXISTS(SELECT 1 FROM history h WHERE h.video_id = v.video_id AND h.user_id = ${uid}) AS in_history,
          (SELECT d.status FROM downloads d JOIN download_owners owner ON owner.video_id=d.video_id WHERE owner.user_id=${uid} AND d.video_id=v.video_id AND d.status!='deleted') AS download_status,
+         COALESCE((SELECT owner.pinned FROM download_owners owner WHERE owner.user_id=${uid} AND owner.video_id=v.video_id), 0) AS download_pinned,
+         EXISTS(
+           SELECT 1 FROM user_playlist_download_protections protection
+           JOIN user_playlists playlist ON playlist.id=protection.playlist_id
+           WHERE playlist.user_id=${uid} AND protection.video_id=v.video_id
+         ) AS download_playlist_protected,
          ${localMediaSourceSelect(uid)} AS local_media_source,
          COALESCE(c.custom_title, c.title) AS channel_title, c.thumbnail AS channel_thumbnail, c.subscriber_count AS channel_subscriber_count
   FROM videos v JOIN channels c ON c.channel_id = v.channel_id

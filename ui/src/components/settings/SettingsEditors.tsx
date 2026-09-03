@@ -31,16 +31,21 @@ export function PlaylistSettingsItem({
   const { t, language } = useI18n();
   const [name, setName] = useState(playlist.name);
   const [icon, setIcon] = useState(playlist.icon);
+  const [offlinePolicy, setOfflinePolicy] = useState(playlist.offline_policy);
   const [pattern, setPattern] = useState("");
   const [matchType, setMatchType] = useState("contains");
   const [field, setField] = useState("title");
   const [rulesOpen, setRulesOpen] = useState(false);
   const rulesId = useId();
-  const hasChanges = name.trim() !== playlist.name || icon !== playlist.icon;
+  const hasChanges = name.trim() !== playlist.name || icon !== playlist.icon || offlinePolicy !== playlist.offline_policy;
 
   const save = async () => {
     if (!name.trim()) return;
-    await api.updateUserPlaylist(playlist.id, { name: name.trim(), icon });
+    await api.updateUserPlaylist(playlist.id, {
+      name: name.trim(),
+      icon,
+      ...(offlinePolicy !== playlist.offline_policy ? { offline_policy: offlinePolicy } : {}),
+    });
     reload();
   };
 
@@ -68,6 +73,18 @@ export function PlaylistSettingsItem({
         <PlaylistIconPicker value={icon} onChange={setIcon} />
         <Input size="sm" className="playlist-settings-name" aria-label={t("playlistName")} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
         <Badge size="sm">{formatVideoCount(playlist.video_count, language)}</Badge>
+        <SelectMenu
+          size="sm"
+          floating
+          label={t("playlistOfflinePolicy")}
+          value={offlinePolicy}
+          onChange={setOfflinePolicy}
+          options={[
+            { value: "none", label: t("playlistOfflineNone") },
+            { value: "download", label: t("playlistOfflineDownload") },
+            { value: "keep", label: t("playlistOfflineKeep") },
+          ]}
+        />
         <div className="playlist-settings-actions">
           <IconButton size="sm" label={t("save")} disabled={!name.trim() || !hasChanges} onClick={save}><Check /></IconButton>
           <Popconfirm

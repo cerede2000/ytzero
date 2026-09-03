@@ -199,7 +199,9 @@ CREATE TABLE IF NOT EXISTS user_playlists (
   name        TEXT NOT NULL,
   icon        TEXT NOT NULL DEFAULT 'ListMusic',
   sort_order  INTEGER NOT NULL DEFAULT 0,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  -- none | download | keep. `keep` adds playlist-owned cleanup protection.
+  offline_policy TEXT NOT NULL DEFAULT 'none' CHECK (offline_policy IN ('none', 'download', 'keep'))
 );
 
 CREATE TABLE IF NOT EXISTS user_playlist_videos (
@@ -209,6 +211,16 @@ CREATE TABLE IF NOT EXISTS user_playlist_videos (
   position    INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (playlist_id, video_id)
 );
+
+-- A playlist protection is independent from a manual pin. This lets one video
+-- be retained by several playlists without removing the other reasons when a
+-- single playlist changes policy or membership.
+CREATE TABLE IF NOT EXISTS user_playlist_download_protections (
+  playlist_id INTEGER NOT NULL REFERENCES user_playlists(id) ON DELETE CASCADE,
+  video_id    TEXT NOT NULL REFERENCES downloads(video_id) ON DELETE CASCADE,
+  PRIMARY KEY (playlist_id, video_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_playlist_download_protections_video ON user_playlist_download_protections(video_id);
 
 CREATE TABLE IF NOT EXISTS user_playlist_rules (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

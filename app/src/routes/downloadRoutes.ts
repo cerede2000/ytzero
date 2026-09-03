@@ -213,9 +213,10 @@ api.post("/videos/:id/download", async (c) => {
   if (video.live_status === "live" || video.live_status === "upcoming") {
     return c.json({ error: "live streams cannot be downloaded while they are active" }, 409);
   }
-  const body = await c.req.json().catch(() => ({} as { priority?: boolean }));
+  const body = await c.req.json().catch(() => ({} as { priority?: boolean; keep?: boolean }));
   if (body.priority) await prioritizeDownload(uid, id);
   else await enqueueDownload(uid, id, "manual");
+  if (body.keep) await setDownloadPinned(uid, id, true);
   return c.json({ ok: true, download: await getDownload(uid, id) });
 });
 

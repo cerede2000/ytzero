@@ -33,6 +33,7 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
   const [downloadPending, setDownloadPending] = useState(false);
   const [downloadFeedback, setDownloadFeedback] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [offlinePolicyPending, setOfflinePolicyPending] = useState(false);
 
   const load = useCallback(async () => {
     if (!playlistId) return;
@@ -79,6 +80,22 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
     finally { setDownloadPending(false); }
   };
 
+  const changeOfflinePolicy = async (offline_policy: UserPlaylist["offline_policy"]) => {
+    if (!playlist || offlinePolicyPending) return;
+    setOfflinePolicyPending(true);
+    setDownloadFeedback("");
+    try {
+      const result = await api.updateUserPlaylist(playlist.id, { offline_policy });
+      setPlaylist(result.playlist);
+      setDownloadFeedback(t(offline_policy === "none" ? "playlistOfflineDisabled" : offline_policy === "download" ? "playlistOfflineEnabled" : "playlistKeepOfflineEnabled"));
+      await load();
+    } catch {
+      setDownloadFeedback(t("playlistOfflineFailed"));
+    } finally {
+      setOfflinePolicyPending(false);
+    }
+  };
+
   const canDownloadPlaylist = videos.length > 0 && videos.some((video) => video.downloads_allowed);
   const sortAction = <SelectMenu
     floating
@@ -93,6 +110,18 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
       { value: "oldest", label: t("playlistSortOldest") },
       { value: "title-asc", label: t("playlistSortTitleAsc") },
       { value: "title-desc", label: t("playlistSortTitleDesc") },
+    ]}
+  />;
+  const offlineAction = <SelectMenu
+    floating
+    disabled={offlinePolicyPending}
+    label={t("playlistOfflinePolicy")}
+    value={playlist?.offline_policy ?? "none"}
+    onChange={changeOfflinePolicy}
+    options={[
+      { value: "none", label: t("playlistOfflineNone") },
+      { value: "download", label: t("playlistOfflineDownload") },
+      { value: "keep", label: t("playlistOfflineKeep") },
     ]}
   />;
   if (!playlist && loading) return <VideoGridSkeleton gridSize="sm" />;
@@ -143,6 +172,7 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
           </div>
           <div className="playlist-actions">
             <PlaylistPlaybackActions videos={videos} disabled={loading} onPlay={playPlaylistVideo} />
+            {offlineAction}
             {sortAction}
             {downloadFeedback && <LocalToast>{downloadFeedback}</LocalToast>}
             {moreActions}
@@ -155,6 +185,7 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
           description={formatVideoCount(playlist.video_count, language)}
           actions={<>
             <PlaylistPlaybackActions videos={videos} disabled={loading} onPlay={playPlaylistVideo} />
+            {offlineAction}
             {sortAction}
             {downloadFeedback && <LocalToast>{downloadFeedback}</LocalToast>}
             {moreActions}

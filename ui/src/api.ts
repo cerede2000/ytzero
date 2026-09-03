@@ -227,8 +227,8 @@ export const api = {
   createDownloadRule: (rule: DownloadRuleInput) => http<{ rule: DownloadRule }>("/downloads/automation", { method: "POST", body: JSON.stringify(rule) }),
   updateDownloadRule: (id: number, patch: Partial<DownloadRuleInput>) => http<{ rule: DownloadRule }>(`/downloads/automation/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
   removeDownloadRule: (id: number) => http<{ ok: true }>(`/downloads/automation/${id}`, { method: "DELETE" }),
-  requestDownload: (id: string, priority = false) =>
-    http<{ ok: true; download: VideoDownload | null }>(`/videos/${id}/download`, { method: "POST", body: JSON.stringify({ priority }) }),
+  requestDownload: (id: string, priority = false, keep = false) =>
+    http<{ ok: true; download: VideoDownload | null }>(`/videos/${id}/download`, { method: "POST", body: JSON.stringify({ priority, keep }) }),
   videoDownload: (id: string) =>
     http<{ download: VideoDownload | null; progress: { percent: number; total_bytes: number | null; speed: string | null } | null }>(`/videos/${id}/download`),
   removeDownload: (id: string, profileId?: number) =>
@@ -446,7 +446,7 @@ export const api = {
     http<{ playlist: UserPlaylist }>("/playlists", { method: "POST", body: JSON.stringify(p) }),
   createUserPlaylistFromSessionQueue: (p: { name: string; icon?: string; video_ids: string[] }) =>
     http<{ playlist: UserPlaylist }>("/playlists/from-session-queue", { method: "POST", body: JSON.stringify(p) }),
-  updateUserPlaylist: (id: number, p: Partial<Pick<UserPlaylist, "name" | "icon" | "sort_order">>) =>
+  updateUserPlaylist: (id: number, p: Partial<Pick<UserPlaylist, "name" | "icon" | "sort_order" | "offline_policy">>) =>
     http<{ playlist: UserPlaylist }>(`/playlists/${id}`, { method: "PUT", body: JSON.stringify(p) }),
   deleteUserPlaylist: (id: number) => http(`/playlists/${id}`, { method: "DELETE" }),
   userPlaylist: (id: number, sort: UserPlaylistSort = "added-newest") => http<{ playlist: UserPlaylist; videos: Video[] }>(`/playlists/${id}?sort=${encodeURIComponent(sort)}`),

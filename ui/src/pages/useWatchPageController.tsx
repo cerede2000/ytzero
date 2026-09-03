@@ -1216,7 +1216,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
           setDownloadReadyToReload(true);
         }
         setBackgroundDownload({ percent: result.progress?.percent ?? null, speed: result.progress?.speed ?? null, error: result.download?.error ?? null });
-        setVideo((prev) => prev?.video_id === id ? { ...prev, download_status: status } : prev);
+        setVideo((prev) => prev?.video_id === id ? { ...prev, download_status: status, download_pinned: result.download?.pinned ?? 0 } : prev);
       }).catch(() => {}).finally(() => {
         inFlight = false;
         if (isCurrent() && reloadQueued) { reloadQueued = false; load(); }
@@ -1235,16 +1235,25 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     setBackgroundDownload({ percent: null, speed: null, error: null });
   }, [id]);
 
-  const requestDownload = () => {
+  const requestDownload = (keep = false) => {
     if (!video) return;
     setDownloadRequestError(false);
     setDownloadReadyToReload(false);
     if (playerKind === "youtube") setPlayerSource("youtube");
-    setVideo((prev) => prev ? { ...prev, download_status: "queued" } : prev);
-    api.requestDownload(video.video_id).catch(() => {
+    setVideo((prev) => prev ? { ...prev, download_status: "queued", download_pinned: keep ? 1 : prev.download_pinned } : prev);
+    api.requestDownload(video.video_id, false, keep).catch(() => {
       setVideo((prev) => prev ? { ...prev, download_status: null } : prev);
       setDownloadRequestError(true);
     });
+  };
+
+  const toggleDownloadPinned = () => {
+    if (!video || downloadStatus !== "done") return;
+    const pinned = video.download_pinned !== 1;
+    setVideo((previous) => previous ? { ...previous, download_pinned: pinned ? 1 : 0 } : previous);
+    api.pinDownload(video.video_id, pinned).then((result) => {
+      setVideo((previous) => previous ? { ...previous, download_pinned: result.download?.pinned ?? 0 } : previous);
+    }).catch(() => reload());
   };
 
   const cancelOrRemoveDownload = () => {
@@ -1524,6 +1533,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     t,
     timeZone,
     toggleFeedAutoplay,
+    toggleDownloadPinned,
     toggleLiked,
     togglePlaylist,
     toggleRelatedSchedule,

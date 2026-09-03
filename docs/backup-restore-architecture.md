@@ -290,6 +290,12 @@ state and are likewise excluded.
   `profile.playlists` schema v2. Older schema v1 archives restore membership in
   their serialized order, while existing target membership remains unchanged
   during a merge.
+- A personal playlist's offline policy (`none`, automatic download, or
+  automatic download with cleanup protection) is portable configuration in
+  `profile.playlists` schema v3. Queue entries, media files, and the derived
+  playlist-protection rows remain machine-bound runtime state and are rebuilt
+  from that policy. Older archives default a newly restored playlist to `none`
+  and leave an existing target playlist's policy unchanged during merge.
 - A profile's assigned access-control group and explicit allow/deny overrides
   are portable configuration in `profile.access-control`. Merge updates only
   selected mapped profiles; replace clears just their overrides and assignment.
@@ -450,6 +456,9 @@ state and are likewise excluded.
   synchronization state, and session chat messages
 - in-progress download jobs, errors, output paths, and temporary playlist-name
   context used to render local filenames
+- `user_playlist_download_protections`; these cleanup guards are derived from
+  portable playlist policies and local download ownership, then rebuilt rather
+  than serialized
 - `download_owners`, which is profile-scoped runtime ownership/visibility for
   shared local files and is rebuilt by future download requests rather than
   exported as portable configuration

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./DownloadsPage.css";
 import { Link, useSearchParams } from "react-router-dom";
-import { AlertTriangle, Check, ChevronDown, Download, HardDrive, LoaderCircle, Pin, PinOff, RotateCw, Settings2, Sparkles, Square, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Download, Folder, HardDrive, LoaderCircle, Pin, PinOff, RotateCw, Settings2, Sparkles, Square, Trash2 } from "lucide-react";
 import { api, type DownloadsResponse, type DownloadItem } from "../api";
 import { formatTimeAgo, useI18n, type I18nKey } from "../i18n";
 import { useDocumentTitle } from "../useDocumentTitle";
@@ -9,8 +9,9 @@ import { img } from "../img";
 import { formatVideoDuration } from "../components/VideoCard";
 import Popconfirm from "../components/Popconfirm";
 import Tooltip from "../components/Tooltip";
-import { Alert, Badge, Button, EmptyState, PageHeader, SectionHeader, Switch, Tabs } from "../components/ui";
+import { Alert, Badge, Button, Chip, EmptyState, IconButton, Input, PageHeader, RevealRegion, SectionHeader, Switch, Tabs } from "../components/ui";
 import EmptyArt from "../components/illustrations/EmptyArt";
+import { PlaylistIcon } from "../components/PlaylistIcon";
 import { subscribeServerEvent } from "../serverEvents";
 import DownloadAutomation from "../components/DownloadAutomation";
 import DownloadConfiguration from "../components/DownloadConfiguration";
@@ -55,6 +56,9 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
   const [queueExpanded, setQueueExpanded] = useState(false);
   const [cancellingQueue, setCancellingQueue] = useState(false);
   const [showAllProfiles, setShowAllProfiles] = useState(false);
+  const [libraryFilter, setLibraryFilter] = useState<"all" | "kept">("all");
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [expandedPlaylists, setExpandedPlaylists] = useState<Set<string>>(() => new Set());
   const requestedView = searchParams.get("view");
   const [view, setViewState] = useState<"library" | "automation" | "configuration">(requestedView === "automation" || requestedView === "configuration" ? requestedView : "library");
   const setView = (next: "library" | "automation" | "configuration") => {
@@ -114,12 +118,41 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
   const visibleDownloads = data.downloads.filter((item) => shortsEnabled || item.is_short !== 1);
   const queueItems = visibleDownloads.filter((d) => d.status === "downloading" || d.status === "queued" || d.status === "error");
   const doneItems = visibleDownloads.filter((d) => d.status === "done");
+  const normalizedQuery = libraryQuery.trim().toLocaleLowerCase(language);
+  const matchingDoneItems = doneItems.filter((item) => !normalizedQuery
+    || item.title.toLocaleLowerCase(language).includes(normalizedQuery)
+    || item.channel_title.toLocaleLowerCase(language).includes(normalizedQuery)
+    || item.playlists.some((playlist) => playlist.name.toLocaleLowerCase(language).includes(normalizedQuery)));
+  const keptItems = matchingDoneItems.filter((item) => item.pinned === 1 || item.playlist_protected === 1);
+  const displayedDoneItems = libraryFilter === "kept" ? keptItems : matchingDoneItems;
+  const keptGroups = libraryFilter === "kept" ? (() => {
+    const groups = new Map<string, { id: number | null; name: string; icon: string; items: DownloadItem[] }>();
+    for (const item of keptItems) {
+      const playlists = item.playlists.length > 0 ? item.playlists : [{ id: null, name: t("downloadsWithoutPlaylist"), icon: "", protects_download: 0 }];
+      for (const playlist of playlists) {
+        const key = playlist.id == null ? "none" : String(playlist.id);
+        const group = groups.get(key) ?? { id: playlist.id, name: playlist.name, icon: playlist.icon, items: [] };
+        group.items.push(item);
+        groups.set(key, group);
+      }
+    }
+    return [...groups.values()];
+  })() : [];
   const visibleQueue = queueExpanded ? queueItems : queueItems.slice(0, QUEUE_COLLAPSED_COUNT);
 
-  const renderRow = (item: DownloadItem) => {
+  const togglePlaylist = (key: string) => {
+    setExpandedPlaylists((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const renderRow = (item: DownloadItem, keyPrefix = "") => {
     const progress = data.active?.video_id === item.video_id ? data.active.percent : null;
     return (
-      <div key={`${item.user_id}:${item.video_id}`} className={`dl-row dl-row--${item.status}`}>
+      <div key={`${keyPrefix}${item.user_id}:${item.video_id}`} className={`dl-row dl-row--${item.status}`}>
         <Link to={`/watch/${item.video_id}`} className="dl-thumb" title={item.title}>
           <img src={img(item.thumbnail)} alt="" loading="lazy" />
           {item.duration && <span className="duration-badge">{formatVideoDuration(item.duration)}</span>}
@@ -141,6 +174,7 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
               {t(SOURCE_KEYS[item.source] ?? "dlSourceManual")}
               {item.automation_rule_name && ` · ${item.automation_rule_name}`}
             </span>
+            {item.playlist_protected === 1 && <Badge size="sm" variant="accent">{t("downloadProtectedByPlaylist")}</Badge>}
             {item.finished_at && <span>{utcAgo(item.finished_at, language)}</span>}
           </div>
           {item.status === "downloading" && (
@@ -155,21 +189,22 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
         <div className="dl-actions">
           {item.status === "error" && (
             <Tooltip text={t("downloadRetry")}>
-              <button className="action-btn" onClick={() => retry(item)}><RotateCw /></button>
+              <IconButton label={t("downloadRetry")} onClick={() => retry(item)}><RotateCw /></IconButton>
             </Tooltip>
           )}
           {item.status === "done" && (
             <Tooltip text={item.pinned === 1 ? t("downloadUnpin") : t("downloadPin")}>
-              <button
-                className={`action-btn${item.pinned === 1 ? " active" : ""}`}
+              <IconButton
+                label={item.pinned === 1 ? t("downloadUnpin") : t("downloadPin")}
+                variant={item.pinned === 1 ? "secondary" : "ghost"}
                 onClick={() => togglePin(item)}
               >
                 {item.pinned === 1 ? <Pin fill="currentColor" /> : <PinOff />}
-              </button>
+              </IconButton>
             </Tooltip>
           )}
           <Popconfirm message={t("downloadRemoveConfirm")} onConfirm={() => remove(item)}>
-            <button className="action-btn" title={t("downloadRemove")}><Trash2 /></button>
+            <IconButton label={t("downloadRemove")} variant="danger"><Trash2 /></IconButton>
           </Popconfirm>
         </div>
       </div>
@@ -189,7 +224,6 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
           <div className="dl-storage-info">
             <span>
               {formatBytes(data.stats.bytes) || "0 B"} / {formatBytes(data.stats.cap_bytes)}
-              {" · "}{data.stats.files} {t("downloadsFiles")}
             </span>
             <div className="dl-storage-bar">
               <div className="dl-storage-fill" style={{ width: `${usedFrac * 100}%` }} />
@@ -229,27 +263,54 @@ export default function DownloadsPage({ shortsEnabled }: { shortsEnabled: boolea
         <>
           {queueItems.length > 0 && (
             <section className="dl-section">
-              <SectionHeader title={t("downloadsSectionQueue")} actions={<div className="dl-queue-actions"><Badge>{queueItems.length}</Badge>{data.scope === "mine" && <Popconfirm message={t("downloadsCancelAllConfirm")} confirmLabel={t("downloadsCancelAll")} onConfirm={cancelQueue}><Button size="sm" variant="danger" disabled={cancellingQueue} leadingIcon={<Square />}>{cancellingQueue ? t("downloadsCancellingAll") : t("downloadsCancelAll")}</Button></Popconfirm>}</div>} />
+              <SectionHeader title={t("downloadsSectionQueue")} actions={data.scope === "mine" && <Popconfirm message={t("downloadsCancelAllConfirm")} confirmLabel={t("downloadsCancelAll")} onConfirm={cancelQueue}><Button size="sm" variant="danger" disabled={cancellingQueue} leadingIcon={<Square />}>{cancellingQueue ? t("downloadsCancellingAll") : t("downloadsCancelAll")}</Button></Popconfirm>} />
               <div className="dl-list">
-                {visibleQueue.map(renderRow)}
+                {visibleQueue.map((item) => renderRow(item))}
               </div>
               {queueItems.length > QUEUE_COLLAPSED_COUNT && (
-                <button className="dl-expand" onClick={() => setQueueExpanded((v) => !v)} aria-expanded={queueExpanded}>
+                <Button variant="ghost" className="dl-expand" onClick={() => setQueueExpanded((v) => !v)} aria-expanded={queueExpanded}>
                   <ChevronDown className={`dl-expand-chevron${queueExpanded ? " open" : ""}`} size={15} />
                   {queueExpanded
                     ? t("showLess")
-                    : `${t("downloadsShowAll")} (${queueItems.length})`}
-                </button>
+                    : t("downloadsShowAll")}
+                </Button>
               )}
             </section>
           )}
 
           {doneItems.length > 0 && (
             <section className="dl-section">
-              <SectionHeader title={t("downloadsSectionDone")} actions={<Badge>{doneItems.length}</Badge>} />
-              <div className="dl-list">
-                {doneItems.map(renderRow)}
+              <SectionHeader title={t("downloadsSectionDone")} />
+              <div className="dl-library-tools">
+                <div className="dl-library-filters" aria-label={t("downloadsLibraryFilter")}>
+                  <Chip active={libraryFilter === "all"} onClick={() => setLibraryFilter("all")}>{t("downloadsAll")}</Chip>
+                  <Chip active={libraryFilter === "kept"} onClick={() => setLibraryFilter("kept")}>{t("downloadsKept")}</Chip>
+                </div>
+                <Input size="sm" className="dl-library-search" aria-label={t("downloadsSearch")} placeholder={t("downloadsSearch")} value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} />
               </div>
+              {displayedDoneItems.length === 0 ? (
+                <EmptyState compact icon={<Pin />} title={t(libraryFilter === "kept" ? "downloadsNoKept" : "downloadsNoMatches")} />
+              ) : libraryFilter === "kept" ? keptGroups.map((group) => {
+                const groupKey = group.id == null ? "none" : String(group.id);
+                const expanded = normalizedQuery.length > 0 || expandedPlaylists.has(groupKey);
+                return (
+                  <section className="dl-folder" key={groupKey}>
+                    <Button
+                      variant="ghost"
+                      className="dl-folder-toggle"
+                      leadingIcon={group.id == null ? <Folder /> : <PlaylistIcon icon={group.icon} />}
+                      trailingIcon={<ChevronDown className={`dl-folder-chevron${expanded ? " open" : ""}`} />}
+                      aria-expanded={expanded}
+                      onClick={() => togglePlaylist(groupKey)}
+                    >
+                      <span className="dl-folder-name">{group.name}</span>
+                    </Button>
+                    <RevealRegion open={expanded}>
+                      <div className="dl-list dl-folder-content">{group.items.map((item) => renderRow(item, `${groupKey}:`))}</div>
+                    </RevealRegion>
+                  </section>
+                );
+              }) : <div className="dl-list">{displayedDoneItems.map((item) => renderRow(item))}</div>}
             </section>
           )}
         </>

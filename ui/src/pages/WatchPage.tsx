@@ -24,6 +24,8 @@ import {
   LoaderCircle,
   MonitorPlay,
   Pause,
+  Pin,
+  PinOff,
   Play,
   Share2,
   SkipForward,
@@ -190,6 +192,7 @@ export default function WatchPage() {
     t,
     timeZone,
     toggleFeedAutoplay,
+    toggleDownloadPinned,
     toggleLiked,
     togglePlaylist,
     toggleRelatedSchedule,
@@ -700,6 +703,9 @@ export default function WatchPage() {
                           <button className="more-item-always" onClick={() => { requestDownload(); setMoreOpen(false); }}>
                             <ArrowDownToLine /> {t("downloadLocally")}
                           </button>
+                          <MenuItem icon={<Pin />} onClick={() => { requestDownload(true); setMoreOpen(false); }}>
+                            {t("downloadAndKeep")}
+                          </MenuItem>
                         </div>
                       )}
                       {downloadsEnabled && !isChildProfile && downloadStatus === "done" && (
@@ -709,6 +715,9 @@ export default function WatchPage() {
                           <a className="more-item-always" href={api.downloadFileUrl(video.video_id)} onClick={() => setMoreOpen(false)}>
                             <ArrowDownToLine /> {t("downloadFileToDevice")}
                           </a>
+                          <MenuItem icon={video.download_pinned === 1 ? <PinOff /> : <Pin />} onClick={() => { toggleDownloadPinned(); setMoreOpen(false); }}>
+                            {t(video.download_pinned === 1 ? "downloadUnpin" : "downloadPin")}
+                          </MenuItem>
                           <Popconfirm message={t("removeLocalCopyConfirm")} onConfirm={cancelOrRemoveDownload}>
                             <button className="more-item-always">
                               <Trash2 /> {t("removeLocalCopy")}
@@ -803,7 +812,7 @@ export default function WatchPage() {
                 {downloadFeedbackVisible && (downloadFeedbackKind === "ready"
                   ? <Button size="sm" onClick={reloadDownloadedPlayer}>{t("watchReloadPlayer")}</Button>
                   : downloadFeedbackKind === "error"
-                    ? <Button size="sm" onClick={requestDownload}>{t("downloadRetry")}</Button>
+                    ? <Button size="sm" onClick={() => requestDownload()}>{t("downloadRetry")}</Button>
                     : <Button size="sm" onClick={cancelOrRemoveDownload}>{t("cancelDownload")}</Button>)}
               </div>
             </div>

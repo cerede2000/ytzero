@@ -44,6 +44,8 @@ export interface Video {
   channel_thumbnail: string | null;
   channel_subscriber_count: string | null;
   download_status?: DownloadStatus | null;
+  download_pinned?: number;
+  download_playlist_protected?: number;
   local_media_source?: "download" | "tubearchivist" | null;
   downloads_enabled?: boolean;
   downloads_allowed?: boolean;
@@ -257,6 +259,7 @@ export interface UserPlaylist {
   icon: string;
   sort_order: number;
   video_count: number;
+  offline_policy: "none" | "download" | "keep";
   has_video?: 0 | 1;
 }
 export interface UserPlaylistRule {
@@ -470,6 +473,8 @@ export interface DownloadItem {
   error: string | null;
   attempts: number;
   pinned: number;
+  playlist_protected: number;
+  playlists: Array<{ id: number; name: string; icon: string; protects_download: number }>;
   created_at: string;
   finished_at: string | null;
   automation_rule_id: number | null;

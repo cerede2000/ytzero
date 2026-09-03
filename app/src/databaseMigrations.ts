@@ -377,6 +377,25 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
       { kind: "add-column", table: "downloads", column: "worker_heartbeat_at_ms", definition: "BIGINT" },
     ],
   },
+  {
+    version: 109,
+    name: "playlist-offline-policies",
+    schemaHashes: {
+      "app/src/schema.sql": "910b1ab5aabd47f187b2d0119bf61278ab0b5571741719c73a04e3b6536a0114",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+    },
+    sqlite: [
+      { kind: "add-column", table: "user_playlists", column: "offline_policy", definition: "TEXT NOT NULL DEFAULT 'none' CHECK (offline_policy IN ('none', 'download', 'keep'))" },
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS user_playlist_download_protections (playlist_id INTEGER NOT NULL REFERENCES user_playlists(id) ON DELETE CASCADE, video_id TEXT NOT NULL REFERENCES downloads(video_id) ON DELETE CASCADE, PRIMARY KEY (playlist_id, video_id))" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_user_playlist_download_protections_video ON user_playlist_download_protections(video_id)" },
+    ],
+    postgres: [
+      { kind: "add-column", table: "user_playlists", column: "offline_policy", definition: "TEXT NOT NULL DEFAULT 'none' CHECK (offline_policy IN ('none', 'download', 'keep'))" },
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS user_playlist_download_protections (playlist_id BIGINT NOT NULL REFERENCES user_playlists(id) ON DELETE CASCADE, video_id TEXT NOT NULL REFERENCES downloads(video_id) ON DELETE CASCADE, PRIMARY KEY (playlist_id, video_id))" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_user_playlist_download_protections_video ON user_playlist_download_protections(video_id)" },
+    ],
+  },
 ];
 
 function quoteIdentifier(identifier: string): string {

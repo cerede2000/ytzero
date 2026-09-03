@@ -30,6 +30,10 @@ describe("profile-scoped downloads", () => {
     expect(result.secondaryAllScope).toBe("mine");
   });
 
+  test("can queue and pin a download atomically from the watch page", () => {
+    expect(result.keepRequestOwner).toEqual({ pinned: 1 });
+  });
+
   test("isolates automation rules and profile preferences", () => {
     expect(result.primaryRuleCount).toBe(0);
     expect(result.secondaryRuleCount).toBe(1);
@@ -65,5 +69,22 @@ describe("profile-scoped downloads", () => {
       { video_id: "cap-liked", status: "done" },
       { video_id: "cap-pinned", status: "done" },
     ]);
+  });
+
+  test("keeps playlist-protected files until the playlist policy is disabled", () => {
+    expect(result.playlistProtected).toEqual({ status: "done" });
+    expect(result.playlistUnprotected).toEqual({ status: "deleted" });
+    expect(result.playlistLibraryItem.playlist_protected).toBe(1);
+    expect(result.playlistLibraryItem.playlists).toEqual([
+      { id: expect.any(Number), name: "Repairs", icon: "ListMusic", protects_download: 1 },
+    ]);
+  });
+
+  test("applies offline policy to future videos added by playlist rules", () => {
+    expect(result.ruleOfflineResult).toEqual({
+      membership: { present: 1 },
+      owner: { present: 1 },
+      protection: { present: 1 },
+    });
   });
 });

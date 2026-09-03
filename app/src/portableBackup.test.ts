@@ -419,7 +419,7 @@ describe("portable backup classification and restore", () => {
     db.prepare(`INSERT INTO download_rules(portable_uuid,user_id,name,source_mode,channel_ids_json,include_keywords_json,exclude_keywords_json,backfill_mode)
       VALUES(?, 1, 'Portable downloads', 'selected', '["UCportable"]', '["episode"]', '["trailer"]', 'all')`).run(ruleUuid);
     const playlistUuid = crypto.randomUUID();
-    const playlist = db.prepare("INSERT INTO user_playlists(name,user_id,portable_uuid) VALUES('Portable playlist',1,?) RETURNING id").get(playlistUuid) as { id: number };
+    const playlist = db.prepare("INSERT INTO user_playlists(name,user_id,portable_uuid,offline_policy) VALUES('Portable playlist',1,?,'keep') RETURNING id").get(playlistUuid) as { id: number };
     db.prepare("INSERT INTO user_playlist_videos(playlist_id,video_id,added_at,position) VALUES(?,'portable001','2024-02-03 04:05:06',7)").run(playlist.id);
     const socialPostId = "64f616b4-fda8-4f31-a9da-5646bbf2a311";
     const socialCommentId = "15142485-66a7-4700-871f-173fd9be74d0";
@@ -516,6 +516,7 @@ describe("portable backup classification and restore", () => {
     expect(db.prepare(`SELECT upv.added_at,upv.position FROM user_playlist_videos upv
       JOIN user_playlists up ON up.id=upv.playlist_id WHERE up.portable_uuid=? AND upv.video_id='portable001'`).get(playlistUuid))
       .toEqual({ added_at: "2024-02-03 04:05:06", position: 7 });
+    expect(db.prepare("SELECT offline_policy FROM user_playlists WHERE portable_uuid=?").get(playlistUuid)).toEqual({ offline_policy: "keep" });
     expect(db.prepare("SELECT body,video_id FROM social_posts WHERE id=?").get(socialPostId)).toEqual({ body: "Sprawdź @Default", video_id: "portable001" });
     expect((db.prepare("SELECT COUNT(*) AS n FROM social_comments WHERE id=?").get(socialCommentId) as { n: number }).n).toBe(1);
     expect((db.prepare("SELECT COUNT(*) AS n FROM social_reactions WHERE post_id=?").get(socialPostId) as { n: number }).n).toBe(2);
