@@ -9,7 +9,6 @@ import { emit, subscribe } from "./events";
 export {
   DEFAULT_VIDEO_CARD_ACTION_CONFIG,
   LOCKED_VIDEO_CARD_ACTION_IDS,
-  PINNED_VIDEO_CARD_ACTION_IDS,
   VIDEO_CARD_ACTION_IDS,
   type VideoCardActionConfig,
   type VideoCardActionId,

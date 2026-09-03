@@ -1557,10 +1557,7 @@ export const ru: Locale = {
     "watchUnavailableRetry": "Повторить",
     "searchEverySource": "Все источники",
     "searchExternalResults": "Результаты",
-    "cardPlay": "Смотреть",
-    "cardPlayAudio": "Слушать",
     "playlistReorderHint": "Перетащите, чтобы изменить порядок",
-    "cardPlayOther": "Воспроизвести в другом режиме",
   },
   buckets: {
     "today": "Сегодня",

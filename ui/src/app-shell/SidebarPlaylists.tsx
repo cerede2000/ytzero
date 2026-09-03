@@ -7,6 +7,7 @@ import { useI18n } from "../i18n";
 import { PlaylistIcon } from "../components/PlaylistIcon";
 import { Input } from "../components/ui";
 import { filterPlaylistsByName } from "../playlistSearch";
+import SidebarPlaylistPlay from "./SidebarPlaylistPlay";
 import "./SidebarPlaylists.css";
 
 export default function SidebarPlaylists() {
@@ -82,11 +83,14 @@ export default function SidebarPlaylists() {
             <div className="sidebar-playlists-empty">{query.trim() ? t("noMatchingPlaylists") : t("noPlaylists")}</div>
           )}
           {filteredPlaylists.map((playlist) => (
-            <NavLink key={playlist.id} to={`/playlists/${playlist.id}`} className={({ isActive }) => `sidebar-playlist-item${isActive ? " active" : ""}`}>
-              <span className="sidebar-playlist-icon"><PlaylistIcon icon={playlist.icon} /></span>
-              <span className="sidebar-sub-name">{playlist.name}</span>
-              <span className="sidebar-playlist-count">{playlist.video_count}</span>
-            </NavLink>
+            <div key={playlist.id} className="sidebar-playlist-row">
+              <NavLink to={`/playlists/${playlist.id}`} className={({ isActive }) => `sidebar-playlist-item${isActive ? " active" : ""}`}>
+                <span className="sidebar-playlist-icon"><PlaylistIcon icon={playlist.icon} /></span>
+                <span className="sidebar-sub-name">{playlist.name}</span>
+                <span className="sidebar-playlist-count">{playlist.video_count}</span>
+              </NavLink>
+              {playlist.video_count > 0 && <SidebarPlaylistPlay playlist={playlist} />}
+            </div>
           ))}
         </div>
       </div>

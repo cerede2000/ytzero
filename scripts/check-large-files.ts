@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 const lineLimits: Record<string, number> = {
-  "app/src/routes.ts": 477,
+  "app/src/routes.ts": 471,
   "app/src/routes/authRoutes.ts": 492,
   "app/src/routes/backupRoutes.ts": 143,
   "app/src/routes/channelPlaylistRoutes.ts": 212,
@@ -60,7 +60,7 @@ const lineLimits: Record<string, number> = {
   "ui/src/components/VideoCard.css": 666,
   "ui/src/components/VideoThumbnail.css": 120,
   "ui/src/pages/SearchPage.css": 164,
-  "app/src/plugins.ts": 1080,
+  "app/src/plugins.ts": 1090,
   "app/src/pluginCatalog.ts": 404,
   "ui/src/api.ts": 575,
   "ui/src/apiTypes.ts": 1179,
