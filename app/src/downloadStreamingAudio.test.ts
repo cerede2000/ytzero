@@ -138,10 +138,7 @@ describe("audio streaming integration", () => {
         const headers = new Headers(init?.headers);
         ranges.push(headers.get("range") ?? "");
         agents.push(headers.get("user-agent") ?? "");
-        // Only who is asking is carried: the rest of what yt-dlp printed
-        // describes its fetch of the watch page, and on a byte range those
-        // headers are what googlevideo answers 403 to.
-        expect(headers.get("accept-language")).toBeNull();
+        expect(headers.get("accept-language")).toBe("pl-PL");
         return rangeResponse([1, 2, 3, 4], 0, 4);
       }) as typeof fetch,
     });

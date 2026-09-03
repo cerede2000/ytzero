@@ -82,7 +82,9 @@ describe("audio track taken from the same answer", () => {
     const source = audioSourceFromPrinted(printed);
     expect(source?.url).toContain("googlevideo.com/audio");
     expect(source?.mime).toBe("audio/mp4");
-    expect(source?.httpHeaders).toEqual({ "User-Agent": "Chrome/149" });
+    // Carried as yt-dlp printed them, normalised the way the shared parser
+    // normalises them: the fetch is made the way the format expects.
+    expect(source?.httpHeaders).toEqual({ "user-agent": "Chrome/149", range: "bytes=0-1" });
     expect(source?.expiresAt).toBeGreaterThan(Date.now());
   });
 
@@ -142,8 +144,8 @@ describe("both playable tracks taken from the same answer", () => {
       ...muxed,
       headers: JSON.stringify({ "User-Agent": "Chrome/146 (yt-dlp)", Accept: "text/html" }),
     });
-    // A URL resolved with a profile's cookies is refused to a caller that does
-    // not look like the client it was minted for.
-    expect(source?.httpHeaders).toEqual({ "User-Agent": "Chrome/146 (yt-dlp)" });
+    // A URL resolved with a profile's cookies is asked for the way the client
+    // it was minted for would ask.
+    expect(source?.httpHeaders).toEqual({ "user-agent": "Chrome/146 (yt-dlp)", accept: "text/html" });
   });
 });

@@ -4,7 +4,6 @@ import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { currentCookieHealth } from "./youtubeCookieHealth";
 import { log } from "./logger";
 import type { AudioSource } from "./audioSourceResolver";
-import { askingHeadersOnly } from "./ytdlpAskingHeaders";
 import { parseYtdlpHttpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import type { VideoInfo } from "./youtube";
@@ -148,7 +147,7 @@ export function audioSourceFromPrinted(printed: PrintedFormat): AudioSource | nu
   if (!absent(printed.vcodec ?? "")) return null;
   const url = printed.url ? safeGoogleVideoUrl(printed.url) : null;
   if (!url) return null;
-  const httpHeaders = askingHeadersOnly(parseYtdlpHttpHeaders(printed.headers ?? ""));
+  const httpHeaders = parseYtdlpHttpHeaders(printed.headers ?? "");
   if (!httpHeaders) return null;
   return { url, mime: "audio/mp4", expiresAt: sourceExpiry(url), issuedAt: Date.now(), httpHeaders };
 }
@@ -168,7 +167,7 @@ export function progressiveVideoFromPrinted(printed: PrintedFormat): Progressive
   if (absent(printed.acodec ?? "") || absent(printed.vcodec ?? "")) return null;
   const url = printed.url ? safeGoogleVideoUrl(printed.url) : null;
   if (!url) return null;
-  const httpHeaders = askingHeadersOnly(parseYtdlpHttpHeaders(printed.headers ?? ""));
+  const httpHeaders = parseYtdlpHttpHeaders(printed.headers ?? "");
   if (!httpHeaders) return null;
   return { url, expiresAt: sourceExpiry(url), issuedAt: Date.now(), httpHeaders };
 }
