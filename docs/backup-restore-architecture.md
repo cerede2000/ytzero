@@ -236,9 +236,10 @@ below.
   playlist identifiers. This shape is part of `profile.settings` schema v3;
   older backups remain valid, with the current value retained on merge or the
   application default used after a replace restore when the key is absent.
-  Watch-later scheduling is always visible and fixed in first position. Restore
-  and remove cannot be hidden but may be reordered; playlist, local-download,
-  and alternate-playback-mode actions are hidden by default.
+  Watch-later scheduling is fixed in first position and has a dedicated
+  visibility switch outside the reorderable action list. Restore and remove
+  cannot be hidden but may be reordered; playlist, local-download, and
+  audio-mode actions are hidden by default.
   The versioned video-card swipe-device configuration is portable per-profile
   presentation configuration. It independently enables the reject/mark-watched
   gesture on desktop, tablet, and mobile devices, with all three enabled by

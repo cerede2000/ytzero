@@ -29,8 +29,8 @@ describe("video card action configuration", () => {
     expect(JSON.parse(serializeVideoCardActionConfig(config))).toEqual(config);
   });
 
-  test("does not allow schedule, restore, or remove to be hidden", () => {
+  test("allows schedule to be hidden but keeps restore and remove visible", () => {
     const config = parseVideoCardActionConfig({ version: 1, actions: [{ id: "restore", hidden: true }, { id: "remove", hidden: true }, { id: "schedule", hidden: true }] });
-    expect(config.actions.slice(0, 3)).toEqual([{ id: "schedule", hidden: false }, { id: "restore", hidden: false }, { id: "remove", hidden: false }]);
+    expect(config.actions.slice(0, 3)).toEqual([{ id: "schedule", hidden: true }, { id: "restore", hidden: false }, { id: "remove", hidden: false }]);
   });
 });

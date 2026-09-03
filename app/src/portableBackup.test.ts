@@ -481,6 +481,7 @@ describe("portable backup classification and restore", () => {
     expect(getUserSetting(1, "youtube_title_language")).toBe("fr");
     expect(getUserSetting(1, "video_card_actions")).toBe("delay");
     expect(getUserSetting(1, "video_card_action_buttons")).toBe(videoCardActions.normalizeVideoCardActionConfig(cardActionButtons));
+    expect(JSON.parse(getUserSetting(1, "video_card_action_buttons")!).actions[0]).toEqual({ id: "schedule", hidden: true });
     expect(getUserSetting(1, "video_card_swipe_devices")).toBe(videoCardActions.normalizeVideoCardSwipeConfig(cardSwipeDevices));
     expect(getUserSetting(1, "video_card_preview")).toBe("downloaded");
     expect(getUserSetting(1, "keyboard_shortcuts")).toBe(keyboardShortcuts);

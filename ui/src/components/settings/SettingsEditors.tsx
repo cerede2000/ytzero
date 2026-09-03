@@ -500,7 +500,7 @@ const VIDEO_CARD_ACTION_ITEMS: Record<VideoCardActionId, { labelKey: I18nKey; ic
   watched: { labelKey: "markWatched", icon: Eye },
   restore: { labelKey: "restore", icon: Undo2 },
   remove: { labelKey: "remove", icon: Trash2 },
-  otherPlaybackMode: { labelKey: "otherPlaybackMode", icon: Headphones },
+  otherPlaybackMode: { labelKey: "audioMode", icon: Headphones },
 };
 
 const VIDEO_CARD_PREVIEW: Video = {
@@ -527,8 +527,9 @@ export function VideoCardActionEditor({ value, mode, onChange }: { value: VideoC
   const trayItemTops = useRef(new Map<VideoCardActionId, number>());
   const previewItemAnimations = useRef(new Map<VideoCardActionId, Animation>());
   const trayItemAnimations = useRef(new Map<VideoCardActionId, Animation>());
-  const visibleActions = value.actions.filter((action) => !action.hidden);
-  const hiddenActions = value.actions.filter((action) => action.hidden);
+  const scheduleAction = value.actions.find((action) => action.id === "schedule")!;
+  const visibleActions = value.actions.filter((action) => action.id !== "schedule" && !action.hidden);
+  const hiddenActions = value.actions.filter((action) => action.id !== "schedule" && action.hidden);
   const previewConfig = showContextualActions ? value : { ...value, actions: value.actions.map((action) => action.id === "restore" || action.id === "remove" ? { ...action, hidden: true } : action) };
 
   useLayoutEffect(() => {
@@ -555,8 +556,8 @@ export function VideoCardActionEditor({ value, mode, onChange }: { value: VideoC
     const dragged = value.actions.find((action) => action.id === id);
     if (!dragged) return;
     const visible = visibleActions.filter((action) => action.id !== id);
-    visible.splice(Math.min(Math.max(1, index), visible.length), 0, { ...dragged, hidden: false });
-    const actions = [...visible, ...hiddenActions.filter((action) => action.id !== id)];
+    visible.splice(Math.min(Math.max(0, index), visible.length), 0, { ...dragged, hidden: false });
+    const actions = [scheduleAction, ...visible, ...hiddenActions.filter((action) => action.id !== id)];
     if (actions.some((action, actionIndex) => action.id !== value.actions[actionIndex]?.id || action.hidden !== value.actions[actionIndex]?.hidden)) onChange({ version: 1, actions });
   };
 
@@ -593,9 +594,9 @@ export function VideoCardActionEditor({ value, mode, onChange }: { value: VideoC
     if (!moved) return;
     const lane = laneRef.current?.getBoundingClientRect();
     if (lane && event.clientX >= lane.left - 12 && event.clientX <= lane.right + 12 && event.clientY >= lane.top - 16 && event.clientY <= lane.bottom + 16) {
-      const candidates = visibleActions.filter((action) => action.id !== current.id && action.id !== "schedule");
+      const candidates = visibleActions.filter((action) => action.id !== current.id);
       const target = candidates.findIndex((action) => event.clientX < (previewItemRefs.current.get(action.id)?.getBoundingClientRect().left ?? Infinity) + (previewItemRefs.current.get(action.id)?.offsetWidth ?? 0) / 2);
-      placeVisible(current.id, target < 0 ? candidates.length + 1 : target + 1);
+      placeVisible(current.id, target < 0 ? candidates.length : target);
       return;
     }
     const tray = trayRef.current?.getBoundingClientRect();

@@ -64,9 +64,9 @@ describe("video card action configuration", () => {
     expect(DEFAULT_VIDEO_CARD_ACTION_CONFIG.actions.map((action) => action.id)).toEqual([...VIDEO_CARD_ACTION_IDS]);
   });
 
-  test("keeps required actions visible", () => {
+  test("keeps destructive recovery actions visible while preserving schedule visibility", () => {
     const config = parseVideoCardActionConfig({ version: 1, actions: [{ id: "restore", hidden: true }, { id: "remove", hidden: true }, { id: "schedule", hidden: true }] });
-    expect(config?.actions.slice(0, 3)).toEqual([{ id: "schedule", hidden: false }, { id: "restore", hidden: false }, { id: "remove", hidden: false }]);
+    expect(config?.actions.slice(0, 3)).toEqual([{ id: "schedule", hidden: true }, { id: "restore", hidden: false }, { id: "remove", hidden: false }]);
   });
 });
 

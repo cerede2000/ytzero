@@ -288,6 +288,17 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
             />
           </SettingRow>
 
+          <SettingRow label={t("showSchedulingRow")} description={t("showSchedulingRowHint")}>
+            <Switch
+              ariaLabel={t("showSchedulingRow")}
+              checked={!videoCardActionConfig.actions.find((action) => action.id === "schedule")?.hidden}
+              onCheckedChange={(checked) => changeVideoCardActionConfig({
+                ...videoCardActionConfig,
+                actions: videoCardActionConfig.actions.map((action) => action.id === "schedule" ? { ...action, hidden: !checked } : action),
+              })}
+            />
+          </SettingRow>
+
           <SettingRow label={t("itemOrder")} description={t("itemOrderHint")} align="start" className="video-card-action-setting">
             <VideoCardActionEditor value={videoCardActionConfig} mode={videoCardActions} onChange={changeVideoCardActionConfig} />
           </SettingRow>

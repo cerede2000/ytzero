@@ -72,6 +72,7 @@ export default function WatchPage() {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [audioMode, setAudioMode] = useProfileAudioMode();
   const videoCardActionConfig = useAppliedVideoCardActionConfig();
+  const showSchedulingRow = videoCardActionConfig.actions.some((action) => action.id === "schedule" && !action.hidden);
   const showSessionQueueAction = videoCardActionConfig.actions.some((action) => action.id === "sessionQueue" && !action.hidden);
   // The controller derives the effective active state from video/profile/room
   // eligibility before it decides whether to mount the iframe.
@@ -991,8 +992,8 @@ export default function WatchPage() {
                   )}
                 </VideoThumbnail>
               </Link>
-              <div className="related-card-actions">
-                <VideoScheduleActions
+              {(showSchedulingRow || showSessionQueueAction) && <div className="related-card-actions">
+                {showSchedulingRow && <VideoScheduleActions
                   video={v}
                   variant="compact"
                   onToggle={(event, bucket, active) => {
@@ -1000,11 +1001,11 @@ export default function WatchPage() {
                     event.stopPropagation();
                     toggleRelatedSchedule(v, bucket, active).catch(console.error);
                   }}
-                />
+                />}
                 {showSessionQueueAction && <div className="related-card-actions__secondary">
                   <SessionPlayQueueAction video={v} compact />
                 </div>}
-              </div>
+              </div>}
             </div>
             <div className="related-item-info">
               <Link className="r-title" to={`/watch/${v.video_id}`} title={v.title}>{v.title}</Link>
