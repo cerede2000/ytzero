@@ -40,7 +40,6 @@ export const fr: Locale = {
     "searchSuggestionForget": "Retirer des recherches récentes",
     "searchSuggestionRecent": "récent",
     "searchSuggestions": "Suggestions de recherche",
-    "subtitlesLooking": "Recherche des sous-titres…",
     "watchImportingVideo": "Chargement de la vidéo…",
     "watchUnavailableDescription": "YouTube n'a pas répondu lors de la recherche de cette vidéo. Un second essai suffit généralement.",
     "watchUnavailableRetry": "Réessayer",

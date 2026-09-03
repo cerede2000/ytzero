@@ -41,7 +41,6 @@ export const hu: Locale = {
     searchSuggestionForget: "Remove from recent searches",
     searchSuggestionRecent: "recent",
     searchSuggestions: "Search suggestions",
-    subtitlesLooking: "Looking for subtitles…",
     watchImportingVideo: "Loading this video…",
     watchUnavailableDescription: "YouTube did not answer when this video was looked up. It usually passes on a second attempt.",
     watchUnavailableRetry: "Try again",

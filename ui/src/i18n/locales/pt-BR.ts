@@ -1530,7 +1530,6 @@ export const ptBR: Locale = {
     "defaultPlayerHint": "Como os vídeos abrem. YouTube usa o reprodutor incorporado e só passa para o fluxo direto quando a incorporação é bloqueada; Fluxo direto reproduz um fluxo 360/720 que você pode melhorar com um download.",
     "defaultPlayerYouTube": "YouTube (incorporado)",
     "defaultPlayerStream": "Fluxo direto",
-    "subtitlesLooking": "Procurando legendas…",
     "refreshSuggestions": "Atualizar sugestões",
     "relatedFromYoutube": "do YouTube",
     "relatedFromLibrary": "da sua biblioteca",

@@ -1530,7 +1530,6 @@ export const ja: Locale = {
     "defaultPlayerHint": "動画の開き方です。YouTube は埋め込みプレーヤーを使い、埋め込みが禁止されている場合のみ直接ストリームに切り替えます。直接ストリームは 360/720 の映像を再生し、ダウンロードで画質を上げられます。",
     "defaultPlayerYouTube": "YouTube（埋め込み）",
     "defaultPlayerStream": "直接ストリーム",
-    "subtitlesLooking": "字幕を探しています…",
     "refreshSuggestions": "おすすめを更新",
     "relatedFromYoutube": "YouTube から",
     "relatedFromLibrary": "ライブラリから",

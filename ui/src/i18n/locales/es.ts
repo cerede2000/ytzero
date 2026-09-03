@@ -1534,7 +1534,6 @@ export const es: Locale = {
     defaultPlayerHint: "Cómo se abren los vídeos. YouTube usa el reproductor incrustado y solo pasa al flujo directo cuando la incrustación está bloqueada; Flujo directo reproduce un flujo de 360/720 que puedes mejorar con una descarga.",
     defaultPlayerYouTube: "YouTube (incrustado)",
     defaultPlayerStream: "Flujo directo",
-    subtitlesLooking: "Buscando subtítulos…",
     refreshSuggestions: "Actualizar sugerencias",
     relatedFromYoutube: "de YouTube",
     relatedFromLibrary: "de tu biblioteca",

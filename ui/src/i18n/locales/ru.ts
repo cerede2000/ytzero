@@ -1530,7 +1530,6 @@ export const ru: Locale = {
     "defaultPlayerHint": "Как открываются видео. YouTube использует встроенный плеер и переходит к прямому потоку только при запрете встраивания; Прямой поток воспроизводит 360/720, качество можно повысить загрузкой.",
     "defaultPlayerYouTube": "YouTube (встроенный)",
     "defaultPlayerStream": "Прямой поток",
-    "subtitlesLooking": "Ищем субтитры…",
     "refreshSuggestions": "Обновить подборку",
     "relatedFromYoutube": "с YouTube",
     "relatedFromLibrary": "из вашей библиотеки",
