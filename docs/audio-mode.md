@@ -78,12 +78,14 @@ follows, so an expired cookie costs one resolution rather than a dead player.
 And yt-dlp's cache lives on the data volume, so the player script it solves
 and the tokens it computes survive a restart instead of being paid for again.
 
-A resolved source carries the user agent yt-dlp used, and the proxy asks with
-it. Only that one: the rest of what yt-dlp prints describes its fetch of the
-watch page — an HTML accept list, `Sec-Fetch-Mode: navigate` — and sending
-those on a byte range describes something that is not happening. Measured
-against a freshly resolved URL, they are the difference between 403 and a 206
-in forty milliseconds.
+A resolved source carries the headers yt-dlp used, and the proxy asks with
+them, setting only the range itself. Those headers describe yt-dlp's fetch of
+the watch page — an HTML accept list, `Sec-Fetch-Mode: navigate` — and this
+fork spent a while asking with the user agent alone, on the strength of an
+August measurement that had them answered 403. Measured again in September on
+the instance, with a profile's own cookie jar and a freshly resolved URL, the
+same range answers 206 with all of them, with the user agent alone, and with
+none at all. Whatever was refusing us then, it was not these.
 
 A refusal also quiets the video-info lookups for ninety seconds. Opening a
 video refreshes its row first, and that refresh tries the watch page, then
