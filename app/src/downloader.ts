@@ -1,11 +1,11 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { database } from "./database";
+import { database, databaseConfig } from "./database";
 import { DB_PATH, getSetting, setSetting } from "./db";
 import { downloadCookieAttempts, downloadFormat, isAnonymousAddressRefusal, recordDownloadAttempt, renderDownloadOutputTemplate } from "./downloadStrategy";
 import { log } from "./logger";
 import { beginMutation, maintenanceActive } from "./maintenance";
-import { publishAppEvent } from "./appEvents";
+import { publishAppEvent, subscribeToAppEvents } from "./appEvents";
 import { notifyDownloadFailed } from "./notifications";
 import { createDownloadStreaming } from "./downloadStreaming";
 import { createDownloadVideoProgressiveStreaming } from "./downloadVideoProgressiveStreaming";
@@ -31,6 +31,7 @@ import {
 import { ytdlpSelfUpdate } from "./ytdlpUpdater";
 import { DOWNLOAD_MANIFEST_SUFFIX, recoverDownloadsFromDisk, writeDownloadManifest } from "./downloadRecovery";
 import { downloadScheduleAllowsNow } from "./downloadSchedule";
+import { backgroundTasksEnabled } from "./deploymentMode";
 export {
   DL_DEFAULTS,
   dlSettings,
@@ -47,6 +48,9 @@ const MAX_ATTEMPTS = 3;
 const RETRY_AFTER_MIN = 30;
 const CLEANUP_INTERVAL_MS = 10 * 60_000;
 const TICK_INTERVAL_MS = 30_000;
+const DOWNLOAD_WORKER_ID = crypto.randomUUID();
+const WORKER_HEARTBEAT_INTERVAL_MS = 2_000;
+const WORKER_STALE_AFTER_MS = 30_000;
 export { DOWNLOAD_MANIFEST_SUFFIX, writeDownloadManifest };
 // ---------- queue state ----------
 
@@ -64,6 +68,8 @@ interface ActiveDownload {
 
 let active: ActiveDownload | null = null;
 let lastProgressEventAt = 0;
+let downloaderStarted = false;
+let downloaderKickTimer: ReturnType<typeof setTimeout> | null = null;
 const notifyDownloadChanged = (videoId: string) => publishAppEvent("downloads", { videoId });
 const notifyDownloadFailure = async (videoId: string, error: string) => {
   try {
@@ -76,9 +82,13 @@ const notifyDownloadFailure = async (videoId: string, error: string) => {
   }
 };
 
-export function activeDownloadProgress(): { video_id: string; percent: number; total_bytes: number | null; speed: string | null } | null {
-  if (!active) return null;
-  return { video_id: active.videoId, percent: active.percent, total_bytes: active.totalBytes, speed: active.speed };
+export async function activeDownloadProgress(): Promise<{ video_id: string; percent: number; total_bytes: number | null; speed: string | null } | null> {
+  if (active) return { video_id: active.videoId, percent: active.percent, total_bytes: active.totalBytes, speed: active.speed };
+  const row = await database.prepare(`
+    SELECT video_id, progress_percent, progress_total_bytes, progress_speed
+    FROM downloads WHERE status='downloading' ORDER BY started_at LIMIT 1
+  `).get<{ video_id: string; progress_percent: number | null; progress_total_bytes: number | null; progress_speed: string | null }>();
+  return row ? { video_id: row.video_id, percent: Number(row.progress_percent ?? 0), total_bytes: row.progress_total_bytes == null ? null : Number(row.progress_total_bytes), speed: row.progress_speed } : null;
 }
 
 // ---------- output template ----------
@@ -274,7 +284,7 @@ export async function enqueueDownload(userId: number, videoId: string, source: "
     // scheduled policy may revive a tombstone when the user re-queued the video
     // after the file was removed (reviveDeleted).
     if (source !== "manual" && !(reviveDeleted && row.status === "deleted")) return false;
-    await database.prepare("UPDATE downloads SET status = 'queued', source = ?, priority = ?, playlist_title = ?, automation_rule_id = ?, requested_by_user_id = ?, error = NULL, attempts = 0, created_at = datetime('now') WHERE video_id = ?")
+    await database.prepare("UPDATE downloads SET status = 'queued', source = ?, priority = ?, playlist_title = ?, automation_rule_id = ?, requested_by_user_id = ?, error = NULL, attempts = 0, created_at = datetime('now'), worker_id = NULL, worker_heartbeat_at_ms = NULL WHERE video_id = ?")
       .run(source, priority ? 1 : 0, context.playlistTitle ?? null, source === "feed" ? context.automationRuleId ?? null : null, userId, videoId);
     if (context.notify !== false) notifyDownloadChanged(videoId);
     return true;
@@ -297,7 +307,7 @@ export async function enqueuePlaylistDownloads(userId: number, videoIds: string[
     if (await enqueueDownload(userId, videoId, "manual", false, false, { playlistTitle, notify: false })) queued++;
   }
   publishAppEvent("downloads", { playlistTitle, queued });
-  if (queued > 0) setTimeout(() => tick().catch((error) => log.error("downloads.tick_failed", { error: error instanceof Error ? error.message : String(error) })), 300);
+  if (queued > 0) kickDownloader();
   return { queued, skipped: videoIds.length - queued, total: videoIds.length };
 }
 
@@ -317,17 +327,26 @@ export async function prioritizeDownload(userId: number, videoId: string): Promi
     try { active.proc.kill(); } catch {}
   }
   // Kick the loop so the wait is seconds, not a whole tick interval.
-  setTimeout(() => tick().catch((error) => log.error("downloads.tick_failed", { error: error instanceof Error ? error.message : String(error) })), 300);
+  kickDownloader();
   return true;
 }
 
 // Removal keeps a 'deleted' tombstone row so the auto policies never bring the
 // video back — from the user's perspective it was rejected, not merely purged.
 export async function removeDownload(userId: number, videoId: string) {
-  await database.prepare("DELETE FROM download_owners WHERE user_id=? AND video_id=?").run(userId, videoId);
-  const remaining = await database.prepare("SELECT user_id FROM download_owners WHERE video_id=? ORDER BY created_at,user_id LIMIT 1").get(videoId) as { user_id: number } | null;
-  if (remaining) {
-    await database.prepare("UPDATE downloads SET requested_by_user_id=? WHERE video_id=? AND requested_by_user_id=?").run(remaining.user_id, videoId, userId);
+  const result = await database.transaction(async () => {
+    await database.prepare("DELETE FROM download_owners WHERE user_id=? AND video_id=?").run(userId, videoId);
+    const remaining = await database.prepare("SELECT user_id FROM download_owners WHERE video_id=? ORDER BY created_at,user_id LIMIT 1").get<{ user_id: number }>(videoId);
+    if (remaining) {
+      await database.prepare("UPDATE downloads SET requested_by_user_id=? WHERE video_id=? AND requested_by_user_id=?").run(remaining.user_id, videoId, userId);
+      return { deleted: false, previousStatus: null as string | null, previousHeartbeatAt: null as number | null };
+    }
+    const suffix = databaseConfig.engine === "postgres" ? " FOR UPDATE" : "";
+    const before = await database.prepare(`SELECT status, worker_heartbeat_at_ms FROM downloads WHERE video_id=?${suffix}`).get<{ status: string; worker_heartbeat_at_ms: number | null }>(videoId);
+    await database.prepare("UPDATE downloads SET status = 'deleted', path = NULL, size_bytes = NULL, error = NULL, priority = 0, progress_percent = NULL, progress_total_bytes = NULL, progress_speed = NULL, worker_id = NULL, worker_heartbeat_at_ms = NULL WHERE video_id = ?").run(videoId);
+    return { deleted: true, previousStatus: before?.status ?? null, previousHeartbeatAt: before?.worker_heartbeat_at_ms == null ? null : Number(before.worker_heartbeat_at_ms) };
+  })();
+  if (!result.deleted) {
     notifyDownloadChanged(videoId);
     return;
   }
@@ -335,8 +354,25 @@ export async function removeDownload(userId: number, videoId: string) {
     active.cancelled = true;
     try { active.proc.kill(); } catch {}
   }
-  await unlinkFiles(videoId);
-  await database.prepare("UPDATE downloads SET status = 'deleted', path = NULL, size_bytes = NULL, error = NULL, priority = 0 WHERE video_id = ?").run(videoId);
+  // A download may be owned by the worker replica. Do not unlink underneath a
+  // remote yt-dlp process; it observes the tombstone and removes its output.
+  const remoteWorkerFresh = result.previousStatus === "downloading"
+    && active?.videoId !== videoId
+    && result.previousHeartbeatAt != null
+    && result.previousHeartbeatAt >= Date.now() - WORKER_STALE_AFTER_MS;
+  if (!remoteWorkerFresh) {
+    await unlinkFiles(videoId);
+  } else {
+    // If the remote process disappears immediately after its last heartbeat,
+    // no watcher remains to clean partial output. Recheck after the ownership
+    // timeout; unlinking is idempotent if the live worker already handled it.
+    const cleanupTimer = setTimeout(() => {
+      database.prepare("SELECT 1 AS deleted FROM downloads WHERE video_id=? AND status='deleted'").get(videoId)
+        .then((deleted) => deleted ? unlinkFiles(videoId) : undefined)
+        .catch((error) => log.warn("downloads.cancel_cleanup_failed", { videoId, error: error instanceof Error ? error.message : String(error) }));
+    }, WORKER_STALE_AFTER_MS + 1_000);
+    cleanupTimer.unref?.();
+  }
   notifyDownloadChanged(videoId);
 }
 
@@ -685,6 +721,18 @@ async function readLines(stream: ReadableStream<Uint8Array>, onLine: (line: stri
   if (buf) onLine(buf);
 }
 
+function kickDownloader(): void {
+  // An HTTP-only replica may enqueue durable work, but only the nominated
+  // background replica is allowed to consume it.
+  if (!downloaderStarted || !backgroundTasksEnabled()) return;
+  if (downloaderKickTimer) return;
+  downloaderKickTimer = setTimeout(() => {
+    downloaderKickTimer = null;
+    tick().catch((error) => log.error("downloads.tick_failed", { error: error instanceof Error ? error.message : String(error) }));
+  }, 300);
+  downloaderKickTimer.unref?.();
+}
+
 // Sidecar extensions that must never be mistaken for the downloaded video.
 const SIDECAR_EXT = [".part", ".ytdl", ".json", ".nfo", ".vtt", ".srt", ".ass", ".lrc", ".jpg", ".jpeg", ".png", ".webp"];
 
@@ -736,8 +784,9 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
   if (s.embed_metadata === 1) baseArgs.push("--embed-metadata");
   if (s.write_info_json === 1) baseArgs.push("--write-info-json");
 
-  await database.prepare("UPDATE downloads SET status = 'downloading', quality = ?, output_base = ?, error = NULL, attempts = attempts + 1, started_at = datetime('now') WHERE video_id = ?")
-    .run(s.quality, base, videoId);
+  const claimed = await database.prepare("UPDATE downloads SET status = 'downloading', quality = ?, output_base = ?, error = NULL, attempts = attempts + 1, started_at = datetime('now'), progress_percent = 0, progress_total_bytes = NULL, progress_speed = NULL, worker_id = ?, worker_heartbeat_at_ms = ? WHERE video_id = ? AND status = 'queued'")
+    .run(s.quality, base, DOWNLOAD_WORKER_ID, Date.now(), videoId);
+  if (claimed.changes === 0) return;
   notifyDownloadChanged(videoId);
   log.info("downloads.start", { videoId, quality: s.quality, compatibleFormat: s.compatible_format === 1, base });
 
@@ -756,9 +805,13 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
       proc = Bun.spawn([YTDLP, ...ytdlpAttemptArgs(args, useCookies, useCookies ? downloadCookiesFile(userId) : null)], { stdout: "pipe", stderr: "pipe" });
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
-      await database.prepare("UPDATE downloads SET status = 'error', error = ? WHERE video_id = ?").run(error, videoId);
-      notifyDownloadChanged(videoId);
-      await notifyDownloadFailure(videoId, error);
+      const failed = await database.prepare("UPDATE downloads SET status = 'error', error = ?, progress_percent = NULL, progress_total_bytes = NULL, progress_speed = NULL, worker_id = NULL, worker_heartbeat_at_ms = NULL WHERE video_id = ? AND status = 'downloading' AND worker_id = ?").run(error, videoId, DOWNLOAD_WORKER_ID);
+      if (failed.changes > 0) {
+        notifyDownloadChanged(videoId);
+        await notifyDownloadFailure(videoId, error);
+      } else {
+        await unlinkFiles(videoId);
+      }
       invalidateYtdlpStatus(); // binary may have moved — re-check on next tick
       log.error("downloads.spawn_failed", { videoId, error });
       active = null;
@@ -769,6 +822,32 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
     else job = { videoId, proc, percent: 0, totalBytes: null, speed: null, cancelled: false, preempted: false };
     active = job;
     const attemptStderr: string[] = [];
+    let checkingOwnership = false;
+    const ownershipTimer = setInterval(() => {
+      if (checkingOwnership || !job) return;
+      checkingOwnership = true;
+      database.prepare(`
+        UPDATE downloads SET worker_heartbeat_at_ms = ?
+        WHERE video_id = ? AND status = 'downloading' AND worker_id = ?
+        RETURNING video_id, priority
+      `).get<{ video_id: string; priority: number }>(Date.now(), videoId, DOWNLOAD_WORKER_ID)
+        .then(async (owned) => {
+          if (!job) return;
+          if (!owned) {
+            job.cancelled = true;
+            try { job.proc.kill(); } catch {}
+            return;
+          }
+          if (Number(owned.priority) === 1) return;
+          const priorityWaiting = await database.prepare("SELECT 1 AS waiting FROM downloads WHERE status='queued' AND priority=1 LIMIT 1").get();
+          if (!priorityWaiting || !job) return;
+          job.preempted = true;
+          try { job.proc.kill(); } catch {}
+        })
+        .catch((error) => log.warn("downloads.ownership_check_failed", { videoId, error: error instanceof Error ? error.message : String(error) }))
+        .finally(() => { checkingOwnership = false; });
+    }, WORKER_HEARTBEAT_INTERVAL_MS);
+    ownershipTimer.unref?.();
 
     try {
       await Promise.all([
@@ -780,6 +859,9 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
           if (m[4]) job.speed = m[4];
           if (Date.now() - lastProgressEventAt >= 1_000) {
             lastProgressEventAt = Date.now();
+            void database.prepare("UPDATE downloads SET progress_percent=?, progress_total_bytes=?, progress_speed=?, worker_heartbeat_at_ms=? WHERE video_id=? AND status='downloading' AND worker_id=?")
+              .run(job.percent, job.totalBytes, job.speed, Date.now(), videoId, DOWNLOAD_WORKER_ID)
+              .catch((error) => log.warn("downloads.progress_persist_failed", { videoId, error: error instanceof Error ? error.message : String(error) }));
             notifyDownloadChanged(videoId);
           }
         }),
@@ -790,7 +872,11 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
         }),
       ]);
     } catch {}
-    code = await proc.exited;
+    try {
+      code = await proc.exited;
+    } finally {
+      clearInterval(ownershipTimer);
+    }
     stderrTail = attemptStderr;
 
     if (!useCookies && code !== 0) anonymousRefused ||= isAnonymousAddressRefusal(stderrTail.at(-1) ?? "");
@@ -808,6 +894,15 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
 
   if (!job) return;
 
+  const durableState = await database.prepare("SELECT status, worker_id FROM downloads WHERE video_id = ?").get(videoId) as { status: string; worker_id: string | null } | null;
+  if (durableState?.status !== "downloading" || durableState.worker_id !== DOWNLOAD_WORKER_ID) {
+    // Cancellation can arrive through any HTTP replica. The database
+    // tombstone is the cross-process signal; clean up output produced before
+    // yt-dlp noticed it only after the child process has stopped.
+    await unlinkFiles(videoId);
+    return;
+  }
+
   if (job.cancelled) {
     await unlinkFiles(videoId);
     return;
@@ -816,7 +911,7 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
   if (job.preempted) {
     // Killed to make room for a priority download — back in line, partial
     // files intact so the resume picks up where it stopped.
-    await database.prepare("UPDATE downloads SET status = 'queued', attempts = attempts - 1 WHERE video_id = ? AND status = 'downloading'").run(videoId);
+    await database.prepare("UPDATE downloads SET status = 'queued', attempts = attempts - 1, progress_percent = NULL, progress_total_bytes = NULL, progress_speed = NULL, worker_id = NULL, worker_heartbeat_at_ms = NULL WHERE video_id = ? AND status = 'downloading' AND worker_id = ?").run(videoId, DOWNLOAD_WORKER_ID);
     notifyDownloadChanged(videoId);
     return;
   }
@@ -834,8 +929,12 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
           log.warn("downloads.nfo_failed", { videoId, error: e instanceof Error ? e.message : String(e) });
         }
       }
-      await database.prepare("UPDATE downloads SET status = 'done', path = ?, size_bytes = ?, error = NULL, finished_at = datetime('now') WHERE video_id = ?")
-        .run(path, size, videoId);
+      const completed = await database.prepare("UPDATE downloads SET status = 'done', path = ?, size_bytes = ?, error = NULL, finished_at = datetime('now'), progress_percent = NULL, progress_total_bytes = NULL, progress_speed = NULL, worker_id = NULL, worker_heartbeat_at_ms = NULL WHERE video_id = ? AND status = 'downloading' AND worker_id = ?")
+        .run(path, size, videoId, DOWNLOAD_WORKER_ID);
+      if (completed.changes === 0) {
+        await unlinkFiles(videoId);
+        return;
+      }
       notifyDownloadChanged(videoId);
       log.info("downloads.done", { videoId, size, path });
       if (s.write_subs === 1 || s.write_auto_subs === 1) {
@@ -850,7 +949,11 @@ async function runDownload(userId: number, videoId: string, s: DlSettings) {
     }
   }
   const error = stderrTail.slice(-3).join(" | ") || `yt-dlp exited with code ${code}`;
-  await database.prepare("UPDATE downloads SET status = 'error', error = ? WHERE video_id = ?").run(error, videoId);
+  const failed = await database.prepare("UPDATE downloads SET status = 'error', error = ?, progress_percent = NULL, progress_total_bytes = NULL, progress_speed = NULL, worker_id = NULL, worker_heartbeat_at_ms = NULL WHERE video_id = ? AND status = 'downloading' AND worker_id = ?").run(error, videoId, DOWNLOAD_WORKER_ID);
+  if (failed.changes === 0) {
+    await unlinkFiles(videoId);
+    return;
+  }
   notifyDownloadChanged(videoId);
   await notifyDownloadFailure(videoId, error);
   log.error("downloads.failed", { videoId, code, error });
@@ -896,6 +999,18 @@ export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodP
 let ticking = false;
 let lastCleanupAt = 0;
 
+async function recoverStaleDownloads(): Promise<number> {
+  const recovered = await database.prepare(`
+    UPDATE downloads
+    SET status = 'queued', progress_percent = NULL, progress_total_bytes = NULL,
+        progress_speed = NULL, worker_id = NULL, worker_heartbeat_at_ms = NULL
+    WHERE status = 'downloading'
+      AND (worker_heartbeat_at_ms IS NULL OR worker_heartbeat_at_ms < ?)
+  `).run(Date.now() - WORKER_STALE_AFTER_MS);
+  if (recovered.changes > 0) log.warn("downloads.stale_workers_recovered", { count: recovered.changes });
+  return recovered.changes;
+}
+
 async function tick() {
   if (maintenanceActive()) return;
   if (ticking) return;
@@ -903,6 +1018,7 @@ async function tick() {
   if (!releaseMutation) return;
   ticking = true;
   try {
+    await recoverStaleDownloads();
     if (!await dlEnabled()) return;
     if (!(await ytdlpStatus())) return;
     const cleanupSettings = await dlSettings();
@@ -929,14 +1045,16 @@ async function tick() {
 }
 
 export async function startDownloader() {
+  if (!backgroundTasksEnabled()) return;
+  if (downloaderStarted) return;
   // Drop any HLS streaming scratch left behind by a previous run.
   resetHlsScratch();
   await migrateLegacyDownloadCookies();
   await migrateLegacyDownloadAutomation();
   if (await ytdlpStatus()) await ytdlpJavascriptRuntimeStatus();
-  // Crash recovery: an interrupted download restarts from the queue.
-  const crashRecovered = (await database.prepare("UPDATE downloads SET status = 'queued' WHERE status = 'downloading'").run()).changes;
-  if (crashRecovered > 0) log.warn("downloads.crash_recovered", { count: crashRecovered });
+  // Recover only abandoned jobs. A previous allocation may still be alive
+  // during a rollout, so a fresh heartbeat must retain ownership.
+  await recoverStaleDownloads();
   // Older versions treated optional subtitle failures as a failed video. Give
   // those jobs one clean run through the new video-first pipeline.
   const recoveredSubtitleFailures = (await database.prepare(`
@@ -948,6 +1066,11 @@ export async function startDownloader() {
     )
   `).run()).changes;
   if (recoveredSubtitleFailures > 0) log.info("downloads.subtitle_failures_requeued", { count: recoveredSubtitleFailures });
+  downloaderStarted = true;
+  // Queue mutations performed by an HTTP-only replica arrive through the
+  // PostgreSQL event relay, so the worker can react without waiting for the
+  // regular 30-second safety tick.
+  subscribeToAppEvents((event) => { if (event.topic === "downloads") kickDownloader(); });
   const reportTickError = (error: unknown) => log.error("downloads.tick_failed", { error: error instanceof Error ? error.message : String(error) });
   setTimeout(() => tick().catch(reportTickError), 8_000);
   setInterval(() => tick().catch(reportTickError), TICK_INTERVAL_MS);

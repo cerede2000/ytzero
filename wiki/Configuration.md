@@ -40,7 +40,8 @@ picker is read-only until `TZ` is removed and the instance restarted.
 | `VIDEO_MAINTENANCE_MAX_AGE_DAYS` | `90` | Maximum video age considered by automatic Shorts and duration backfills. Older videos are resolved only when accessed or manually synchronized. |
 | `UI_DIST` | `./public` | Built frontend directory served by the backend. |
 | `DOWNLOADS_DIR` | `./data/downloads` | Where the [YT-DLP Integration](YT-DLP-Integration) plugin stores downloaded video files and their `<videoId>.ytz.json` recovery sidecars. Move each sidecar with its media file. |
-| `DOWNLOAD_COOKIES_DIR` | `./data/download-cookies` | Machine-local directory for per-profile YouTube cookie files. Keep it private and inside persistent storage. |
+| `DOWNLOAD_COOKIES_DIR` | `./data/download-cookies` | Private persistent directory for per-profile YouTube cookie files. In a cluster it must be shared with the background worker. |
+| `TUBE_ARCHIVIST_CONFIG_DIR` | next to the data directory | Directory containing the machine-local TubeArchivist access token. Share it between replicas that serve or synchronize TubeArchivist content. |
 | `YTDLP_PATH` | `yt-dlp` | Path to the yt-dlp binary used by the [YT-DLP Integration](YT-DLP-Integration) plugin. |
 | `FFMPEG_PATH` | `ffmpeg` | Path to ffmpeg, used for merged downloads and experimental stream-while-downloading playback. |
 | `YTDLP_AUTO_UPDATE` | _(unset; `1` in Docker)_ | Initial default for automatic yt-dlp updates (`1` means daily). An administrator can later choose Never, 1, 3, 7, or 30 days and the stable/nightly channel in the Downloads UI. |
@@ -49,6 +50,9 @@ picker is read-only until `TZ` is removed and the instance restarted.
 | `YTZERO_AUTH_METHOD` | _(unset)_ | Set to `shared` to force shared-password authentication regardless of the saved method. One-click cloud templates set this automatically. |
 | `YTZERO_AUTH_PASSWORD` | _(unset)_ | Shared login password used when `YTZERO_AUTH_METHOD=shared`. It stays environment-owned and is never written to the database, backups, or logs. A missing or empty value leaves forced authentication unconfigured and emits `auth.environment_password_missing`. |
 | `YTZERO_AUTH_DISABLE` | _(unset)_ | Set to `1` to force the **None** auth method regardless of the saved setting. Emergency unlock if an auth method locks you out — see [Authentication](Authentication#recovery-anti-lockout). |
+| `YTZERO_BACKGROUND_TASKS` | `1` | Set to `0` on HTTP-only replicas in a PostgreSQL cluster. Such replicas still serve requests and enqueue durable work, but do not start refresh schedulers, the download consumer, automatic yt-dlp updates, or TubeArchivist background synchronization. Exactly one replica should keep the default `1`. |
+| `YTZERO_INSTANCE_NAME` | hostname and port | Optional human-readable node name shown in **Settings → Cluster**. Nomad's `NOMAD_ALLOC_NAME` is used automatically when this variable is unset. Give each concurrently running instance a distinct name. |
+| `APP_EVENT_POLL_INTERVAL_MS` | `750` | PostgreSQL cross-replica live-event polling interval in milliseconds (`100`–`30000`). Usually there is no reason to change it. |
 | `YTZERO_VERSION` | `dev` | Version reported by `/api/health`. Set by the Docker build and by the native installer; there is no reason to set it by hand. |
 | `DATABASE_URL` | _(unset)_ | PostgreSQL connection URL. When unset, YT Zero uses SQLite at `DB_PATH`. Migrate from Dangerous settings before enabling this value. |
 | `DATABASE_STATE_PATH` | next to the data directory | Machine-local marker used to detect an unexpected engine/location change. It contains fingerprints and migration receipt IDs, never credentials. |
@@ -114,9 +118,11 @@ external HTTPS URL.
 ## Health check
 
 `GET /api/health` needs no authentication and returns `200` with
-`{"status":"ok","version":"…","uptime":…}`, or `503` if the database cannot be
-reached. The Docker image has a `HEALTHCHECK` wired to it; use it for reverse
-proxy probes, Unraid, or uptime monitoring.
+`{"status":"ok","version":"…","commit":"…","uptime":…,"database":"sqlite|postgres","background_tasks":true|false}`,
+or `503` if the database cannot be reached. The Docker image has a `HEALTHCHECK`
+wired to it; use it for reverse-proxy readiness probes, Unraid, or uptime
+monitoring. In a cluster, `database` and `background_tasks` also confirm that an
+allocation received the intended role.
 
 ## Docker Compose
 
@@ -157,6 +163,165 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
 Back up PostgreSQL with the tools supplied by your PostgreSQL operator (for example `pg_dump` plus tested restore procedures). Portable YT Zero backups remain engine-independent, but they intentionally exclude secrets, downloads, caches, and database implementation metadata.
 
 On a brand-new installation you may set `DATABASE_URL` from the first start. YT Zero initializes an empty PostgreSQL database from its pristine schema. If the local SQLite file already contains channels, videos, history, or per-video state, automatic initialization is refused and the explicit Settings migration above is required.
+
+### Clustered PostgreSQL deployment
+
+YT Zero supports several application processes against one PostgreSQL database.
+SQLite remains strictly single-instance: never run several processes against a
+shared SQLite file.
+
+#### Supported topology
+
+Use the same YT Zero image and `DATABASE_URL` in two deployment groups:
+
+| Group | Count | `YTZERO_BACKGROUND_TASKS` | Responsibility |
+| --- | ---: | --- | --- |
+| Background worker | exactly `1` | `1` (default) | HTTP plus schedulers, download processing, yt-dlp maintenance, and TubeArchivist background sync |
+| HTTP replicas | `1` or more | `0` | Serve the UI/API, publish live events, and enqueue durable work without consuming it |
+
+The worker is still an HTTP-capable process, but normally only the HTTP group is
+registered in the public load-balancer pool. This keeps traffic scaling separate
+from singleton background work.
+
+#### Initial deployment
+
+1. Create PostgreSQL and migrate an existing SQLite installation while only one
+   YT Zero process is running. A new empty installation may start directly with
+   `DATABASE_URL`.
+2. Start the singleton worker and let it finish database migrations.
+3. Start or scale the HTTP group.
+4. Check `/api/health` on both groups and then open **Settings → Cluster** from
+   the primary profile.
+
+Example environment:
+
+```text
+# singleton worker
+DATABASE_URL=postgresql://ytzero:secret@postgres/ytzero
+YTZERO_BACKGROUND_TASKS=1
+YTZERO_INSTANCE_NAME=ytzero-worker-1
+
+# each HTTP replica
+DATABASE_URL=postgresql://ytzero:secret@postgres/ytzero
+YTZERO_BACKGROUND_TASKS=0
+YTZERO_INSTANCE_NAME=ytzero-http-1
+```
+
+Give every concurrently running process a useful, distinct
+`YTZERO_INSTANCE_NAME`. When it is unset, YT Zero uses `NOMAD_ALLOC_NAME` when
+available, otherwise the process hostname and port.
+
+`YTZERO_BACKGROUND_TASKS` nominates the worker; it does **not** perform leader
+election. Configure the worker group with a desired count of one and a
+stop-before-start update strategy. Use `Recreate` in Kubernetes, or the
+equivalent non-overlapping deployment behavior in Nomad. Atomic download claims
+protect individual queue items, but two background-capable processes would
+still duplicate periodic scheduler work.
+
+#### Health and cluster dashboard
+
+The unauthenticated health endpoint should report:
+
+Worker:
+
+```json
+{"status":"ok","database":"postgres","background_tasks":true}
+```
+
+HTTP replica:
+
+```json
+{"status":"ok","database":"postgres","background_tasks":false}
+```
+
+The real response also includes `version`, `commit`, and process `uptime`. A
+`503` means the process cannot query PostgreSQL and must not receive traffic.
+
+With PostgreSQL active, the primary profile gets **Cluster** as the last item in
+Settings. Its API is administrator-only. The dashboard refreshes every five
+seconds and shows each process's name, host, role, build, uptime, last contact,
+and a small allowlist of non-secret runtime settings. It warns about:
+
+- no online worker;
+- more than one online worker;
+- different builds running at the same time.
+
+Every process writes a PostgreSQL heartbeat every five seconds. It becomes
+offline after 15 seconds without a heartbeat, remains visible in the dashboard
+for one hour, and its registry row is cleaned up after 24 hours. The dashboard
+never returns database URLs, authentication configuration, tokens, cookies, or
+filesystem contents.
+
+#### Behavior during failures
+
+HTTP replicas continue serving traffic and can enqueue downloads while the
+worker is unavailable. Downloads and scheduled refreshes wait in PostgreSQL
+until the worker returns. A claimed download can be recovered 30 seconds after
+its previous worker heartbeat disappears and can resume from partial files when
+all workers use the same `DOWNLOADS_DIR`.
+
+Queue claims are atomic. Cancellation and priority changes made through another
+replica reach the worker through PostgreSQL; an active worker verifies ownership
+about every two seconds. Application events use a short-lived PostgreSQL relay,
+so ordinary SSE updates cross replica boundaries. OIDC/WebAuthn flows, Child
+Lock sessions, child playback heartbeats, PIN-failure counters, download
+progress, and other cluster runtime state are shared through PostgreSQL.
+Settings and plugin caches converge within about two seconds.
+
+The cluster remains available while an HTTP process is replaced, provided the
+load balancer removes failed health checks. Replacing the worker pauses only
+background work; it does not prevent healthy HTTP replicas from serving the
+application.
+
+#### Shared and local storage
+
+PostgreSQL only shares database state. Mount the same read-write filesystem on
+all replicas for every feature whose files must follow a request:
+
+| Path | When it must be shared |
+| --- | --- |
+| `DOWNLOADS_DIR` | Downloads or local playback are enabled. |
+| `DOWNLOAD_COOKIES_DIR` | Cookies can be uploaded through an HTTP replica and consumed by the worker. |
+| `AVATAR_DIR` | Uploaded profile avatars are used. |
+| `RESTORE_SESSION_DIR` | A multi-step portable restore may cross replicas. |
+| `TUBE_ARCHIVIST_CONFIG_DIR` | TubeArchivist is configured or proxied by more than one replica. |
+
+`IMG_CACHE_DIR` may remain replica-local because it is rebuildable. Logs are
+also replica-local; set a distinct `LOG_PATH` per allocation because several
+processes must not rotate the same file. `/api/logs` and `/api/logs/stream` show
+the instance that served the request. Keep `DB_PATH` replica-local even when
+`DATABASE_URL` selects PostgreSQL: YT Zero still uses the local SQLite file as
+its migration source and compatibility bootstrap. `DATABASE_STATE_PATH` is a
+machine-local safety marker and should likewise be distinct per allocation,
+not used as the cluster coordinator. Mount shared directories individually
+instead of sharing the entire `/data` tree between replicas.
+
+#### Load-balancer affinity and maintenance
+
+Ordinary pages, authentication callbacks, downloads, notifications, and the
+general `/api/events` stream do not need sticky sessions. Live process state
+still exists for Watch Together rooms and active local audio/HLS/direct streams;
+configure affinity for `/api/social/watch-parties/*` and for a viewer's media
+requests. Keep the long-running manual channel-sync request at
+`/api/channels/sync` on one replica until that sync finishes. A shared filesystem
+cannot transfer a running ffmpeg/yt-dlp process or an open Watch Together room.
+
+Rolling application starts are serialized around schema migration with a
+PostgreSQL advisory lock. Nevertheless, deploy one version at a time and avoid
+leaving mixed builds online. Before a portable restore or an in-app
+SQLite-to-PostgreSQL migration, scale the whole deployment down to one process;
+their maintenance lease cannot pause mutations already executing on another
+replica.
+
+Before considering the deployment ready, verify:
+
+- all processes use the same PostgreSQL database and application build;
+- exactly one healthy process reports `background_tasks: true`;
+- every HTTP replica reports `background_tasks: false`;
+- required file-backed features use the shared paths listed above;
+- `DB_PATH`, `DATABASE_STATE_PATH`, and `LOG_PATH` are distinct per allocation;
+- the load balancer removes `/api/health` responses with status `503`;
+- the Cluster dashboard has no topology or mixed-version warning.
 
 ## Background refresh
 

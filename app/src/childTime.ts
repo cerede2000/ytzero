@@ -3,7 +3,7 @@
 // parent-granted extensions, and a lockout after repeated wrong child-lock
 // PINs. Enforcement is cooperative — the server stops counting and reports
 // `locked`, and the UI locks the screen.
-import { database } from "./database";
+import { database, databaseConfig } from "./database";
 import { getUserSetting, setUserSetting } from "./db";
 import { recordWatchTagSignals } from "./contentSignals";
 import { zonedDayHour } from "./timeZone";
@@ -29,26 +29,34 @@ export function childLimitSeconds(userId: number): number | null {
 
 // Progress heartbeats arrive up to ~10 s apart while a video actually plays,
 // so wall-clock deltas between ticks are a good watch-time measure; a gap wider
-// than 15 s means pause/navigation and is not counted. Memory-only state — a
-// restart just skips one delta.
-const lastTick = new Map<number, { at: number; videoId: string }>();
+// than 15 s means pause/navigation and is not counted. The latest heartbeat is
+// database-backed so consecutive requests may land on different HTTP replicas.
 const lastChildEvent = new Map<number, number>();
 const childIdleTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 /** Active playback heartbeats, used by the small parent "now watching" panel. */
 export async function activeChildPlayback(maxAgeMs = 12_000) {
   const cutoff = Date.now() - maxAgeMs;
-  const recent = [...lastTick.entries()].filter(([, tick]) => tick.at >= cutoff);
-  return (await Promise.all(recent.map(async ([userId, tick]) =>
-    await isChildUser(userId) ? { userId, videoId: tick.videoId } : null
-  ))).filter((entry): entry is { userId: number; videoId: string } => entry !== null);
+  const rows = await database.prepare(`
+    SELECT activity.user_id, activity.video_id
+    FROM playback_activity activity JOIN users u ON u.id=activity.user_id
+    WHERE u.is_child=1 AND activity.seen_at_ms >= ?
+  `).all(cutoff) as Array<{ user_id: number; video_id: string }>;
+  return rows.map((row) => ({ userId: Number(row.user_id), videoId: row.video_id }));
 }
 
 export async function recordWatchTick(userId: number, videoId: string) {
   if (isParentLocked(userId)) return;
   const now = Date.now();
-  const last = lastTick.get(userId);
-  lastTick.set(userId, { at: now, videoId });
+  const last = await database.transaction(async () => {
+    const row = await database.prepare(`SELECT video_id, seen_at_ms FROM playback_activity WHERE user_id = ?${databaseConfig.engine === "postgres" ? " FOR UPDATE" : ""}`)
+      .get<{ video_id: string; seen_at_ms: number }>(userId);
+    await database.prepare(`
+      INSERT INTO playback_activity(user_id, video_id, seen_at_ms) VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET video_id=excluded.video_id, seen_at_ms=excluded.seen_at_ms
+    `).run(userId, videoId, now);
+    return row ? { at: Number(row.seen_at_ms), videoId: row.video_id } : null;
+  })();
   const child = await isChildUser(userId);
   if (child && now - (lastChildEvent.get(userId) ?? 0) >= 2_000) {
     lastChildEvent.set(userId, now);
@@ -76,8 +84,9 @@ export async function recordWatchTick(userId: number, videoId: string) {
 }
 
 /** The video the user was most recently watching (for "until video ends"). */
-export function lastWatchedVideo(userId: number): string | null {
-  return lastTick.get(userId)?.videoId ?? null;
+export async function lastWatchedVideo(userId: number): Promise<string | null> {
+  const row = await database.prepare("SELECT video_id FROM playback_activity WHERE user_id = ?").get<{ video_id: string }>(userId);
+  return row?.video_id ?? null;
 }
 
 async function usedSecondsToday(userId: number): Promise<number> {
@@ -89,10 +98,9 @@ async function usedSecondsToday(userId: number): Promise<number> {
 
 // Wrong child-lock PIN attempts (leaving the profile, approving extensions)
 // count against the child profile; the third one locks it. The lock lives in
-// user_settings so it survives restarts; the counter is memory-only.
+// user_settings so it survives restarts; the counter is transient DB state.
 const PIN_LOCK_MINUTES = 30;
 const PIN_LOCK_ATTEMPTS = 3;
-const pinFailures = new Map<number, number>();
 
 export function isPinLocked(userId: number): boolean {
   const until = getUserSetting(userId, "child_pin_lock_until");
@@ -105,26 +113,29 @@ export function isParentLocked(userId: number): boolean {
 
 export async function lockChildByParent(userId: number) {
   await setUserSetting(userId, "child_parent_locked", "1");
-  lastTick.delete(userId);
+  await database.prepare("DELETE FROM playback_activity WHERE user_id = ?").run(userId);
 }
 
 /** Count one failed attempt; returns true when this attempt locked the profile. */
 export async function registerChildLockFailure(userId: number): Promise<boolean> {
   if (!await isChildUser(userId)) return false;
-  const failures = (pinFailures.get(userId) ?? 0) + 1;
-  pinFailures.set(userId, failures);
-  if (failures < PIN_LOCK_ATTEMPTS) return false;
-  pinFailures.delete(userId);
+  const row = await database.prepare(`
+    INSERT INTO child_pin_failures(user_id, failures) VALUES (?, 1)
+    ON CONFLICT(user_id) DO UPDATE SET failures=child_pin_failures.failures + 1
+    RETURNING failures
+  `).get<{ failures: number }>(userId);
+  if (Number(row?.failures ?? 0) < PIN_LOCK_ATTEMPTS) return false;
+  await database.prepare("DELETE FROM child_pin_failures WHERE user_id = ?").run(userId);
   await setUserSetting(userId, "child_pin_lock_until", new Date(Date.now() + PIN_LOCK_MINUTES * 60_000).toISOString());
   return true;
 }
 
-export function clearChildLockFailures(userId: number) {
-  pinFailures.delete(userId);
+export async function clearChildLockFailures(userId: number) {
+  await database.prepare("DELETE FROM child_pin_failures WHERE user_id = ?").run(userId);
 }
 
 export async function unlockChildProfile(userId: number) {
-  pinFailures.delete(userId);
+  await clearChildLockFailures(userId);
   await setUserSetting(userId, "child_pin_lock_until", "");
   await setUserSetting(userId, "child_parent_locked", "");
 }

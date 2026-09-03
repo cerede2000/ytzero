@@ -1074,3 +1074,36 @@ export interface DatabaseStatus {
   previousEngine: "sqlite" | "postgres";
   pendingReceiptId: string | null;
 }
+
+export interface AppHealth {
+  status: "ok" | "error";
+  version: string;
+  commit: string;
+  uptime?: number;
+  database?: "sqlite" | "postgres";
+  background_tasks?: boolean;
+}
+
+export interface ClusterInstance {
+  id: string;
+  name: string;
+  hostname: string;
+  started_at_ms: number;
+  last_seen_at_ms: number;
+  online: boolean;
+  version: string;
+  commit: string;
+  background_tasks: boolean;
+  role: "worker" | "http";
+  settings: Record<string, string>;
+}
+
+export interface ClusterStatus {
+  enabled: true;
+  generated_at_ms: number;
+  current_instance_id: string;
+  healthy: boolean;
+  summary: { online: number; workers: number; http: number };
+  warnings: Array<"no_background_worker" | "multiple_background_workers" | "mixed_versions">;
+  instances: ClusterInstance[];
+}

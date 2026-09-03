@@ -48,31 +48,49 @@ async function assignProfile(userId: number, groupId: number) {
 
 /** One-time runtime conversion can safely parse historical JSON, unlike SQL migrations. */
 export async function ensureAccessControl(): Promise<void> {
-  const existing = await database.prepare("SELECT singleton FROM permission_policy WHERE singleton=1").get() as { singleton: number } | null;
-  if (getSetting("access_control_migrated") === "1" && existing) return;
-  if (existing) {
+  const initialize = async () => {
+    const existing = await database.prepare("SELECT singleton FROM permission_policy WHERE singleton=1").get<{ singleton: number }>();
+    if (getSetting("access_control_migrated") === "1" && existing) return;
+    if (existing) {
+      await setSetting("access_control_migrated", "1");
+      return;
+    }
+
+    const standard = await createGroup("Standard", DEFAULT_STANDARD_PERMISSIONS, true);
+    const restricted = await createGroup("Restricted", DEFAULT_RESTRICTED_PERMISSIONS, true);
+    await database.prepare("INSERT INTO permission_policy(singleton,default_group_id,revision) VALUES(1,?,1)").run(standard.id);
+
+    const legacy = parseLegacyAdminOnlyAreas(getSetting("profile_admin_only_areas"));
+    const isFactoryPolicy = legacy.length === LEGACY_DEFAULT_ADMIN_ONLY_AREAS.length
+      && legacy.every((permission) => LEGACY_DEFAULT_ADMIN_ONLY_AREAS.includes(permission));
+    let migratedGroupId: number | null = null;
+    if (!isFactoryPolicy) {
+      const granted = PROFILE_PERMISSION_AREAS.filter((permission) => !legacy.includes(permission));
+      migratedGroupId = (await createGroup("Migrated policy", granted, false)).id;
+    }
+
+    const users = await database.prepare("SELECT id,is_child FROM users ORDER BY id").all() as Array<{ id: number; is_child: number }>;
+    for (const user of users) {
+      await assignProfile(user.id, migratedGroupId ?? (user.is_child === 1 ? restricted.id : standard.id));
+    }
     await setSetting("access_control_migrated", "1");
+  };
+
+  if (database.engine === "postgres") {
+    await database.transaction(async () => {
+      // Fresh cluster replicas may reach this runtime migration together. Keep
+      // the check and initialization under one PostgreSQL transaction lock so
+      // a losing replica observes the completed policy instead of creating a
+      // second set of system groups or failing on the singleton row.
+      await database.prepare("SELECT pg_advisory_xact_lock(1498565715)").get();
+      await initialize();
+    })();
     return;
   }
-
-  const standard = await createGroup("Standard", DEFAULT_STANDARD_PERMISSIONS, true);
-  const restricted = await createGroup("Restricted", DEFAULT_RESTRICTED_PERMISSIONS, true);
-  await database.prepare("INSERT INTO permission_policy(singleton,default_group_id,revision) VALUES(1,?,1)").run(standard.id);
-
-  const legacy = parseLegacyAdminOnlyAreas(getSetting("profile_admin_only_areas"));
-  const isFactoryPolicy = legacy.length === LEGACY_DEFAULT_ADMIN_ONLY_AREAS.length
-    && legacy.every((permission) => LEGACY_DEFAULT_ADMIN_ONLY_AREAS.includes(permission));
-  let migratedGroupId: number | null = null;
-  if (!isFactoryPolicy) {
-    const granted = PROFILE_PERMISSION_AREAS.filter((permission) => !legacy.includes(permission));
-    migratedGroupId = (await createGroup("Migrated policy", granted, false)).id;
-  }
-
-  const users = await database.prepare("SELECT id,is_child FROM users ORDER BY id").all() as Array<{ id: number; is_child: number }>;
-  for (const user of users) {
-    await assignProfile(user.id, migratedGroupId ?? (user.is_child === 1 ? restricted.id : standard.id));
-  }
-  await setSetting("access_control_migrated", "1");
+  // SQLite's legacy synchronous settings cache uses a separate connection, so
+  // preserve the established single-process initialization path without an
+  // async-client transaction around setSetting().
+  await initialize();
 }
 
 export async function assignDefaultPermissionGroup(userId: number): Promise<void> {

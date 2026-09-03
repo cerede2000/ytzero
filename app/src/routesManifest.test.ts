@@ -45,6 +45,7 @@ describe("HTTP route manifest", () => {
     const importVideoRoute = "POST /videos/:id/import";
     const sessionPlaylistRoute = "POST /playlists/from-session-queue";
     const clearVideoBookmarksRoute = "DELETE /videos/:id/bookmark";
+    const clusterStatusRoute = "GET /cluster/status";
     const notificationPreferenceRoutes = [
       "GET /notification-preferences",
       "PUT /notification-preferences",
@@ -55,7 +56,7 @@ describe("HTTP route manifest", () => {
       "PUT /access-control/group-order", "PUT /access-control/default-group", "PUT /access-control/profiles/:id",
       "DELETE /access-control/groups/:id",
     ];
-    expect(routes).toHaveLength(248);
+    expect(routes).toHaveLength(249);
     expect(routes).toContain(transcriptRoute);
     expect(routes).toContain(playbackAdjacentRoute);
     expect(routes).toContain(liveAudioRoute);
@@ -67,11 +68,12 @@ describe("HTTP route manifest", () => {
     expect(routes).toContain(importVideoRoute);
     expect(routes).toContain(sessionPlaylistRoute);
     expect(routes).toContain(clearVideoBookmarksRoute);
+    expect(routes).toContain(clusterStatusRoute);
     for (const route of notificationPreferenceRoutes) expect(routes).toContain(route);
     for (const route of accessControlRoutes) expect(routes).toContain(route);
     expect(routes).toContain("GET /plugins/tubearchivist/config");
     expect(routes).toContain("POST /plugins/tubearchivist/sync");
-    const legacyRoutes = routes.filter((route) => route !== transcriptRoute && route !== playbackAdjacentRoute && route !== liveAudioRoute && route !== vodAudioRoute && route !== retryAudioRoute && route !== directStreamRoute && route !== ytdlpConfigRoute && route !== ytdlpUpdateRoute && route !== importVideoRoute && route !== sessionPlaylistRoute && route !== clearVideoBookmarksRoute && !accessControlRoutes.includes(route) && !notificationPreferenceRoutes.includes(route));
+    const legacyRoutes = routes.filter((route) => route !== transcriptRoute && route !== playbackAdjacentRoute && route !== liveAudioRoute && route !== vodAudioRoute && route !== retryAudioRoute && route !== directStreamRoute && route !== ytdlpConfigRoute && route !== ytdlpUpdateRoute && route !== importVideoRoute && route !== sessionPlaylistRoute && route !== clearVideoBookmarksRoute && route !== clusterStatusRoute && !accessControlRoutes.includes(route) && !notificationPreferenceRoutes.includes(route));
     expect(createHash("sha256").update(legacyRoutes.join("\n")).digest("hex"))
       .toBe("80c5a76e8b9e73067474352689dee5912762cbd8933feb23ceb68592f592158b");
   });

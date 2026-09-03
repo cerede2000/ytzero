@@ -25,10 +25,11 @@ describe("cross-database schema migrations", () => {
     await database.exec("CREATE TABLE user_videos (user_id INTEGER, video_id TEXT)");
     await database.exec("CREATE TABLE user_playlist_videos (playlist_id INTEGER, video_id TEXT, added_at TEXT)");
     await database.exec("CREATE TABLE videos (video_id TEXT PRIMARY KEY)");
+    await database.exec("CREATE TABLE downloads (video_id TEXT PRIMARY KEY)");
     await database.exec("INSERT INTO user_playlist_videos VALUES (1, 'later', '2026-01-02'), (1, 'earlier', '2026-01-01')");
 
-    expect(await applyDatabaseMigrations(database)).toBe(104);
-    expect(await applyDatabaseMigrations(database)).toBe(104);
+    expect(await applyDatabaseMigrations(database)).toBe(108);
+    expect(await applyDatabaseMigrations(database)).toBe(108);
     expect((await database.prepare("PRAGMA table_info(auth_sessions)").all() as Array<{ name: string }>).some((column) => column.name === "permission_group_uuid")).toBe(true);
 
     const columns = await database.prepare('PRAGMA table_info("user_channels")').all<{ name: string }>();
@@ -41,6 +42,12 @@ describe("cross-database schema migrations", () => {
     expect(catalogColumns.some((column) => column.name === "short_check_attempts")).toBe(true);
     expect(catalogColumns.some((column) => column.name === "short_check_attempted_at")).toBe(true);
     expect(catalogColumns.some((column) => column.name === "short_check_next_attempt_at")).toBe(true);
+    const downloadColumns = await database.prepare('PRAGMA table_info("downloads")').all<{ name: string }>();
+    expect(downloadColumns.some((column) => column.name === "progress_percent")).toBe(true);
+    expect(downloadColumns.some((column) => column.name === "progress_total_bytes")).toBe(true);
+    expect(downloadColumns.some((column) => column.name === "progress_speed")).toBe(true);
+    expect(downloadColumns.some((column) => column.name === "worker_id")).toBe(true);
+    expect(downloadColumns.some((column) => column.name === "worker_heartbeat_at_ms")).toBe(true);
     expect(await database.prepare("SELECT 1 AS present FROM sqlite_master WHERE type='index' AND name='idx_videos_shorts_retry'").get<{ present: number }>())
       .toEqual({ present: 1 });
     expect(await database.prepare("SELECT video_id, position FROM user_playlist_videos ORDER BY position").all())
@@ -53,8 +60,29 @@ describe("cross-database schema migrations", () => {
       expect(await database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name=?").get<{ count: number }>(table))
         .toEqual({ count: 1 });
     }
+    for (const table of ["auth_flows", "child_lock_sessions", "playback_activity", "child_pin_failures", "app_events", "cluster_instances"]) {
+      expect(await database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name=?").get<{ count: number }>(table))
+        .toEqual({ count: 1 });
+    }
     const permissionGroupColumns = await database.prepare('PRAGMA table_info("permission_groups")').all<{ name: string }>();
     expect(permissionGroupColumns.some((column) => column.name === "sort_order")).toBe(true);
+    await database.close();
+  });
+
+  test("repairs cluster download columns when an earlier migration 105 was already recorded", async () => {
+    const database = new AsyncDatabaseClient("sqlite", ":memory:");
+    await database.exec("CREATE TABLE downloads (video_id TEXT PRIMARY KEY)");
+    await database.exec("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)");
+    for (const migration of DATABASE_MIGRATIONS.filter((item) => item.version < 108)) {
+      await database.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)")
+        .run(migration.version, migration.name, "2026-09-03T00:00:00.000Z");
+    }
+
+    expect(await applyDatabaseMigrations(database)).toBe(108);
+    const columns = await database.prepare('PRAGMA table_info("downloads")').all<{ name: string }>();
+    for (const name of ["progress_percent", "progress_total_bytes", "progress_speed", "worker_id", "worker_heartbeat_at_ms"]) {
+      expect(columns.some((column) => column.name === name)).toBe(true);
+    }
     await database.close();
   });
 });

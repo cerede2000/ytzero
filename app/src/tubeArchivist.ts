@@ -6,6 +6,7 @@ import { DB_PATH, getSetting, setSetting } from "./db";
 import { log } from "./logger";
 import { pluginEnabled } from "./plugins";
 import { normalizeVideoComments, type VideoCommentsResult } from "./youtubeComments";
+import { backgroundTasksEnabled } from "./deploymentMode";
 
 const PLUGIN_ID = "tubearchivist";
 const VIDEO_ID = /^[A-Za-z0-9_-]{6,20}$/;
@@ -234,7 +235,7 @@ export function syncTubeArchivist(): Promise<TubeArchivistSyncResult> {
 export function scheduleTubeArchivistSync(immediate = false): void {
   if (timer) clearTimeout(timer);
   timer = null;
-  if (!pluginEnabled(PLUGIN_ID) || !tubeArchivistConfigured()) return;
+  if (!backgroundTasksEnabled() || !pluginEnabled(PLUGIN_ID) || !tubeArchivistConfigured()) return;
   const minutes = Math.max(15, Number(getSetting("plugin_tubearchivist_sync_interval_minutes")) || 60);
   timer = setTimeout(() => void syncTubeArchivist().catch((error) => log.warn("tubearchivist.sync_failed", { error: error instanceof Error ? error.message : String(error) })), immediate ? 0 : minutes * 60_000);
   scheduleWatchedFlush(immediate ? 0 : 60_000);
@@ -243,7 +244,7 @@ export function scheduleTubeArchivistSync(immediate = false): void {
 function scheduleWatchedFlush(delay = 60_000): void {
   if (watchedTimer) clearTimeout(watchedTimer);
   watchedTimer = null;
-  if (!pluginEnabled(PLUGIN_ID) || !tubeArchivistConfigured()) return;
+  if (!backgroundTasksEnabled() || !pluginEnabled(PLUGIN_ID) || !tubeArchivistConfigured()) return;
   watchedTimer = setTimeout(() => void flushTubeArchivistWatched(), delay);
 }
 

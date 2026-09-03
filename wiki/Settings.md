@@ -10,11 +10,26 @@ The menu is grouped by purpose:
 - **Library** — Channels, Followed playlists, Filters, Tags, Rules, and personal Playlists.
 - **Experience** — Appearance, Feed, Navigation, Playback, Subtitles, Screenshots, and Privacy.
 - **Administration** — Plugins, Profiles, and Authentication.
-- **System** — Changelog and update checks, Logs, External videos, Backup and restore, Database, and other dangerous operations.
+- **System** — Changelog and update checks, Logs, External videos, Backup and restore, Database, other dangerous operations, and Cluster health when PostgreSQL is active.
 
 Only sections available to the active profile are shown. Authentication remains
 owner-only, while system and shared administration tools require administrator
 access.
+
+## Cluster health
+
+On PostgreSQL installations, the primary profile gets **Cluster** as the last
+item in the System group. It shows live application-process heartbeats, HTTP and
+background-worker roles, versions, uptime, last contact, and selected non-secret
+runtime settings. Warnings identify a missing worker, multiple workers, or mixed
+application builds. The view refreshes every five seconds.
+
+This dashboard reports application topology; it does not manage or restart
+allocations. Use Nomad, Kubernetes, Docker, or your service manager to change
+replica counts and deployment roles. See
+[Clustered PostgreSQL deployment](Configuration#clustered-postgresql-deployment)
+for the supported topology, storage requirements, failover behavior, and
+maintenance procedure.
 
 ## Experience settings
 

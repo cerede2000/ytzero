@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { api } from "./routes";
-import { db, getSetting } from "./db";
+import { db, getSetting, reloadSettingCache } from "./db";
 import { database, databaseConfig } from "./database";
 import { startSQLiteMaintenance } from "./sqliteMaintenance";
 import { startScheduler } from "./refreshScheduler";
@@ -14,6 +14,10 @@ import { collectDiagnosticSnapshot } from "./diagnostics";
 import { migrateLegacyProfileAvatars } from "./profileAvatars";
 import { flushTubeArchivistWatched, scheduleTubeArchivistSync } from "./tubeArchivist";
 import { environmentAuthMethod, environmentAuthPasswordConfigured } from "./authEnvironment";
+import { startAppEventRelay } from "./appEvents";
+import { deploymentMode } from "./deploymentMode";
+import { reloadPluginEnabledCache } from "./plugins";
+import { startClusterHeartbeat } from "./clusterRuntime";
 
 if (environmentAuthMethod() && !environmentAuthPasswordConfigured()) {
   log.error("auth.environment_password_missing", {
@@ -37,7 +41,8 @@ app.get("/api/health", async (c) => {
     log.error("health.db", { error: String(err) });
     return c.json({ status: "error", version: VERSION, commit: COMMIT }, 503);
   }
-  return c.json({ status: "ok", version: VERSION, commit: COMMIT, uptime: Math.round(process.uptime()) });
+  const mode = deploymentMode(databaseConfig.engine);
+  return c.json({ status: "ok", version: VERSION, commit: COMMIT, uptime: Math.round(process.uptime()), database: mode.database, background_tasks: mode.backgroundTasks });
 });
 
 app.route("/api", api);
@@ -92,16 +97,36 @@ app.get("*", serveStatic({ path: `${uiDir}/index.html` }));
 
 await migrateLegacyProfileAvatars()
   .catch((error) => log.warn("profile.avatar_migration_failed", { error: error instanceof Error ? error.message : String(error) }));
-startScheduler();
-await startDownloader();
-scheduleTubeArchivistSync(true);
-void flushTubeArchivistWatched();
+const mode = deploymentMode(databaseConfig.engine);
+await startClusterHeartbeat();
+await startAppEventRelay({ cleanup: mode.backgroundTasks });
+if (mode.backgroundTasks) {
+  startScheduler();
+  await startDownloader();
+  scheduleTubeArchivistSync(true);
+  void flushTubeArchivistWatched();
+} else {
+  log.info("scheduler.disabled", { variable: "YTZERO_BACKGROUND_TASKS", database: databaseConfig.engine });
+}
+if (databaseConfig.engine === "postgres") {
+  let refreshingRuntimeCaches = false;
+  setInterval(() => {
+    if (refreshingRuntimeCaches) return;
+    refreshingRuntimeCaches = true;
+    Promise.all([reloadSettingCache(), reloadPluginEnabledCache()])
+      .then(([settingsChanged, changedPlugins]) => {
+        if (mode.backgroundTasks && (settingsChanged || changedPlugins.includes("tubearchivist"))) scheduleTubeArchivistSync();
+      })
+      .catch((error) => log.warn("cluster.cache_refresh_failed", { error: error instanceof Error ? error.message : String(error) }))
+      .finally(() => { refreshingRuntimeCaches = false; });
+  }, 2_000);
+}
 if (databaseConfig.engine === "sqlite") startSQLiteMaintenance(db);
 
 const port = Number(process.env.PORT ?? 3001);
 const idleTimeout = Number(process.env.IDLE_TIMEOUT_SECONDS ?? 120);
 const server = Bun.serve({ port, idleTimeout, fetch: app.fetch });
-log.info("app.listen", { url: String(server.url), port, uiDir, idleTimeout, version: VERSION, commit: COMMIT });
+log.info("app.listen", { url: String(server.url), port, uiDir, idleTimeout, version: VERSION, commit: COMMIT, backgroundTasks: mode.backgroundTasks, database: mode.database });
 collectDiagnosticSnapshot()
   .then((snapshot) => log.info("app.state_snapshot", snapshot))
   .catch((error) => log.warn("app.state_snapshot_failed", { error: error instanceof Error ? error.message : String(error) }));

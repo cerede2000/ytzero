@@ -107,6 +107,13 @@ manifest uses `Recreate` and one replica to protect the default SQLite database.
 It works as a starting point on DigitalOcean Kubernetes, GKE, EKS, AKS, k3s,
 and other conforming clusters.
 
+To scale beyond one replica, switch to PostgreSQL and split the workload into a
+singleton background Deployment and an HTTP Deployment. Keep
+`YTZERO_BACKGROUND_TASKS=1` only on the singleton and set it to `0` on every
+HTTP replica. The bundled manifest deliberately remains the simpler SQLite
+single-instance example. See [Clustered PostgreSQL deployment](Configuration#clustered-postgresql-deployment)
+for shared-volume and load-balancer-affinity requirements.
+
 ## Zeabur
 
 The repository includes a publishable

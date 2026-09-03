@@ -17,8 +17,8 @@ type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; pro
 type Api = Hono<ApiEnvironment>; type ApiContext = Context<ApiEnvironment>;
 
 interface SettingsRouteAccess {
-  childLockStatus: (context: ApiContext) => unknown;
-  clearChildLockSession: (context: ApiContext) => void;
+  childLockStatus: (context: ApiContext) => Promise<unknown>;
+  clearChildLockSession: (context: ApiContext) => Promise<void>;
   currentUserId: (context: ApiContext) => number;
   externalPermissionGroupUuid: (context: ApiContext) => string | undefined;
   hashChildLockPin: (pin: string) => Promise<string>;
@@ -26,7 +26,7 @@ interface SettingsRouteAccess {
   isPrimaryUser: (context: ApiContext) => boolean;
   isChildLockEnabled: () => boolean;
   isSixDigitPin: (pin: unknown) => pin is string;
-  setChildLockSession: (context: ApiContext) => void;
+  setChildLockSession: (context: ApiContext) => Promise<void>;
   verifyChildLockPin: (pin: string) => Promise<boolean>;
 }
 
@@ -47,8 +47,8 @@ export function registerSettingsRoutes(api: Api, access: SettingsRouteAccess): v
 
 // ---------- settings ----------
 
-api.get("/child-lock", (c) => {
-  return c.json({ child_lock: childLockStatus(c) });
+api.get("/child-lock", async (c) => {
+  return c.json({ child_lock: await childLockStatus(c) });
 });
 
 api.get("/profile-permissions", async (c) => {
@@ -172,26 +172,27 @@ api.post("/child-lock/enable", async (c) => {
   if (!isSixDigitPin(body.pin)) return c.json({ error: "PIN must have 6 digits" }, 400);
   await setSetting("child_lock_pin_hash", await hashChildLockPin(body.pin));
   await setSetting("child_lock_enabled", "1");
+  await database.prepare("DELETE FROM child_lock_sessions").run();
   publishAppEvent("child-requests");
   // Admin access no longer depends on the shared unlock cookie. Clear any stale
   // cookie so other profiles in this browser are protected immediately.
-  clearChildLockSession(c);
-  return c.json({ child_lock: childLockStatus(c) });
+  await clearChildLockSession(c);
+  return c.json({ child_lock: await childLockStatus(c) });
 });
 
 api.post("/child-lock/unlock", async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  if (!isChildLockEnabled()) return c.json({ child_lock: childLockStatus(c) });
+  if (!isChildLockEnabled()) return c.json({ child_lock: await childLockStatus(c) });
   if (!isSixDigitPin(body.pin) || !(await verifyChildLockPin(body.pin))) {
     return c.json({ error: "invalid PIN" }, 401);
   }
-  setChildLockSession(c);
-  return c.json({ child_lock: childLockStatus(c) });
+  await setChildLockSession(c);
+  return c.json({ child_lock: await childLockStatus(c) });
 });
 
-api.post("/child-lock/lock", (c) => {
-  clearChildLockSession(c);
-  return c.json({ child_lock: childLockStatus(c) });
+api.post("/child-lock/lock", async (c) => {
+  await clearChildLockSession(c);
+  return c.json({ child_lock: await childLockStatus(c) });
 });
 
 api.post("/child-lock/change-pin", async (c) => {
@@ -200,19 +201,21 @@ api.post("/child-lock/change-pin", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   if (!isSixDigitPin(body.new_pin)) return c.json({ error: "PIN must have 6 digits" }, 400);
   await setSetting("child_lock_pin_hash", await hashChildLockPin(body.new_pin));
+  await database.prepare("DELETE FROM child_lock_sessions").run();
   publishAppEvent("child-requests");
-  clearChildLockSession(c);
-  return c.json({ child_lock: childLockStatus(c) });
+  await clearChildLockSession(c);
+  return c.json({ child_lock: await childLockStatus(c) });
 });
 
 api.post("/child-lock/disable", async (c) => {
   if (!isAdmin(c)) return c.json({ error: "only an admin can manage child lock" }, 403);
-  if (!isChildLockEnabled()) return c.json({ child_lock: childLockStatus(c) });
+  if (!isChildLockEnabled()) return c.json({ child_lock: await childLockStatus(c) });
   await setSetting("child_lock_enabled", "0");
   await setSetting("child_lock_pin_hash", "");
+  await database.prepare("DELETE FROM child_lock_sessions").run();
   publishAppEvent("child-requests");
-  clearChildLockSession(c);
-  return c.json({ child_lock: childLockStatus(c) });
+  await clearChildLockSession(c);
+  return c.json({ child_lock: await childLockStatus(c) });
 });
 
 api.get("/settings", (c) => {

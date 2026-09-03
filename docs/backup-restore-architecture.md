@@ -178,6 +178,19 @@ The following is the current source-of-truth classification. A feature that
 adds persistent data must update this list and the backup registry described
 below.
 
+Cluster runtime tables are transient state and are never portable:
+`auth_flows` contains single-use, five-minute OIDC/WebAuthn challenges;
+`child_lock_sessions` contains expiring server-side unlock tokens;
+`playback_activity` and `child_pin_failures` contain short-lived child-safety
+coordination state; and `app_events` is a short-lived cross-replica SSE
+notification log. `cluster_instances` is the ephemeral process heartbeat and
+safe runtime-configuration snapshot used by the cluster dashboard. The
+`downloads.worker_id` and
+`downloads.worker_heartbeat_at_ms` fields are transient queue ownership rather
+than portable download state. They are intentionally excluded from every
+backup section. Durable `auth_sessions` remain instance-local authentication
+state and are likewise excluded.
+
 ### Portable configuration and organization
 
 - `settings`: only registered, non-secret global settings. Exclude Child Lock

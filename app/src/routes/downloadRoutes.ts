@@ -172,7 +172,7 @@ api.get("/downloads", async (c) => {
   const uid = currentUserId(c);
   const includeAllProfiles = c.req.query("scope") === "all" && isAdmin(c);
   const downloads = await listDownloads(uid, includeAllProfiles);
-  const progress = activeDownloadProgress();
+  const progress = await activeDownloadProgress();
   const ytdlpVersion = await ytdlpStatus();
   return c.json({
     enabled: await profileDownloadsEnabled(uid),
@@ -223,7 +223,7 @@ api.post("/videos/:id/download", async (c) => {
 api.get("/videos/:id/download", async (c) => {
   const id = c.req.param("id");
   const download = await getDownload(currentUserId(c), id);
-  const progress = activeDownloadProgress();
+  const progress = await activeDownloadProgress();
   return c.json({
     download,
     progress: download?.status === "downloading" && progress?.video_id === id ? progress : null,

@@ -36,12 +36,13 @@ import { SettingsSearch } from "../components/settings/SettingsSearch";
 import ChannelSettingsDialog, { hasCustomChannelSettings } from "../components/settings/ChannelSettingsDialog";
 import { filterPlaylistsByName } from "../playlistSearch";
 import NotificationSettings from "../components/settings/NotificationSettings";
+import { ClusterSettings } from "../components/settings/ClusterSettings";
 
 const AuthSettings = lazy(() => import("../components/AuthSettings"));
 const TubeArchivistSettings = lazy(() => import("../components/settings/TubeArchivistSettings")
   .then((module) => ({ default: module.TubeArchivistSettings })));
 
-type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "plugins" | "advanced" | "profiles" | "auth";
+type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "plugins" | "advanced" | "profiles" | "auth" | "cluster";
 
 const TIME_ZONES = (() => {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "timeZone") => string[] };
@@ -63,6 +64,7 @@ const SETTINGS_AREAS: { id: Tab; primaryOnly?: boolean }[] = [
   { id: "advanced", primaryOnly: true },
   { id: "profiles" },
   { id: "auth", primaryOnly: true },
+  { id: "cluster", primaryOnly: true },
 ];
 
 const DISPLAY_PERMISSION_AREAS: ProfilePermissionArea[] = ["appearance", "feed", "navigation", "playback"];
@@ -123,6 +125,7 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
     changeWatchedStyle,
     changelog,
     changelogRemoteError,
+    clusterAvailable,
     channelCustomName,
     channelQuery,
     channelStatusLabel,
@@ -471,6 +474,8 @@ export default function SettingsPage({ showToast }: { showToast: (m: string) => 
       </Suspense>}
 
       {!isCurrentTabLocked && tab === "notifications" && <NotificationSettings />}
+
+      {!isCurrentTabLocked && tab === "cluster" && isPrimary && clusterAvailable && <ClusterSettings />}
 
       {!isCurrentTabLocked && tab === "channels" && (
         <SettingsSection>

@@ -92,6 +92,16 @@ export function pluginEnabled(id: string) {
   return pluginEnabledCache.get(id) ?? true;
 }
 
+export async function reloadPluginEnabledCache(): Promise<string[]> {
+  const rows = await database.prepare("SELECT id, enabled FROM plugins").all() as { id: string; enabled: number }[];
+  const changed: string[] = [];
+  for (const row of rows) if (pluginEnabledCache.get(row.id) !== (row.enabled !== 0)) changed.push(row.id);
+  pluginEnabledCache.clear();
+  for (const row of rows) pluginEnabledCache.set(row.id, row.enabled !== 0);
+  if (changed.includes("social") && !pluginEnabled("social")) socialWatchPartyStore.closeAll("social_disabled");
+  return changed;
+}
+
 export async function setPluginEnabled(id: string, enabled: boolean, options: { activate?: boolean } = {}) {
   const manifest = PLUGINS.find((p) => p.id === id);
   if (!manifest) throw new Error("plugin not found");

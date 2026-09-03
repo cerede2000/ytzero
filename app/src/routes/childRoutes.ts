@@ -69,7 +69,7 @@ api.post("/child/time-request", async (c) => {
     "SELECT id FROM child_time_requests WHERE user_id = ? AND status = 'pending' AND created_at > datetime('now', '-1 hour')"
   ).get(uid) as { id: number } | null;
   if (existing) return c.json({ ok: true, id: existing.id });
-  const videoId = typeof video_id === "string" && video_id ? video_id : lastWatchedVideo(uid);
+  const videoId = typeof video_id === "string" && video_id ? video_id : await lastWatchedVideo(uid);
   const row = await database.prepare(
     "INSERT INTO child_time_requests (user_id, video_id) VALUES (?, ?) RETURNING id"
   ).get(uid, videoId) as { id: number };
@@ -128,7 +128,7 @@ api.post("/child/time-requests/:id/resolve", async (c) => {
       publishAppEvent("child-watching");
       return c.json({ error: "invalid PIN", pin_locked: isPinLocked(request.user_id) }, 401);
     }
-    clearChildLockFailures(request.user_id);
+    await clearChildLockFailures(request.user_id);
   }
   await applyGrant(request.user_id, grant as ChildGrant, request.video_id);
   await database.prepare(
@@ -154,4 +154,3 @@ api.post("/profiles/:id/unlock-child", async (c) => {
 });
 
 }
-

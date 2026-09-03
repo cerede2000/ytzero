@@ -286,6 +286,9 @@ describe("portable backup classification and restore", () => {
     expect(serialized).not.toContain("COMMUNITY-CACHE-DO-NOT-EXPORT");
     expect(serialized).not.toContain("POST-SYNC-ERROR-DO-NOT-EXPORT");
     expect(serialized).not.toContain("auth_sessions");
+    for (const transientTable of ["auth_flows", "child_lock_sessions", "playback_activity", "child_pin_failures", "app_events", "cluster_instances"]) {
+      expect(serialized).not.toContain(transientTable);
+    }
     expect(serialized).not.toContain("download_cookie");
   });
 

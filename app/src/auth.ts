@@ -152,28 +152,28 @@ export function clearAuthSessionCookie() {
 
 // ---------- short-lived challenge / state store (WebAuthn + OIDC) ----------
 
-type Flow = { value: string; userId: number | null; nonce?: string; expires: number };
-const flows = new Map<string, Flow>();
+type Flow = { value: string; userId: number | null; nonce?: string };
 const FLOW_TTL_MS = 5 * 60 * 1000;
+const databaseTimestamp = (milliseconds: number) => new Date(milliseconds).toISOString().replace("T", " ").slice(0, 19);
 
-function cleanupFlows() {
-  const now = Date.now();
-  for (const [k, f] of flows) if (f.expires <= now) flows.delete(k);
-}
-
-function putFlow(value: string, userId: number | null, nonce?: string): string {
-  cleanupFlows();
+async function putFlow(value: string, userId: number | null, nonce?: string): Promise<string> {
   const id = crypto.randomUUID();
-  flows.set(id, { value, userId, nonce, expires: Date.now() + FLOW_TTL_MS });
+  const expiresAt = databaseTimestamp(Date.now() + FLOW_TTL_MS);
+  await database.prepare("INSERT INTO auth_flows (id, value, user_id, nonce, expires_at) VALUES (?, ?, ?, ?, ?)")
+    .run(id, value, userId, nonce ?? null, expiresAt);
+  // Opportunistic bounded-state cleanup; correctness never depends on it.
+  void database.prepare("DELETE FROM auth_flows WHERE expires_at <= datetime('now')").run().catch(() => {});
   return id;
 }
-function takeFlow(id: string | undefined): Flow | null {
+async function takeFlow(id: string | undefined): Promise<Flow | null> {
   if (!id) return null;
-  const f = flows.get(id);
-  if (!f) return null;
-  flows.delete(id);
-  if (f.expires <= Date.now()) return null;
-  return f;
+  // DELETE ... RETURNING makes a challenge single-use even when two callbacks
+  // reach different replicas concurrently. Compare expiry in the database so
+  // UTC text timestamps are never interpreted in the process-local timezone.
+  const flow = await database.prepare("DELETE FROM auth_flows WHERE id = ? AND expires_at > datetime('now') RETURNING value, user_id, nonce")
+    .get<{ value: string; user_id: number | null; nonce: string | null }>(id);
+  if (!flow) return null;
+  return { value: flow.value, userId: flow.user_id, ...(flow.nonce ? { nonce: flow.nonce } : {}) };
 }
 
 // ---------- WebAuthn / passkeys ----------
@@ -222,7 +222,7 @@ export async function passkeyRegisterOptions(c: any, userId: number | null, user
     excludeCredentials: existing.map((cr) => ({ id: cr.credential_id })),
     authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
   });
-  const flowId = putFlow(options.challenge, userId);
+  const flowId = await putFlow(options.challenge, userId);
   return { options, flowId };
 }
 
@@ -232,7 +232,7 @@ export async function passkeyRegisterVerify(
   response: RegistrationResponseJSON,
   label?: string
 ) {
-  const flow = takeFlow(flowId);
+  const flow = await takeFlow(flowId);
   if (!flow) throw new Error("challenge expired");
   const verification = await verifyRegistrationResponse({
     response,
@@ -267,7 +267,7 @@ export async function passkeyLoginOptions(c: any, userId: number | null) {
       transports: cr.transports ? JSON.parse(cr.transports) : undefined,
     })),
   });
-  const flowId = putFlow(options.challenge, userId);
+  const flowId = await putFlow(options.challenge, userId);
   return { options, flowId };
 }
 
@@ -284,7 +284,7 @@ export async function passkeyLoginVerify(
   flowId: string | undefined,
   response: AuthenticationResponseJSON
 ): Promise<{ user_id: number | null }> {
-  const flow = takeFlow(flowId);
+  const flow = await takeFlow(flowId);
   if (!flow) throw new Error("challenge expired");
   const cred = await database
     .prepare("SELECT * FROM webauthn_credentials WHERE credential_id = ?")
@@ -370,9 +370,7 @@ export async function oidcAuthUrl(c: any): Promise<{ url: string; flowId: string
     nonce,
   });
   // Store the verifier keyed by a flow id we put in a cookie; correlate on callback.
-  const flowId = putFlow(codeVerifier, null, nonce);
-  // We also need the state echoed back; pack it into the flow value map via a second entry.
-  flows.get(flowId)!.value = JSON.stringify({ codeVerifier, state });
+  const flowId = await putFlow(JSON.stringify({ codeVerifier, state }), null, nonce);
   return { url: url.href, flowId };
 }
 
@@ -399,7 +397,7 @@ export async function oidcCallback(
   flowId: string | undefined,
   currentUrl: string
 ): Promise<{ user_id: number | null; mode: "mapped" | "gateway"; is_admin: boolean; permission_group_uuid: string | null }> {
-  const flow = takeFlow(flowId);
+  const flow = await takeFlow(flowId);
   if (!flow) throw new Error("login flow expired");
   const { codeVerifier, state } = JSON.parse(flow.value) as { codeVerifier: string; state: string };
   const config = await getOidcConfig();

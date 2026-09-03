@@ -2,9 +2,11 @@ import type { Locale } from "../types";
 import { localeFormats } from "../localeFormats";
 import { featureMessages } from "./featureMessages";
 import { surfaceMessages } from "./surfaceMessages";
+import { clusterMessages } from "./cluster";
 export const de: Locale = {
   messages: {
     ...surfaceMessages.de,
+    ...clusterMessages.de,
     navToday: "Start",
     navSocial: "Social",
     navDiscovery: "Entdecken",

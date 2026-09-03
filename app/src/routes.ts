@@ -60,7 +60,6 @@ registerRequestDiagnostics(api);
 
 const CHILD_LOCK_SESSION_COOKIE = "ytzero_child_lock";
 const CHILD_LOCK_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-const childLockSessions = new Map<string, number>();
 
 function parseCookies(header: string | undefined) {
   const cookies: Record<string, string> = {};
@@ -88,27 +87,20 @@ function isChildLockEnabled() {
   return getSetting("child_lock_enabled") === "1" && Boolean(getSetting("child_lock_pin_hash"));
 }
 
-function cleanupChildLockSessions() {
-  const now = Date.now();
-  for (const [token, expiresAt] of childLockSessions) {
-    if (expiresAt <= now) childLockSessions.delete(token);
-  }
-}
-
-function hasChildLockSession(c: any) {
+async function hasChildLockSession(c: any) {
   if (!isChildLockEnabled()) return true;
-  cleanupChildLockSessions();
   const token = parseCookies(c.req.header("cookie"))[CHILD_LOCK_SESSION_COOKIE];
-  return Boolean(token && (childLockSessions.get(token) ?? 0) > Date.now());
+  if (!token) return false;
+  return Boolean(await database.prepare("SELECT 1 FROM child_lock_sessions WHERE token = ? AND expires_at > datetime('now')").get(token));
 }
 
-function childLockStatus(c: any) {
+async function childLockStatus(c: any) {
   const enabled = isChildLockEnabled();
   return {
     enabled,
     // Admin authority already proves who is operating the app. The lock protects
     // other profiles and never hides settings from the primary/admin profile.
-    locked: enabled && !isAdmin(c) && !hasChildLockSession(c),
+    locked: enabled && !isAdmin(c) && !await hasChildLockSession(c),
   };
 }
 
@@ -122,19 +114,21 @@ async function hashChildLockPin(pin: string) {
   return Bun.password.hash(pin);
 }
 
-function setChildLockSession(c: any) {
+async function setChildLockSession(c: any) {
   const token = crypto.randomUUID();
   const expiresAt = Date.now() + CHILD_LOCK_SESSION_TTL_MS;
-  childLockSessions.set(token, expiresAt);
+  await database.prepare("INSERT INTO child_lock_sessions (token, expires_at) VALUES (?, ?)")
+    .run(token, new Date(expiresAt).toISOString().replace("T", " ").slice(0, 19));
+  void database.prepare("DELETE FROM child_lock_sessions WHERE expires_at <= datetime('now')").run().catch(() => {});
   c.header(
     "Set-Cookie",
     `${CHILD_LOCK_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${Math.floor(CHILD_LOCK_SESSION_TTL_MS / 1000)}; SameSite=Lax; HttpOnly`
   );
 }
 
-function clearChildLockSession(c: any) {
+async function clearChildLockSession(c: any) {
   const token = parseCookies(c.req.header("cookie"))[CHILD_LOCK_SESSION_COOKIE];
-  if (token) childLockSessions.delete(token);
+  if (token) await database.prepare("DELETE FROM child_lock_sessions WHERE token = ?").run(token);
   c.header("Set-Cookie", `${CHILD_LOCK_SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly`);
 }
 
@@ -321,7 +315,7 @@ api.use("*", async (c, next) => {
   // Child Lock keeps its original role: a temporary PIN gate for shared
   // settings. Personal tags and playlists remain usable while it is locked.
   const isPinProtected = areas.some((area) => PIN_PROTECTED_PERMISSION_AREAS.has(area));
-  if (isPinProtected && !isAdmin(c) && !hasChildLockSession(c)) {
+  if (isPinProtected && !isAdmin(c) && !await hasChildLockSession(c)) {
     return c.json({ error: "settings locked" }, 423);
   }
   await next();

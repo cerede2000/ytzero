@@ -1,11 +1,13 @@
 import { localeFormats } from "../localeFormats";
 import { featureMessages } from "./featureMessages";
 import { surfaceMessages } from "./surfaceMessages";
+import { clusterMessages } from "./cluster";
 import type { Locale } from "../types";
 
 export const hu: Locale = {
   messages: {
     ...surfaceMessages.hu,
+    ...clusterMessages.hu,
     navToday: "Kezdőlap",
     navSocial: "Közösség",
     navDiscovery: "Felfedezés",

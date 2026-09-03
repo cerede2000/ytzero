@@ -12,6 +12,7 @@ import type {
 import {
   BUCKET_LABELS, PLAYBACK_SPEEDS, SB_CATEGORIES,
   type AppChangelog,
+  type AppHealth,
   type AppLogs,
   type AppNotification,
   type AppSettings,
@@ -39,6 +40,7 @@ import {
   type ChildTimeRequest,
   type CleanupFilter,
   type CleanupPreviewResult,
+  type ClusterStatus,
   type DatabaseStatus,
   type DeArrowBranding,
   type DiscoveryRecommendation,
@@ -100,6 +102,8 @@ export * from "./apiTypes";
 export * from "./pluginTypes";
 export { ApiError } from "./apiHttp";
 export const api = {
+  health: () => http<AppHealth>("/health"),
+  clusterStatus: () => http<ClusterStatus>("/cluster/status"),
   databaseStatus: () => http<DatabaseStatus>("/database/status"),
   migrateDatabaseToPostgres: (target_url: string) => http<{ receiptId: string; tables: number; rows: number; next: string }>("/database/migration/sqlite-to-postgres", { method: "POST", body: JSON.stringify({ target_url }) }),
   confirmDatabaseMigration: () => http<{ ok: true; status: DatabaseStatus }>("/database/migration/confirm", { method: "POST", body: "{}" }),

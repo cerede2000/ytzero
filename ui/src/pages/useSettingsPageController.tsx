@@ -34,7 +34,7 @@ import ProfilesSettings, { ProfilePasswordSettings } from "../components/setting
 import { ChannelOwnership, FilterRuleGroups, PlaylistSettingsItem, PluginMultiselect, RuleRow, SidebarNavEditor, TagRow } from "../components/settings/SettingsEditors";
 import { ChangelogNote, LogLine, SettingsLoadingState } from "../components/settings/SettingsSupport";
 
-type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "plugins" | "advanced" | "profiles" | "auth";
+type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "plugins" | "advanced" | "profiles" | "auth" | "cluster";
 const TIME_ZONES = (() => {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "timeZone") => string[] };
   const supported = intl.supportedValuesOf?.("timeZone") ?? [
@@ -54,6 +54,7 @@ const SETTINGS_AREAS: { id: Tab; primaryOnly?: boolean }[] = [
   { id: "advanced", primaryOnly: true },
   { id: "profiles" },
   { id: "auth", primaryOnly: true },
+  { id: "cluster", primaryOnly: true },
 ];
 
 const DISPLAY_PERMISSION_AREAS: ProfilePermissionArea[] = ["appearance", "feed", "navigation", "playback"];
@@ -74,7 +75,6 @@ const FEED_MAX_AGE_UNITS: Exclude<FeedMaxAgeUnit, "off">[] = ["days", "weeks", "
 const FEED_MAX_AGE_VALUES = Array.from({ length: 30 }, (_, i) => String(i + 1));
 const LOG_LINE_LIMIT = 300;
 const PLUGIN_SETTING_SAVE_DEBOUNCE_MS = 300;
-
 function isFeedMaxAgeUnit(value: unknown): value is FeedMaxAgeUnit {
   return typeof value === "string" && (FEED_MAX_AGE_UNITS as string[]).includes(value);
 }
@@ -119,6 +119,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
   const [loading, setLoading] = useState(true);
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsLoadError, setSettingsLoadError] = useState("");
+  const [clusterAvailable, setClusterAvailable] = useState(false);
   const [addingChannel, setAddingChannel] = useState(false);
   const [updatingChannelId, setUpdatingChannelId] = useState<string | null>(null);
   const [addingTag, setAddingTag] = useState(false);
@@ -418,12 +419,13 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     setSettingsReady(false);
     setSettingsLoadError("");
     try {
-      const [auth, child, r, cl, permissions] = await Promise.all([
+      const [auth, child, r, cl, permissions, health] = await Promise.all([
         api.authStatus(),
         api.childStatus(),
         api.settings(),
         api.childLock(),
         api.profilePermissions(),
+        api.health(),
       ]);
       // "Admin" = primary profile OR an OIDC session in the configured admin group.
       // is_admin drives the admin-only tabs/sections (kept in the isPrimary var).
@@ -486,6 +488,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
       try { setSbCategories(JSON.parse(r.settings.sponsorblock_categories || '["sponsor"]')); } catch {}
       setChildLock(cl.child_lock);
       setProfilePermissions(permissions.permissions);
+      setClusterAvailable(health.database === "postgres");
       setSettingsReady(true);
     } catch (error) {
       console.error(error);
@@ -1078,6 +1081,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     const hasVisibleDisplaySection = tabItem.id !== "display" || DISPLAY_PERMISSION_AREAS.some(canManageArea);
     return (!tabItem.primaryOnly || isPrimary)
       && (tabItem.id !== "auth" || canManageAdministrators)
+      && (tabItem.id !== "cluster" || clusterAvailable)
       && hasVisibleChannelSection
       && hasVisibleDisplaySection
       && (tabItem.id === "channels" || isPrimary || permissionArea == null || profilePermissions.effective.includes(permissionArea) || (tabItem.id === "profiles" && activeAuthMethod === "per_profile"));
@@ -1129,6 +1133,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
         { value: "advanced:logs", label: t("logs") },
         { value: "advanced:external", label: t("navExternal"), count: externalVideos.length },
         { value: "advanced:dangerous", label: t("dangerous") },
+        ...(tabIsVisible("cluster") ? [{ value: "cluster", label: t("clusterTab") }] : []),
       ] : [],
     },
   ].filter((group) => group.items.length > 0);
@@ -1142,7 +1147,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     if (!visibleAreas.some((tabItem) => tabItem.id === tab)) {
       setTab(visibleAreas[0]?.id ?? "tags");
     }
-  }, [settingsReady, isChildProfile, isPrimary, canManageAdministrators, profilePermissions.effective, tab]);
+  }, [settingsReady, isChildProfile, isPrimary, canManageAdministrators, clusterAvailable, profilePermissions.effective, tab]);
 
   useEffect(() => {
     if (!settingsReady || tab !== "channels" || channelSubTabOptions.some((option) => option.value === channelSubTab)) return;
@@ -1187,6 +1192,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     changeWatchedStyle,
     changelog,
     changelogRemoteError,
+    clusterAvailable,
     channelCustomName, channelPostsTab,
     channelQuery,
     channelStatusLabel,

@@ -41,7 +41,7 @@ export function registerChannelRoutes(
   access: {
     currentUserId: (context: ApiContext) => number;
     isAdmin: (context: ApiContext) => boolean;
-    hasChildLockSession: (context: ApiContext) => boolean;
+    hasChildLockSession: (context: ApiContext) => Promise<boolean>;
     attachTags: (userId: number, videos: VideoRow[]) => Promise<Array<VideoRow & Record<string, unknown>>>;
     attachWatchedState: typeof import("../videoRoutesSupport").attachWatchedState;
   },
@@ -110,7 +110,7 @@ api.get("/channels", async (c) => {
 
 api.post("/channels", async (c) => {
   // A child may subscribe only after a parent unlocked settings for this browser.
-  if (await isChildUser(currentUserId(c)) && !hasChildLockSession(c)) return c.json({ error: "settings locked" }, 423);
+  if (await isChildUser(currentUserId(c)) && !await hasChildLockSession(c)) return c.json({ error: "settings locked" }, 423);
   const uid = currentUserId(c);
   const { url, custom_name } = await c.req.json();
   if (!url) return c.json({ error: "url required" }, 400);

@@ -6,6 +6,8 @@ import { log, readRecentLogs, subscribeToLogs } from "../logger";
 import { checkLatestRelease } from "../updates";
 import { COMMIT, VERSION } from "../version";
 import { refreshAll } from "../refresher";
+import { currentClusterStatus } from "../clusterRuntime";
+import { databaseConfig } from "../database";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
@@ -99,6 +101,12 @@ api.get("/logs/stream", (c) => {
 api.get("/version", (c) => isAdmin(c)
   ? c.json({ version: VERSION, commit: COMMIT })
   : c.json({ error: "admin only" }, 403));
+
+api.get("/cluster/status", async (c) => {
+  if (!isAdmin(c)) return c.json({ error: "admin only" }, 403);
+  if (databaseConfig.engine !== "postgres") return c.json({ error: "cluster dashboard requires PostgreSQL" }, 404);
+  return c.json(await currentClusterStatus());
+});
 
 api.post("/updates/check", async (c) => {
   if (!isAdmin(c)) return c.json({ error: "admin only" }, 403);

@@ -419,7 +419,7 @@ api.post("/profiles/switch", async (c) => {
       publishAppEvent("child-watching");
       return c.json({ error: "invalid PIN", pin_locked: isPinLocked(current.id) }, 401);
     }
-    clearChildLockFailures(current.id);
+    await clearChildLockFailures(current.id);
   }
   // PINs only gate switching under the 'none' method; other methods replace them.
   if (authMethod() === "none" && user.pin_hash) {

@@ -402,15 +402,25 @@ export function setUserSetting(userId: number, key: string, value: string): Prom
   ).run(userId, key, value).then(() => { userSettingCache.set(`${userId}:${key}`, value); });
 }
 
-export async function reloadSettingCache(): Promise<void> {
+function sameStringMap(left: Map<string, string>, right: Map<string, string>): boolean {
+  return left.size === right.size && [...left].every(([key, value]) => right.get(key) === value);
+}
+
+export async function reloadSettingCache(): Promise<boolean> {
+  const nextSettings = new Map(
+    (await database.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[])
+      .map((row) => [row.key, row.value]),
+  );
+  const nextUserSettings = new Map(
+    (await database.prepare("SELECT user_id, key, value FROM user_settings").all() as { user_id: number; key: string; value: string }[])
+      .map((row) => [`${row.user_id}:${row.key}`, row.value]),
+  );
+  const changed = !sameStringMap(settingCache, nextSettings) || !sameStringMap(userSettingCache, nextUserSettings);
   settingCache.clear();
-  for (const row of await database.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[]) {
-    settingCache.set(row.key, row.value);
-  }
+  for (const [key, value] of nextSettings) settingCache.set(key, value);
   userSettingCache.clear();
-  for (const row of await database.prepare("SELECT user_id, key, value FROM user_settings").all() as { user_id: number; key: string; value: string }[]) {
-    userSettingCache.set(`${row.user_id}:${row.key}`, row.value);
-  }
+  for (const [key, value] of nextUserSettings) userSettingCache.set(key, value);
+  return changed;
 }
 
 // ---------- one-time multi-user migration ----------

@@ -119,6 +119,13 @@ CREATE TABLE IF NOT EXISTS downloads (
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   started_at  TEXT,
   finished_at TEXT,
+  progress_percent REAL,
+  progress_total_bytes INTEGER,
+  progress_speed TEXT,
+  -- Runtime ownership prevents a replacement worker from taking a live job.
+  -- Both fields are transient and cleared when the job leaves downloading.
+  worker_id TEXT,
+  worker_heartbeat_at_ms INTEGER,
   automation_rule_id INTEGER,
   requested_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
 );
@@ -568,7 +575,7 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
 );
 CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
 
--- Server-side auth sessions (survive restart, unlike the in-memory child lock).
+-- Server-side auth sessions shared by every HTTP replica.
 -- scope = 'account' (may pick any profile, e.g. shared / oidc-gateway) or
 -- 'profile' (pinned to user_id, e.g. per_profile / oidc-mapped).
 CREATE TABLE IF NOT EXISTS auth_sessions (
@@ -582,6 +589,67 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   last_seen  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at);
+
+-- Short-lived login challenges are shared by HTTP replicas so an OIDC or
+-- WebAuthn callback may land on a different process than the initiating request.
+CREATE TABLE IF NOT EXISTS auth_flows (
+  id         TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  nonce      TEXT,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_flows_expires ON auth_flows(expires_at);
+
+-- The Child Lock unlock cookie is also server-side and shared by replicas.
+CREATE TABLE IF NOT EXISTS child_lock_sessions (
+  token      TEXT PRIMARY KEY,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_child_lock_sessions_expires ON child_lock_sessions(expires_at);
+
+-- Transient playback heartbeat used for cross-replica child accounting and
+-- the parent's now-watching panel. Durable aggregate time stays in watch_time_log.
+CREATE TABLE IF NOT EXISTS playback_activity (
+  user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  video_id   TEXT NOT NULL,
+  seen_at_ms INTEGER NOT NULL
+);
+
+-- Cross-replica failed-PIN counter. The resulting timed lock remains in the
+-- profile settings; this row is removed on success or after the threshold.
+CREATE TABLE IF NOT EXISTS child_pin_failures (
+  user_id  INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  failures INTEGER NOT NULL DEFAULT 0
+);
+
+-- Transient cross-replica notification log. PostgreSQL HTTP replicas poll it
+-- to forward mutations to their locally connected SSE clients.
+CREATE TABLE IF NOT EXISTS app_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  origin     TEXT NOT NULL,
+  topic      TEXT NOT NULL,
+  user_id    INTEGER,
+  data       TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_app_events_created ON app_events(created_at);
+
+-- Ephemeral membership registry for the PostgreSQL cluster dashboard. Each
+-- process refreshes only its own row; stale rows are kept briefly so an
+-- administrator can see a replica that disappeared during a rollout.
+CREATE TABLE IF NOT EXISTS cluster_instances (
+  instance_id       TEXT PRIMARY KEY,
+  instance_name     TEXT NOT NULL,
+  hostname          TEXT NOT NULL,
+  started_at_ms     INTEGER NOT NULL,
+  last_seen_at_ms   INTEGER NOT NULL,
+  version           TEXT NOT NULL,
+  commit_hash       TEXT NOT NULL,
+  background_tasks  INTEGER NOT NULL CHECK (background_tasks IN (0,1)),
+  settings_json     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cluster_instances_last_seen ON cluster_instances(last_seen_at_ms);
 
 -- One undo slot per profile for the "clean up the feed" bulk action — a fresh
 -- run always replaces the previous slot, there is no history stack.

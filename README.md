@@ -22,6 +22,11 @@ YT Zero turns YouTube back into a simple reader for channels you chose on purpos
 
 It reads public YouTube RSS feeds, stores everything in your own SQLite or PostgreSQL database, and gives you a calm place to sort, schedule, watch, archive, and revisit videos from creators you already follow. With the optional [yt-dlp](https://github.com/yt-dlp/yt-dlp) integration it can even download those videos and play them from disk, in its own player.
 
+PostgreSQL deployments can run multiple HTTP replicas with one nominated
+background worker. See the [clustered deployment configuration](https://github.com/Pelski/ytzero/wiki/Configuration#clustered-postgresql-deployment)
+for worker, shared-storage, and load-balancer requirements. SQLite deployments
+remain single-instance.
+
 If the problem is "YouTube is good at surfacing more, not better," YT Zero is the opposite: a quiet inbox, your own rules, and a player built around intentional watching.
 
 ![YT Zero main feed](docs/assets/feed.png)

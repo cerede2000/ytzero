@@ -59,7 +59,7 @@ export async function attachTags(uid: number, videos: VideoRow[], profileDownloa
   const downloadsEnabled = downloadsAllowed && await profileDownloadsEnabled(uid);
   // Live percentage for the one video the downloader is fetching right now,
   // so lists can paint a download progress bar without a dedicated request.
-  const dlProgress = activeDownloadProgress();
+  const dlProgress = await activeDownloadProgress();
   const ids = videos.map((v) => v.video_id);
   const ph = ids.map(() => "?").join(",");
   // Tags are per profile: only surface tags owned by the active user.

@@ -10,6 +10,7 @@ import {
 } from "./refresher";
 import { syncNextFollowedPlaylist, syncNextSubscribedChannel } from "./scheduledSync";
 import { runAutomaticUpdateChecks } from "./updates";
+import { backgroundTasksEnabled } from "./deploymentMode";
 const FEED_REFRESH_BATCH_SIZE = 10;
 const FEED_REFRESH_FAIRNESS_SLOTS = 2;
 
@@ -21,6 +22,7 @@ function positiveNumber(value: string | undefined, fallback: number): number {
 const VIDEO_MAINTENANCE_MAX_AGE_DAYS = positiveNumber(process.env.VIDEO_MAINTENANCE_MAX_AGE_DAYS, 90);
 
 export function startScheduler() {
+  if (!backgroundTasksEnabled()) return;
   startChannelPostsScheduler();
   setTimeout(() => runAutomaticUpdateChecks().catch(() => {}), 60_000);
   setInterval(() => runAutomaticUpdateChecks().catch(() => {}), 60_000);
