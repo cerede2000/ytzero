@@ -671,6 +671,7 @@ export const ptBR: Locale = {
     "watchedStyleHint": "Cada modo mostra uma barra de progresso completa. Escolha um tratamento adicional em miniatura.",
     "videoCardActionsLabel": "Acções das placas de vídeo",
     "videoCardActionsHint": "Escolha quando as ações aparecem nas placas de vídeo.",
+    "otherPlaybackMode": "Outro modo de reprodução",
     "contextActionsPreview": "Antever ações fixas (específicas para suas respectivas visões)",
     "videoCardActionsHover": "Ao pairar",
     "videoCardActionsAlways": "Sempre visível",

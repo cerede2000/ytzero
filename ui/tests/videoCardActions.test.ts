@@ -18,13 +18,14 @@ describe("video card action configuration", () => {
   test("keeps schedule first, saved visibility, and appends newly introduced actions", () => {
     const config = parseVideoCardActionConfig({ version: 1, actions: [{ id: "playlist", hidden: true }] });
     expect(config.actions[1]).toEqual({ id: "playlist", hidden: true });
-    expect(config.actions.map((action) => action.id)).toEqual(["schedule", "playlist", "sessionQueue", "download", "archive", "watched", "restore", "remove"]);
+    expect(config.actions.map((action) => action.id)).toEqual(["schedule", "playlist", "sessionQueue", "download", "archive", "watched", "restore", "remove", "otherPlaybackMode"]);
+    expect(config.actions.at(-1)).toEqual({ id: "otherPlaybackMode", hidden: true });
   });
 
   test("falls back to a complete default for invalid input", () => {
     const config = parseVideoCardActionConfig('{"version":1,"actions":[{"id":"unknown","hidden":false}]}');
-    expect(config.actions).toHaveLength(8);
-    expect(config.actions.filter((action) => action.hidden).map((action) => action.id)).toEqual(["playlist", "download"]);
+    expect(config.actions).toHaveLength(9);
+    expect(config.actions.filter((action) => action.hidden).map((action) => action.id)).toEqual(["playlist", "download", "otherPlaybackMode"]);
     expect(JSON.parse(serializeVideoCardActionConfig(config))).toEqual(config);
   });
 

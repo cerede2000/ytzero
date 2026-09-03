@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ArrowDownToLine, Ban, BookmarkPlus, Check, ChevronDown, ChevronUp, Clock, Eye, EyeOff, Filter, GripHorizontal, GripVertical, ListFilter, ListMusic, ListPlus, LoaderCircle, Lock, Pencil, Plus, RotateCcw, Trash2, Tv, Undo2, X, Zap } from "lucide-react";
+import { Archive, ArrowDownToLine, Ban, BookmarkPlus, Check, ChevronDown, ChevronUp, Clock, Eye, EyeOff, Filter, GripHorizontal, GripVertical, Headphones, ListFilter, ListMusic, ListPlus, LoaderCircle, Lock, Pencil, Plus, RotateCcw, Trash2, Tv, Undo2, X, Zap } from "lucide-react";
 import { api, type Channel, type FilterRule, type Profile, type Rule, type Tag, type UserPlaylist, type UserPlaylistRule, type Video } from "../../api";
 import { emit } from "../../events";
 import { formatVideoCount, useI18n, type I18nKey } from "../../i18n";
@@ -500,6 +500,7 @@ const VIDEO_CARD_ACTION_ITEMS: Record<VideoCardActionId, { labelKey: I18nKey; ic
   watched: { labelKey: "markWatched", icon: Eye },
   restore: { labelKey: "restore", icon: Undo2 },
   remove: { labelKey: "remove", icon: Trash2 },
+  otherPlaybackMode: { labelKey: "otherPlaybackMode", icon: Headphones },
 };
 
 const VIDEO_CARD_PREVIEW: Video = {

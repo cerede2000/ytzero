@@ -671,6 +671,7 @@ export const ja: Locale = {
     "watchedStyleHint": "全てのモードはフルプログレスバーを表示します。 追加のサムネイル処理を選択します。",
     "videoCardActionsLabel": "ビデオカードアクション",
     "videoCardActionsHint": "ビデオカードにアクションが表示された場合を選択します。",
+    "otherPlaybackMode": "別の再生モード",
     "contextActionsPreview": "修正されたアクションをプレビュー(各ビューに固有の)",
     "videoCardActionsHover": "ホバー",
     "videoCardActionsAlways": "常に見える",

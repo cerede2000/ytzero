@@ -31,6 +31,7 @@ describe("video card action configuration", () => {
       { id: "watched", hidden: false },
       { id: "restore", hidden: false },
       { id: "remove", hidden: false },
+      { id: "otherPlaybackMode", hidden: true },
     ]);
   });
 
@@ -41,8 +42,8 @@ describe("video card action configuration", () => {
 
   test("normalizes malformed backup values to the default", () => {
     const actions = JSON.parse(normalizeVideoCardActionConfig("bad json")).actions;
-    expect(actions).toHaveLength(8);
-    expect(actions.filter((action: { hidden: boolean }) => action.hidden).map((action: { id: string }) => action.id)).toEqual(["playlist", "download"]);
+    expect(actions).toHaveLength(9);
+    expect(actions.filter((action: { hidden: boolean }) => action.hidden).map((action: { id: string }) => action.id)).toEqual(["playlist", "download", "otherPlaybackMode"]);
   });
 
   test("accepts and preserves a browser save containing sessionQueue", () => {
@@ -54,7 +55,7 @@ describe("video card action configuration", () => {
 
     expect(validateVideoCardSettings({ video_card_action_buttons: browserValue })).toBeNull();
     expect(parseVideoCardActionConfig(browserValue)?.actions.map((action) => action.id)).toEqual([
-      "schedule", "remove", "restore", "watched", "archive", "download", "playlist", "sessionQueue",
+      "schedule", "otherPlaybackMode", "remove", "restore", "watched", "archive", "download", "playlist", "sessionQueue",
     ]);
     expect(JSON.parse(normalizeVideoCardActionConfig(browserValue)).actions.find((action: { id: string }) => action.id === "archive")?.hidden).toBe(true);
   });

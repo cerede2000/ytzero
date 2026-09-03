@@ -577,6 +577,7 @@ export const hu: Locale = {
     watchedStyleHint: "Minden mód teljes folyamatjelző sávot mutat. Válassz egy további miniatűr-kezelést.",
     videoCardActionsLabel: "Videókártya-műveletek",
     videoCardActionsHint: "Válaszd ki, mikor jelenjenek meg a műveletek a videókártyákon.",
+    otherPlaybackMode: "Másik lejátszási mód",
     contextActionsPreview: "Rögzített műveletek előnézete (az adott nézethez kötve)",
     videoCardActionsHover: "Rámutatáskor",
     videoCardActionsAlways: "Mindig látható",

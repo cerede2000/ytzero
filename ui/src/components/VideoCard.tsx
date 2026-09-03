@@ -7,7 +7,9 @@ import {
   Eye,
   EyeOff,
   Heart,
+  Headphones,
   Lock,
+  MonitorPlay,
   ScanEye,
   Star,
   Trash2,
@@ -33,6 +35,7 @@ import { useDeArrowBranding } from "../dearrow";
 import { readAppliedVideoCardActionsMode, type VideoCardActionsMode } from "../videoCardActions";
 import { videoCardSwipeEnabled } from "../videoCardSwipeRuntime";
 import { useAppliedVideoCardActionConfig, type VideoCardActionConfig, type VideoCardActionId } from "../videoCardActionConfig";
+import { otherPlaybackModeIsAudioOnly, playVideoInOtherPlaybackMode } from "../videoCardPlaybackMode";
 import { claimVideoCardPreview, readVideoCardPreviewMode, releaseVideoCardPreview } from "../videoCardPreview";
 import "./VideoGrid.css";
 import "./VideoCard.css";
@@ -498,6 +501,7 @@ export function VideoCard({
             : "swipe-reveal--right";
   const watched = isWatched ?? video.watched === 1;
   const visibleActionIds = actionConfig.actions.filter((action) => !action.hidden).map((action) => action.id);
+  const otherPlaybackModeIsAudio = otherPlaybackModeIsAudioOnly();
   const scheduleIndex = visibleActionIds.indexOf("schedule");
   const actionsBeforeSchedule = scheduleIndex < 0 ? visibleActionIds : visibleActionIds.slice(0, scheduleIndex);
   const actionsAfterSchedule = scheduleIndex < 0 ? [] : visibleActionIds.slice(scheduleIndex + 1);
@@ -543,6 +547,21 @@ export function VideoCard({
       case "remove":
         if (onRemoveFromPlaylist) return <button key={id} className="action-btn" aria-label={t("removeFromPlaylist")} onClick={(e) => act(e, () => onRemoveFromPlaylist(video.video_id))}><Trash2 /></button>;
         return onRemoveFromHistory && video.history_id != null ? <button key={id} className="action-btn" aria-label={t("removeFromHistory")} onClick={(e) => act(e, () => onRemoveFromHistory(video.history_id!), "removed")}><Trash2 /></button> : null;
+      case "otherPlaybackMode": {
+        if (otherPlaybackModeIsAudio && (video.is_private === 1 || video.members_only === 1 || video.live_status === "upcoming")) return null;
+        const label = t(otherPlaybackModeIsAudio ? "playerAudioMode" : "playerAudioModeExit");
+        const ModeIcon = otherPlaybackModeIsAudio ? Headphones : MonitorPlay;
+        return <Tooltip key={id} text={label} portal={actionsInBar}>
+          <button
+            className="action-btn"
+            aria-label={label}
+            onClick={(event) => {
+              event.stopPropagation();
+              playVideoInOtherPlaybackMode(video, onPlay);
+            }}
+          ><ModeIcon /></button>
+        </Tooltip>;
+      }
       default:
         return null;
     }

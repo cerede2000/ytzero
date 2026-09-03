@@ -671,6 +671,7 @@ export const ru: Locale = {
     "watchedStyleHint": "Каждый режим показывает полную планку прогресса. Выберите дополнительное миниатюрное лечение.",
     "videoCardActionsLabel": "Действия видеокарт",
     "videoCardActionsHint": "Выберите, когда действия появляются на видеокартах.",
+    "otherPlaybackMode": "Другой режим воспроизведения",
     "contextActionsPreview": "Предварительный просмотр фиксированных действий (специфичных для их соответствующих взглядов)",
     "videoCardActionsHover": "На ветру",
     "videoCardActionsAlways": "Всегда видимый",

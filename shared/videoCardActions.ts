@@ -4,7 +4,7 @@
  * Keep this module dependency-free: both independently built applications import
  * it, and deployment packaging copies it alongside their source trees.
  */
-export const VIDEO_CARD_ACTION_IDS = ["schedule", "sessionQueue", "playlist", "download", "archive", "watched", "restore", "remove"] as const;
+export const VIDEO_CARD_ACTION_IDS = ["schedule", "sessionQueue", "playlist", "download", "archive", "watched", "restore", "remove", "otherPlaybackMode"] as const;
 export type VideoCardActionId = (typeof VIDEO_CARD_ACTION_IDS)[number];
 export type VideoCardActionConfig = { version: 1; actions: Array<{ id: VideoCardActionId; hidden: boolean }> };
 
@@ -12,7 +12,7 @@ export const LOCKED_VIDEO_CARD_ACTION_IDS = new Set<VideoCardActionId>(["schedul
 
 export const DEFAULT_VIDEO_CARD_ACTION_CONFIG: VideoCardActionConfig = {
   version: 1,
-  actions: VIDEO_CARD_ACTION_IDS.map((id) => ({ id, hidden: id === "playlist" || id === "download" })),
+  actions: VIDEO_CARD_ACTION_IDS.map((id) => ({ id, hidden: id === "playlist" || id === "download" || id === "otherPlaybackMode" })),
 };
 
 export function parseVideoCardActionConfig(value: unknown): VideoCardActionConfig | null {

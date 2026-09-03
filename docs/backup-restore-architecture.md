@@ -237,8 +237,8 @@ below.
   older backups remain valid, with the current value retained on merge or the
   application default used after a replace restore when the key is absent.
   Watch-later scheduling is always visible and fixed in first position. Restore
-  and remove cannot be hidden but may be reordered; playlist and local-download
-  actions are hidden by default.
+  and remove cannot be hidden but may be reordered; playlist, local-download,
+  and alternate-playback-mode actions are hidden by default.
   The versioned video-card swipe-device configuration is portable per-profile
   presentation configuration. It independently enables the reject/mark-watched
   gesture on desktop, tablet, and mobile devices, with all three enabled by

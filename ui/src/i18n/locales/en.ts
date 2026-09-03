@@ -579,6 +579,7 @@ export const en = {
     watchedStyleHint: "Every mode shows a full progress bar. Choose an additional thumbnail treatment.",
     videoCardActionsLabel: "Video card actions",
     videoCardActionsHint: "Choose when actions appear on video cards.",
+    otherPlaybackMode: "Other playback mode",
     contextActionsPreview: "Preview fixed actions (specific to their respective views)",
     videoCardActionsHover: "On hover",
     videoCardActionsAlways: "Always visible",

@@ -579,6 +579,7 @@ export const pl: Locale = {
     watchedStyleHint: "Każdy tryb pokazuje pełny pasek postępu. Wybierz dodatkowy wygląd miniatury.",
     videoCardActionsLabel: "Akcje na kartach filmów",
     videoCardActionsHint: "Wybierz, kiedy akcje pojawiają się na kartach filmów.",
+    otherPlaybackMode: "Inny tryb odtwarzania",
     contextActionsPreview: "Podgląd akcji stałych (specyficznych dla odpowiednich widoków)",
     videoCardActionsHover: "Po najechaniu",
     videoCardActionsAlways: "Zawsze widoczne",

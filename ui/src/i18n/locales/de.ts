@@ -579,6 +579,7 @@ export const de: Locale = {
     watchedStyleHint: "Jeder Modus zeigt einen vollen Fortschrittsbalken. Wähle zusätzlich die Darstellung des Vorschaubilds.",
     videoCardActionsLabel: "Aktionen auf Videokarten",
     videoCardActionsHint: "Lege fest, wann Aktionen auf Videokarten erscheinen.",
+    otherPlaybackMode: "Anderer Wiedergabemodus",
     contextActionsPreview: "Vorschau fester Aktionen (spezifisch für die jeweiligen Ansichten)",
     videoCardActionsHover: "Beim Darüberfahren",
     videoCardActionsAlways: "Immer sichtbar",

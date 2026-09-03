@@ -671,6 +671,7 @@ export const fr: Locale = {
     "watchedStyleHint": "Chaque mode affiche une barre de progression complète. Choisissez un traitement miniature supplémentaire.",
     "videoCardActionsLabel": "Actions de la carte vidéo",
     "videoCardActionsHint": "Choisissez quand les actions apparaissent sur les cartes vidéo.",
+    "otherPlaybackMode": "Autre mode de lecture",
     "contextActionsPreview": "Prévisualiser les actions fixes (spécifiques à leurs vues respectives)",
     "videoCardActionsHover": "Au survol",
     "videoCardActionsAlways": "Toujours visible",
