@@ -34,7 +34,7 @@ import ProfilesSettings, { ProfilePasswordSettings } from "../components/setting
 import { ChannelOwnership, FilterRuleGroups, PlaylistSettingsItem, PluginMultiselect, RuleRow, SidebarNavEditor, TagRow } from "../components/settings/SettingsEditors";
 import { ChangelogNote, LogLine, SettingsLoadingState } from "../components/settings/SettingsSupport";
 
-type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "plugins" | "advanced" | "profiles" | "auth" | "cluster";
+type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "clients" | "plugins" | "advanced" | "profiles" | "auth" | "cluster";
 const TIME_ZONES = (() => {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "timeZone") => string[] };
   const supported = intl.supportedValuesOf?.("timeZone") ?? [
@@ -428,13 +428,16 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     setSettingsReady(false);
     setSettingsLoadError("");
     try {
-      const [auth, child, r, cl, permissions, health] = await Promise.all([
+      const [auth, child, r, cl, permissions, health, invidious] = await Promise.all([
         api.authStatus(),
         api.childStatus(),
         api.settings(),
         api.childLock(),
         api.profilePermissions(),
         api.health(),
+        // Loaded with the rest so the navigation is right the first time it is
+        // drawn, and never fatal: an instance without the route still settles.
+        api.invidiousToken().catch(() => null),
       ]);
       // "Admin" = primary profile OR an OIDC session in the configured admin group.
       // is_admin drives the admin-only tabs/sections (kept in the isPrimary var).
@@ -1101,6 +1104,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     return (!tabItem.primaryOnly || isPrimary)
       && (tabItem.id !== "auth" || canManageAdministrators)
       && (tabItem.id !== "cluster" || clusterAvailable)
+      && clientsApply
       && hasVisibleChannelSection
       && hasVisibleDisplaySection
       && (tabItem.id === "channels" || isPrimary || permissionArea == null || profilePermissions.effective.includes(permissionArea) || (tabItem.id === "profiles" && activeAuthMethod === "per_profile"));
@@ -1167,7 +1171,7 @@ export function useSettingsPageController({ showToast }: { showToast: (message: 
     if (!visibleAreas.some((tabItem) => tabItem.id === tab)) {
       setTab(visibleAreas[0]?.id ?? "tags");
     }
-  }, [settingsReady, isChildProfile, isPrimary, canManageAdministrators, clusterAvailable, profilePermissions.effective, tab]);
+  }, [settingsReady, isChildProfile, isPrimary, canManageAdministrators, clusterAvailable, profilePermissions.effective, invidiousAccess?.enabled, tab]);
 
   useEffect(() => {
     if (!settingsReady || tab !== "channels" || channelSubTabOptions.some((option) => option.value === channelSubTab)) return;

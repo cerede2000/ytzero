@@ -1546,10 +1546,7 @@ export const es: Locale = {
     watchUnavailableRetry: "Reintentar",
     searchEverySource: "Todas las fuentes",
     searchExternalResults: "Resultados",
-    cardPlay: "Reproducir",
-    cardPlayAudio: "Escuchar",
     playlistReorderHint: "Arrastra para reordenar",
-    cardPlayOther: "Reproducir en el otro modo",
   },
   buckets: {
     today: "Hoy",

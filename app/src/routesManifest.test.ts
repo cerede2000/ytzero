@@ -56,7 +56,27 @@ describe("HTTP route manifest", () => {
       "PUT /access-control/group-order", "PUT /access-control/default-group", "PUT /access-control/profiles/:id",
       "DELETE /access-control/groups/:id",
     ];
-    expect(routes).toHaveLength(249);
+    // Ours, each named so what is left is upstream's own list, unchanged.
+    const searchSuggestRoute = "GET /search/suggest";
+    const suggestionsRoute = "GET /videos/:id/suggestions";
+    // A playlist is a list somebody arranged, so the arrangement is something
+    // the page can send back.
+    const playlistOrderRoute = "PUT /playlists/:id/order";
+    // The seam every search provider is reached through.
+    const providerRoutes = ["GET /search/providers", "GET /search/external"];
+    // Where a profile mints the token its phone signs in with. The dialect's
+    // own routes live on the outer app and never reach this list.
+    const invidiousRoutes = routes.filter((route) => route.includes("/invidious/"));
+    // An experiment on its own island: routes nothing upstream calls.
+    const dailymotionRoutes = routes.filter((route) => route.includes("/dailymotion"));
+    const ourRoutes = [searchSuggestRoute, suggestionsRoute, playlistOrderRoute, ...providerRoutes, ...invidiousRoutes, ...dailymotionRoutes];
+    expect(routes).toHaveLength(249 + ourRoutes.length);
+    for (const route of ourRoutes) expect(routes).toContain(route);
+    expect(invidiousRoutes).toEqual([
+      "GET /invidious/token",
+      "POST /invidious/token",
+      "DELETE /invidious/token",
+    ]);
     expect(routes).toContain(transcriptRoute);
     expect(routes).toContain(playbackAdjacentRoute);
     expect(routes).toContain(liveAudioRoute);
@@ -73,7 +93,7 @@ describe("HTTP route manifest", () => {
     for (const route of accessControlRoutes) expect(routes).toContain(route);
     expect(routes).toContain("GET /plugins/tubearchivist/config");
     expect(routes).toContain("POST /plugins/tubearchivist/sync");
-    const legacyRoutes = routes.filter((route) => route !== transcriptRoute && route !== playbackAdjacentRoute && route !== liveAudioRoute && route !== vodAudioRoute && route !== retryAudioRoute && route !== directStreamRoute && route !== ytdlpConfigRoute && route !== ytdlpUpdateRoute && route !== importVideoRoute && route !== sessionPlaylistRoute && route !== clearVideoBookmarksRoute && route !== clusterStatusRoute && !accessControlRoutes.includes(route) && !notificationPreferenceRoutes.includes(route));
+    const legacyRoutes = routes.filter((route) => route !== transcriptRoute && route !== playbackAdjacentRoute && route !== liveAudioRoute && route !== vodAudioRoute && route !== retryAudioRoute && route !== directStreamRoute && route !== ytdlpConfigRoute && route !== ytdlpUpdateRoute && route !== importVideoRoute && route !== sessionPlaylistRoute && route !== clearVideoBookmarksRoute && route !== clusterStatusRoute && !accessControlRoutes.includes(route) && !notificationPreferenceRoutes.includes(route) && !ourRoutes.includes(route));
     expect(createHash("sha256").update(legacyRoutes.join("\n")).digest("hex"))
       .toBe("80c5a76e8b9e73067474352689dee5912762cbd8933feb23ceb68592f592158b");
     // Upstream's own expectation, byte for byte: its routes are untouched.

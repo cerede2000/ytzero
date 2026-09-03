@@ -35,6 +35,68 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
   const [downloadFeedback, setDownloadFeedback] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [offlinePolicyPending, setOfflinePolicyPending] = useState(false);
+  const [carriedVideoId, setCarriedVideoId] = useState<string | null>(null);
+
+  /*
+   * Reordering is only meaningful against the playlist's own order: dragging a
+   * video up a list sorted by title would move it back the moment the page
+   * reloads. So opening the editor shows that order, whatever was being looked
+   * at before.
+   */
+  const reorderable = editing && sort === "playlist-order";
+  const startEditing = () => {
+    setEditing(true);
+    if (sort !== "playlist-order") setSearchParams({ sort: "playlist-order" });
+  };
+
+  const carryTo = (videoId: string, toIndex: number) => {
+    setVideos((current) => {
+      const from = current.findIndex((video) => video.video_id === videoId);
+      return from < 0 || from === toIndex ? current : movedItem(current, from, toIndex);
+    });
+  };
+
+  const dropCarried = async () => {
+    const carried = carriedVideoId;
+    setCarriedVideoId(null);
+    if (!carried || !playlist) return;
+    // The list on screen is the order; it is sent whole, and what comes back
+    // is what the server actually holds.
+    const asked = videos.map((video) => video.video_id);
+    try {
+      const answer = await api.reorderUserPlaylist(playlist.id, asked);
+      if (answer.video_ids.join("\u0000") !== asked.join("\u0000")) load();
+    } catch {
+      load();
+    }
+  };
+
+  /*
+   * The pointer is followed on the window rather than on the grip.
+   *
+   * A grip that captures the pointer stops hearing about it the moment the
+   * list reorders under it — the card it belongs to has moved, and the drop
+   * that should have saved the new order never arrives, so the list springs
+   * back on the next load. The window hears every move and the release, and
+   * knows nothing about which card is where.
+   */
+  useEffect(() => {
+    if (!carriedVideoId) return;
+    const over = (event: PointerEvent) => {
+      const under = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-playlist-index]");
+      const index = Number(under?.dataset.playlistIndex);
+      if (Number.isInteger(index)) carryTo(carriedVideoId, index);
+    };
+    const drop = () => { void dropCarried(); };
+    window.addEventListener("pointermove", over);
+    window.addEventListener("pointerup", drop);
+    window.addEventListener("pointercancel", drop);
+    return () => {
+      window.removeEventListener("pointermove", over);
+      window.removeEventListener("pointerup", drop);
+      window.removeEventListener("pointercancel", drop);
+    };
+  });
 
   const load = useCallback(async () => {
     if (!playlistId) return;

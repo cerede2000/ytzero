@@ -1128,3 +1128,12 @@ export interface ClusterStatus {
   warnings: Array<"no_background_worker" | "multiple_background_workers" | "mixed_versions">;
   instances: ClusterInstance[];
 }
+
+/** What the settings screen may know about a profile's client token. */
+export interface InvidiousTokenState {
+  /** Whether this server speaks the dialect at all. */
+  enabled: boolean;
+  configured: boolean;
+  created_at: string | null;
+  last_used_at: string | null;
+}

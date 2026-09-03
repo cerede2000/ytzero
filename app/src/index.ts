@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { api } from "./routes";
+import { warmPotProvider } from "./ytdlpPotProvider";
+import { provisionManagedYtdlp } from "./ytdlpProvision";
+import { registerInvidiousCompat } from "./compat/invidious";
 import { db, getSetting, reloadSettingCache } from "./db";
 import { database, databaseConfig } from "./database";
 import { startSQLiteMaintenance } from "./sqliteMaintenance";
@@ -106,7 +109,11 @@ const mode = deploymentMode(databaseConfig.engine);
 await startClusterHeartbeat();
 await startAppEventRelay({ cleanup: mode.backgroundTasks });
 if (mode.backgroundTasks) {
-  startScheduler();
+  // Before anything asks for it: the downloader, the transcripts and every
+// yt-dlp path read the same configured location, and on a fresh volume that
+// location is empty until somebody writes it.
+provisionManagedYtdlp();
+startScheduler();
   await startDownloader();
   scheduleTubeArchivistSync(true);
   void flushTubeArchivistWatched();
@@ -132,6 +139,9 @@ const port = Number(process.env.PORT ?? 3001);
 const idleTimeout = Number(process.env.IDLE_TIMEOUT_SECONDS ?? 120);
 const server = Bun.serve({ port, idleTimeout, fetch: app.fetch });
 log.info("app.listen", { url: String(server.url), port, uiDir, idleTimeout, version: VERSION, commit: COMMIT, backgroundTasks: mode.backgroundTasks, database: mode.database });
+// A proof-of-origin token takes seconds to compute. Start on it now, so the
+// first person to open something is not the one who waits for it.
+warmPotProvider();
 collectDiagnosticSnapshot()
   .then((snapshot) => log.info("app.state_snapshot", snapshot))
   .catch((error) => log.warn("app.state_snapshot_failed", { error: error instanceof Error ? error.message : String(error) }));

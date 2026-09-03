@@ -481,6 +481,10 @@ export const api = {
     http<{ playlist: UserPlaylist }>("/playlists", { method: "POST", body: JSON.stringify(p) }),
   createUserPlaylistFromSessionQueue: (p: { name: string; icon?: string; video_ids: string[] }) =>
     http<{ playlist: UserPlaylist }>("/playlists/from-session-queue", { method: "POST", body: JSON.stringify(p) }),
+  // The whole order, not a move: a move only means something against the list
+  // the reader was looking at, and that list can have changed in another tab.
+  reorderUserPlaylist: (id: number, videoIds: string[]) =>
+    http<{ video_ids: string[] }>(`/playlists/${id}/order`, { method: "PUT", body: JSON.stringify({ video_ids: videoIds }) }),
   updateUserPlaylist: (id: number, p: Partial<Pick<UserPlaylist, "name" | "icon" | "sort_order" | "offline_policy">>) =>
     http<{ playlist: UserPlaylist }>(`/playlists/${id}`, { method: "PUT", body: JSON.stringify(p) }),
   deleteUserPlaylist: (id: number) => http(`/playlists/${id}`, { method: "DELETE" }),

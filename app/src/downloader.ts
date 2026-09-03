@@ -1,6 +1,7 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { database, databaseConfig } from "./database";
+import { potArgsFor } from "./ytdlpPotProvider";
 import { DB_PATH, getSetting, setSetting } from "./db";
 import { downloadCookieAttempts, downloadFormat, renderDownloadOutputTemplate } from "./downloadStrategy";
 import { callerWasRefused, cookieAttemptMemory } from "./cookieAttemptOrder";

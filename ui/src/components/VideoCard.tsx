@@ -8,8 +8,11 @@ import {
   EyeOff,
   Heart,
   Headphones,
+  ListPlus,
+  ListX,
   Lock,
   MonitorPlay,
+  Play,
   ScanEye,
   Star,
   Trash2,
@@ -30,7 +33,6 @@ import { VideoThumbnail, watchProgress } from "./VideoThumbnail";
 import { BUCKET_ICONS, VideoScheduleActions } from "./VideoScheduleActions";
 import { VideoCardPlaylistAction } from "./VideoCardPlaylistAction";
 import { profileAudioModeEnabled, rememberProfileAudioMode } from "../audioModePreference";
-import { playInOtherMode } from "../cardPlayback";
 import { rememberedProfileId } from "../profilePreference";
 import { SessionPlayQueueAction } from "./SessionPlayQueueAction";
 import { Badge } from "./ui";
@@ -570,7 +572,20 @@ export function VideoCard({
             ? "swipe-reveal--unscheduled"
             : "swipe-reveal--right";
   const watched = isWatched ?? video.watched === 1;
-  const visibleActionIds = actionConfig.actions.filter((action) => !action.hidden).map((action) => action.id);
+  /*
+   * Only what this provider's videos can actually be subjected to.
+   *
+   * Every action below already refuses when its own precondition is missing,
+   * but their preconditions are about the library, and a provider with no rows
+   * there would simply show an empty cluster. `remove` is the exception, and
+   * the point: leaving a shelf is about the reader, is written to this
+   * provider's own table, and must stay reachable. The list grows as more of
+   * its own actions are wired.
+   */
+  const ownActionIds = new Set<VideoCardActionId>(["remove"]);
+  const visibleActionIds = actionConfig.actions
+    .filter((action) => !action.hidden && (!withoutLibraryRow || ownActionIds.has(action.id)))
+    .map((action) => action.id);
   const otherPlaybackModeIsAudio = otherPlaybackModeIsAudioOnly();
   const scheduleIndex = visibleActionIds.indexOf("schedule");
   const actionsBeforeSchedule = scheduleIndex < 0 ? visibleActionIds : visibleActionIds.slice(0, scheduleIndex);
@@ -579,22 +594,19 @@ export function VideoCard({
   const renderSecondaryAction = (id: VideoCardActionId): ReactNode => {
     if (actionPreview && id !== "schedule") return actionPreview.renderAction(id);
     switch (id) {
-      case "play": {
-        // The thumbnail already opens the video in the mode this profile last
-        // chose, so this offers the other one: headphones while watching, the
-        // picture back while listening. The icon is the mode you get, not the
-        // one you are in.
-        const label = t(audioModeRemembered ? "cardPlay" : "cardPlayAudio");
-        return <Tooltip key={id} text={label} portal>
+      case "otherPlaybackMode": {
+        if (otherPlaybackModeIsAudio && (video.is_private === 1 || video.members_only === 1 || video.live_status === "upcoming")) return null;
+        const label = t(otherPlaybackModeIsAudio ? "playerAudioMode" : "playerAudioModeExit");
+        const ModeIcon = otherPlaybackModeIsAudio ? Headphones : MonitorPlay;
+        return <Tooltip key={id} text={label} portal={actionsInBar}>
           <button
             className="action-btn"
             aria-label={label}
             onClick={(event) => {
-              event.preventDefault();
               event.stopPropagation();
-              setAudioModeRemembered(playInOtherMode(video, audioModeRemembered, (audio) => rememberProfileAudioMode(rememberedProfileId(), audio), onPlay));
+              playVideoInOtherPlaybackMode(video, onPlay);
             }}
-          >{audioModeRemembered ? <Play /> : <Headphones />}</button>
+          ><ModeIcon /></button>
         </Tooltip>;
       }
       case "sessionQueue":
