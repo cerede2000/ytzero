@@ -404,7 +404,6 @@ export const pl: Locale = {
     subtitlesDownloaded: "Pobrane",
     subtitlesAllLanguages: "Wszystkie języki",
     subtitlesUnavailable: "niedostępne",
-    subtitlesLooking: "Szukam napisów…",
     subtitlesNoneAvailable: "Brak dostępnych napisów",
     searchLanguagePlaceholder: "Szukaj języka...",
     subtitleStyleTitle: "Styl napisów",
