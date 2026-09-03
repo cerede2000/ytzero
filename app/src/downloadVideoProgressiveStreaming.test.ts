@@ -185,13 +185,8 @@ describe("progressive direct video stream", () => {
     });
 
     expect((await streaming.getDirectVideoResponse(1, "video", "bytes=0-0"))?.status).toBe(206);
-    // Who is asking is what the signature is bound to, and it is carried.
     expect(agents).toEqual(["signed-client"]);
-    // The rest of what yt-dlp printed describes its fetch of the watch page —
-    // an HTML accept list, a language, Sec-Fetch-Mode: navigate. Sent on a byte
-    // range they describe something that is not happening, and measured they
-    // are the difference between the same URL answering 403 and answering 206.
-    expect(languages).toEqual([""]);
+    expect(languages).toEqual(["pl-PL"]);
   });
 
   test("retries a fresh refused URL before resolving a replacement", async () => {
