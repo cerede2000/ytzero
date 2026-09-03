@@ -8,8 +8,11 @@ import {
   EyeOff,
   Heart,
   Headphones,
+  ListPlus,
+  ListX,
   Lock,
   MonitorPlay,
+  Play,
   ScanEye,
   Star,
   Trash2,
@@ -30,7 +33,6 @@ import { VideoThumbnail, watchProgress } from "./VideoThumbnail";
 import { BUCKET_ICONS, VideoScheduleActions } from "./VideoScheduleActions";
 import { VideoCardPlaylistAction } from "./VideoCardPlaylistAction";
 import { profileAudioModeEnabled, rememberProfileAudioMode } from "../audioModePreference";
-import { playInOtherMode } from "../cardPlayback";
 import { rememberedProfileId } from "../profilePreference";
 import { SessionPlayQueueAction } from "./SessionPlayQueueAction";
 import { Badge } from "./ui";
@@ -639,22 +641,19 @@ export function VideoCard({
   const renderSecondaryAction = (id: VideoCardActionId): ReactNode => {
     if (actionPreview && id !== "schedule") return actionPreview.renderAction(id);
     switch (id) {
-      case "play": {
-        // The thumbnail already opens the video in the mode this profile last
-        // chose, so this offers the other one: headphones while watching, the
-        // picture back while listening. The icon is the mode you get, not the
-        // one you are in.
-        const label = t(audioModeRemembered ? "cardPlay" : "cardPlayAudio");
-        return <Tooltip key={id} text={label} portal>
+      case "otherPlaybackMode": {
+        if (otherPlaybackModeIsAudio && (video.is_private === 1 || video.members_only === 1 || video.live_status === "upcoming")) return null;
+        const label = t(otherPlaybackModeIsAudio ? "playerAudioMode" : "playerAudioModeExit");
+        const ModeIcon = otherPlaybackModeIsAudio ? Headphones : MonitorPlay;
+        return <Tooltip key={id} text={label} portal={actionsInBar}>
           <button
             className="action-btn"
             aria-label={label}
             onClick={(event) => {
-              event.preventDefault();
               event.stopPropagation();
-              setAudioModeRemembered(playInOtherMode(video, audioModeRemembered, (audio) => rememberProfileAudioMode(rememberedProfileId(), audio), onPlay));
+              playVideoInOtherPlaybackMode(video, onPlay);
             }}
-          >{audioModeRemembered ? <Play /> : <Headphones />}</button>
+          ><ModeIcon /></button>
         </Tooltip>;
       }
       case "sessionQueue":

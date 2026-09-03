@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { database } from "../database";
+import { orderedPlaylistVideoIds } from "../playlistOrder";
 import { enqueuePlaylistDownloads, syncUserPlaylistOfflinePolicy } from "../downloader";
 import { childLocalOnly, isChildUser } from "../childTime";
 import { log } from "../logger";
