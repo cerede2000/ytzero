@@ -4,7 +4,6 @@ import { downloadCookieAttempts, isAnonymousAddressRefusal, recordDownloadAttemp
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import { ytdlpAttemptArgs } from "./downloadConfig";
 import { parseYtdlpHttpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
-import { askingHeadersOnly } from "./ytdlpAskingHeaders";
 import { audioLanguageFor, audioSelectorFor } from "./audioTrackLanguage";
 import { potArgsFor } from "./ytdlpPotProvider";
 import { recordVideoGone } from "./videoGoneOnPlayback";
@@ -112,7 +111,7 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
       const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
       const url = safeGoogleVideoUrl(lines[0] ?? "");
       const extension = lines[1] ?? "m4a";
-      const httpHeaders = askingHeadersOnly(parseYtdlpHttpHeaders(lines[2] ?? ""));
+      const httpHeaders = parseYtdlpHttpHeaders(lines[2] ?? "");
       if (!url || !httpHeaders) {
         reportFailure("missing_or_rejected_url");
         return { source: null, anonymousRefused: false };

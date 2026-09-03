@@ -3,7 +3,6 @@ import { fetchGoogleVideoResponse, safeGoogleVideoUrl } from "./audioUpstreamUrl
 import { downloadCookieAttempts, isAnonymousAddressRefusal, recordDownloadAttempt } from "./downloadStrategy";
 import { ytdlpAttemptArgs } from "./downloadConfig";
 import { parseYtdlpHttpHeaders, rangedYtdlpHeaders, type YtdlpHttpHeaders } from "./ytdlpHttpHeaders";
-import { askingHeadersOnly } from "./ytdlpAskingHeaders";
 import { potArgsFor } from "./ytdlpPotProvider";
 
 interface Dependencies {
@@ -89,7 +88,7 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
       }
       const [candidate, ext, vcodec, acodec, serializedHeaders] = stdout.trim().split(/\r?\n/);
       const url = safeGoogleVideoUrl(candidate ?? "");
-      const httpHeaders = askingHeadersOnly(parseYtdlpHttpHeaders(serializedHeaders ?? ""));
+      const httpHeaders = parseYtdlpHttpHeaders(serializedHeaders ?? "");
       if (!url || !httpHeaders || ext !== "mp4" || !vcodec?.startsWith("avc1") || !acodec?.startsWith("mp4a")) return { source: null, refused: false };
       const issuedAt = now();
       return { source: { url, expiresAt: sourceExpiry(url, issuedAt), issuedAt, httpHeaders }, refused: false };
