@@ -17,7 +17,7 @@ import { configuredTimeZone } from "./timeZone";
 import { manualScheduleIsDue, nextScheduleOccurrenceMs, parseManualRefreshSchedule } from "./channelRefreshSchedule";
 import { liveStatusChanged, resolveActiveLivestreams, type StoredLiveStatus } from "./liveStatus";
 import { channelSyncJobIsRunning } from "./channelSyncRuntime";
-import { isYouTubeRateLimitError } from "./youtubeRateLimit";
+import { isYouTubeRateLimitError, isYouTubeRefusalError } from "./youtubeRateLimit";
 import { CHANNEL_SYNC_VIDEO_UPSERT_SQL, localisedTitleUpdates, RSS_VIDEO_UPSERT_SQL } from "./videoUpserts";
 import { syncChannelVideoAvailability } from "./videoAvailabilitySync";
 import { isYouTubeRefusal, videoInfoRefusalQuiet, YouTubeRefusingError } from "./youtubeRefusalQuiet";
@@ -40,6 +40,11 @@ const VIDEO_MAINTENANCE_CUTOFF = `-${VIDEO_MAINTENANCE_MAX_AGE_DAYS} days`;
  * yet known. Every other scheduled job could be spaced out from the outside
  * and this one could not, which made it the one nobody could turn down.
  */
+function positiveNumber(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
 export const SHORTS_BATCH_SIZE = positiveNumber(process.env.SHORTS_BATCH_SIZE, 50);
 
 async function feedRefreshCandidates(): Promise<RefreshCandidate[]> {
@@ -1170,6 +1175,7 @@ export async function refreshVideoMetadataBatch(limit = 10): Promise<VideoMetada
 
   let durationsFilled = 0;
   let datesFilled = 0;
+  let checked = 0;
   let skipped = 0;
   const cookieFallbackBudget = new MetadataCookieFallbackBudget();
   for (let i = 0; i < rows.length; i++) {
@@ -1273,6 +1279,8 @@ export async function backfillImportedVideos(limit = 15) {
   if (rows.length === 0) return;
 
   let enriched = 0;
+  // What the batch got through, and what it deliberately left: a halt is not
+  // the same event as a failure, and reporting them as one hides both.
   let checked = 0;
   let skipped = 0;
   const cookieFallbackBudget = new MetadataCookieFallbackBudget();

@@ -175,10 +175,6 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const wasPlayingBeforeFsRef = useRef(false);
-  // Captured at pointer-down (before the synthetic mousemove reveals controls) so
-  // a touch tap can decide: reveal controls first, then only the middle band
-  // toggles play/pause — the sides just (re)show the controls, YouTube-style.
-  const tapStateRef = useRef<{ touch: boolean; controlsShown: boolean }>({ touch: false, controlsShown: true });
   const [resolution, setResolution] = useState(0);
 
   // ---------- subtitles ----------

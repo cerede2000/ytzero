@@ -101,6 +101,14 @@ export interface ChannelRefreshScheduleDetails {
     nextRefreshAt: string | null;
   };
 }
+
+/** One followed channel matched while typing in the search box. */
+export interface SearchSuggestChannel {
+  channel_id: string;
+  title: string;
+  thumbnail: string;
+}
+
 export interface Channel {
   channel_id: string;
   title: string;

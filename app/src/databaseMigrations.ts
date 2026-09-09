@@ -263,96 +263,35 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
     ],
   },
   {
-    version: 110,
-    name: "followed-playlist-offline-policies",
+    version: 12,
+    name: "video-original-titles",
     schemaHashes: {
-      "app/src/schema.sql": "cd063217769b7a5184cbb80a370d64f6ecc37ab15cf26b94e0bc7f8685a4bdce",
+      "app/src/schema.sql": "7464674b4e1c8370f630374603552b9929cb2b09031353cf3da3b1cf02c4df8f",
       "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
       "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+      "app/src/dailymotionSchema.sql": "6e43314a30a4f5038dfd3cc2f44df69dc48090be8c68be4315090846259cdc7a",
+      "app/src/invidiousSchema.sql": "4f77a9670470989f8822b8cc02cc36e073fa57edb20cd81804bf2af4ca3a415b",
     },
+    /*
+     * One column, and it is never shown to anybody.
+     *
+     * `title` is what a reader here sees, and YouTube translates a title into
+     * whatever language the request asks for — so on a French instance a
+     * Japanese video can and should be listed under its French title. The
+     * trouble is that the sources which do not translate keep writing over it:
+     * the channel feed and oEmbed both hand back what the uploader wrote, and
+     * neither can tell "this upload was renamed" from "this title was
+     * translated here".
+     *
+     * Remembering the untranslated title answers that question without asking
+     * anybody anything: the feed's title against this one is a rename, and the
+     * feed's title against `title` is nothing at all.
+     */
     sqlite: [
-      { kind: "add-column", table: "user_followed_playlists", column: "offline_policy", definition: "TEXT NOT NULL DEFAULT 'none' CHECK (offline_policy IN ('none', 'download', 'keep'))" },
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS followed_playlist_download_protections (user_id INTEGER NOT NULL, playlist_id TEXT NOT NULL, video_id TEXT NOT NULL REFERENCES downloads(video_id) ON DELETE CASCADE, PRIMARY KEY (user_id, playlist_id, video_id), FOREIGN KEY (user_id, playlist_id) REFERENCES user_followed_playlists(user_id, playlist_id) ON DELETE CASCADE)" },
-      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_followed_playlist_download_protections_video ON followed_playlist_download_protections(video_id)" },
+      { kind: "add-column", table: "videos", column: "title_original", definition: "TEXT" },
     ],
     postgres: [
-      { kind: "add-column", table: "user_followed_playlists", column: "offline_policy", definition: "TEXT NOT NULL DEFAULT 'none' CHECK (offline_policy IN ('none', 'download', 'keep'))" },
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS followed_playlist_download_protections (user_id BIGINT NOT NULL, playlist_id TEXT NOT NULL, video_id TEXT NOT NULL REFERENCES downloads(video_id) ON DELETE CASCADE, PRIMARY KEY (user_id, playlist_id, video_id), FOREIGN KEY (user_id, playlist_id) REFERENCES user_followed_playlists(user_id, playlist_id) ON DELETE CASCADE)" },
-      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_followed_playlist_download_protections_video ON followed_playlist_download_protections(video_id)" },
-    ],
-  },
-  {
-    version: 111,
-    // Preserve the identity already recorded by development databases that
-    // received this migration before it entered the shared registry.
-    name: "profile-feed-builder",
-    schemaHashes: {
-      "app/src/schema.sql": "8259bf588c8829ee6388d5d4b877208b5f4c33effb090bf63341211a35cb7849",
-      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
-      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
-    },
-    sqlite: [
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS user_feed_configs (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, revision INTEGER NOT NULL DEFAULT 0, config_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now')))" },
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS feed_composition_sessions (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, config_revision INTEGER NOT NULL, columns_count INTEGER NOT NULL, seed TEXT NOT NULL, request_json TEXT NOT NULL, state_json TEXT NOT NULL, created_at_ms INTEGER NOT NULL, last_accessed_at_ms INTEGER NOT NULL, expires_at_ms INTEGER NOT NULL)" },
-      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_feed_composition_sessions_expiry ON feed_composition_sessions(expires_at_ms)" },
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS feed_composition_pages (composition_id TEXT NOT NULL REFERENCES feed_composition_sessions(id) ON DELETE CASCADE, page_index INTEGER NOT NULL, response_json TEXT NOT NULL, PRIMARY KEY (composition_id, page_index))" },
-    ],
-    postgres: [
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS user_feed_configs (user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, revision INTEGER NOT NULL DEFAULT 0, config_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))" },
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS feed_composition_sessions (id TEXT PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, config_revision INTEGER NOT NULL, columns_count INTEGER NOT NULL, seed TEXT NOT NULL, request_json TEXT NOT NULL, state_json TEXT NOT NULL, created_at_ms BIGINT NOT NULL, last_accessed_at_ms BIGINT NOT NULL, expires_at_ms BIGINT NOT NULL)" },
-      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_feed_composition_sessions_expiry ON feed_composition_sessions(expires_at_ms)" },
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS feed_composition_pages (composition_id TEXT NOT NULL REFERENCES feed_composition_sessions(id) ON DELETE CASCADE, page_index INTEGER NOT NULL, response_json TEXT NOT NULL, PRIMARY KEY (composition_id, page_index))" },
-    ],
-  },
-  {
-    version: 112,
-    name: "playlist-download-quality",
-    schemaHashes: {
-      "app/src/schema.sql": "41f7f19c62c9af2d2f79983c130ec5d7ecf94ba85274ec8a713887838cc81670",
-      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
-      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
-    },
-    sqlite: [
-      { kind: "add-column", table: "user_playlists", column: "download_quality", definition: "TEXT CHECK (download_quality IS NULL OR download_quality IN ('best', '1440', '1080', '720', '480'))" },
-      { kind: "add-column", table: "user_followed_playlists", column: "download_quality", definition: "TEXT CHECK (download_quality IS NULL OR download_quality IN ('best', '1440', '1080', '720', '480'))" },
-      { kind: "add-column", table: "downloads", column: "requested_quality", definition: "TEXT CHECK (requested_quality IS NULL OR requested_quality IN ('best', '1440', '1080', '720', '480'))" },
-    ],
-    postgres: [
-      { kind: "add-column", table: "user_playlists", column: "download_quality", definition: "TEXT CHECK (download_quality IS NULL OR download_quality IN ('best', '1440', '1080', '720', '480'))" },
-      { kind: "add-column", table: "user_followed_playlists", column: "download_quality", definition: "TEXT CHECK (download_quality IS NULL OR download_quality IN ('best', '1440', '1080', '720', '480'))" },
-      { kind: "add-column", table: "downloads", column: "requested_quality", definition: "TEXT CHECK (requested_quality IS NULL OR requested_quality IN ('best', '1440', '1080', '720', '480'))" },
-    ],
-  },
-  {
-    version: 113,
-    name: "external-notification-delivery",
-    schemaHashes: {
-      "app/src/schema.sql": "b3eed272dc7687831970765bc2c12f023e72ac3809e71626cf5b078a8d56d026",
-      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
-      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
-    },
-    sqlite: [
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS notification_delivery (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, provider TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0,1)), targets TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, provider))" },
-    ],
-    postgres: [
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS notification_delivery (user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, provider TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0,1)), targets TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, provider))" },
-    ],
-  },
-  {
-    version: 114,
-    name: "tubearchivist-two-way-watched",
-    schemaHashes: {
-      "app/src/schema.sql": "b3eed272dc7687831970765bc2c12f023e72ac3809e71626cf5b078a8d56d026",
-      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
-      "app/src/tubeArchivistSchema.sql": "31e77b7af023276f38d1075b0a5a2197fef150513f010b90bab5909971871056",
-    },
-    sqlite: [
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS tube_archivist_imported_watched (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, video_id TEXT NOT NULL REFERENCES tube_archivist_items(video_id) ON DELETE CASCADE, PRIMARY KEY (user_id, video_id))" },
-      { kind: "add-column", table: "tube_archivist_watch_outbox", column: "is_watched", definition: "INTEGER NOT NULL DEFAULT 1 CHECK (is_watched IN (0,1))" },
-    ],
-    postgres: [
-      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS tube_archivist_imported_watched (user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, video_id TEXT NOT NULL REFERENCES tube_archivist_items(video_id) ON DELETE CASCADE, PRIMARY KEY (user_id, video_id))" },
-      { kind: "add-column", table: "tube_archivist_watch_outbox", column: "is_watched", definition: "INTEGER NOT NULL DEFAULT 1 CHECK (is_watched IN (0,1))" },
+      { kind: "add-column", table: "videos", column: "title_original", definition: "TEXT" },
     ],
   },
   {
@@ -623,6 +562,101 @@ export const DATABASE_MIGRATIONS: readonly DatabaseMigration[] = [
       { kind: "add-column", table: "user_playlists", column: "offline_policy", definition: "TEXT NOT NULL DEFAULT 'none' CHECK (offline_policy IN ('none', 'download', 'keep'))" },
       { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS user_playlist_download_protections (playlist_id BIGINT NOT NULL REFERENCES user_playlists(id) ON DELETE CASCADE, video_id TEXT NOT NULL REFERENCES downloads(video_id) ON DELETE CASCADE, PRIMARY KEY (playlist_id, video_id))" },
       { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_user_playlist_download_protections_video ON user_playlist_download_protections(video_id)" },
+    ],
+  },
+  {
+    version: 110,
+    name: "followed-playlist-offline-policies",
+    schemaHashes: {
+      "app/src/schema.sql": "cd063217769b7a5184cbb80a370d64f6ecc37ab15cf26b94e0bc7f8685a4bdce",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+    },
+    sqlite: [
+      { kind: "add-column", table: "user_followed_playlists", column: "offline_policy", definition: "TEXT NOT NULL DEFAULT 'none' CHECK (offline_policy IN ('none', 'download', 'keep'))" },
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS followed_playlist_download_protections (user_id INTEGER NOT NULL, playlist_id TEXT NOT NULL, video_id TEXT NOT NULL REFERENCES downloads(video_id) ON DELETE CASCADE, PRIMARY KEY (user_id, playlist_id, video_id), FOREIGN KEY (user_id, playlist_id) REFERENCES user_followed_playlists(user_id, playlist_id) ON DELETE CASCADE)" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_followed_playlist_download_protections_video ON followed_playlist_download_protections(video_id)" },
+    ],
+    postgres: [
+      { kind: "add-column", table: "user_followed_playlists", column: "offline_policy", definition: "TEXT NOT NULL DEFAULT 'none' CHECK (offline_policy IN ('none', 'download', 'keep'))" },
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS followed_playlist_download_protections (user_id BIGINT NOT NULL, playlist_id TEXT NOT NULL, video_id TEXT NOT NULL REFERENCES downloads(video_id) ON DELETE CASCADE, PRIMARY KEY (user_id, playlist_id, video_id), FOREIGN KEY (user_id, playlist_id) REFERENCES user_followed_playlists(user_id, playlist_id) ON DELETE CASCADE)" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_followed_playlist_download_protections_video ON followed_playlist_download_protections(video_id)" },
+    ],
+  },
+  {
+    version: 111,
+    // Preserve the identity already recorded by development databases that
+    // received this migration before it entered the shared registry.
+    name: "profile-feed-builder",
+    schemaHashes: {
+      "app/src/schema.sql": "8259bf588c8829ee6388d5d4b877208b5f4c33effb090bf63341211a35cb7849",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+    },
+    sqlite: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS user_feed_configs (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, revision INTEGER NOT NULL DEFAULT 0, config_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now')))" },
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS feed_composition_sessions (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, config_revision INTEGER NOT NULL, columns_count INTEGER NOT NULL, seed TEXT NOT NULL, request_json TEXT NOT NULL, state_json TEXT NOT NULL, created_at_ms INTEGER NOT NULL, last_accessed_at_ms INTEGER NOT NULL, expires_at_ms INTEGER NOT NULL)" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_feed_composition_sessions_expiry ON feed_composition_sessions(expires_at_ms)" },
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS feed_composition_pages (composition_id TEXT NOT NULL REFERENCES feed_composition_sessions(id) ON DELETE CASCADE, page_index INTEGER NOT NULL, response_json TEXT NOT NULL, PRIMARY KEY (composition_id, page_index))" },
+    ],
+    postgres: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS user_feed_configs (user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, revision INTEGER NOT NULL DEFAULT 0, config_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))" },
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS feed_composition_sessions (id TEXT PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, config_revision INTEGER NOT NULL, columns_count INTEGER NOT NULL, seed TEXT NOT NULL, request_json TEXT NOT NULL, state_json TEXT NOT NULL, created_at_ms BIGINT NOT NULL, last_accessed_at_ms BIGINT NOT NULL, expires_at_ms BIGINT NOT NULL)" },
+      { kind: "sql", statement: "CREATE INDEX IF NOT EXISTS idx_feed_composition_sessions_expiry ON feed_composition_sessions(expires_at_ms)" },
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS feed_composition_pages (composition_id TEXT NOT NULL REFERENCES feed_composition_sessions(id) ON DELETE CASCADE, page_index INTEGER NOT NULL, response_json TEXT NOT NULL, PRIMARY KEY (composition_id, page_index))" },
+    ],
+  },
+  {
+    version: 112,
+    name: "playlist-download-quality",
+    schemaHashes: {
+      "app/src/schema.sql": "41f7f19c62c9af2d2f79983c130ec5d7ecf94ba85274ec8a713887838cc81670",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+    },
+    sqlite: [
+      { kind: "add-column", table: "user_playlists", column: "download_quality", definition: "TEXT CHECK (download_quality IS NULL OR download_quality IN ('best', '1440', '1080', '720', '480'))" },
+      { kind: "add-column", table: "user_followed_playlists", column: "download_quality", definition: "TEXT CHECK (download_quality IS NULL OR download_quality IN ('best', '1440', '1080', '720', '480'))" },
+      { kind: "add-column", table: "downloads", column: "requested_quality", definition: "TEXT CHECK (requested_quality IS NULL OR requested_quality IN ('best', '1440', '1080', '720', '480'))" },
+    ],
+    postgres: [
+      { kind: "add-column", table: "user_playlists", column: "download_quality", definition: "TEXT CHECK (download_quality IS NULL OR download_quality IN ('best', '1440', '1080', '720', '480'))" },
+      { kind: "add-column", table: "user_followed_playlists", column: "download_quality", definition: "TEXT CHECK (download_quality IS NULL OR download_quality IN ('best', '1440', '1080', '720', '480'))" },
+      { kind: "add-column", table: "downloads", column: "requested_quality", definition: "TEXT CHECK (requested_quality IS NULL OR requested_quality IN ('best', '1440', '1080', '720', '480'))" },
+    ],
+  },
+  {
+    version: 113,
+    name: "external-notification-delivery",
+    schemaHashes: {
+      "app/src/schema.sql": "b3eed272dc7687831970765bc2c12f023e72ac3809e71626cf5b078a8d56d026",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "30b7c3fc889aedc977e2e5cd834cfd48d9e51870530213433359ed24333e03a0",
+    },
+    sqlite: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS notification_delivery (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, provider TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0,1)), targets TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, provider))" },
+    ],
+    postgres: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS notification_delivery (user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, provider TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0,1)), targets TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, provider))" },
+    ],
+  },
+  {
+    version: 114,
+    name: "tubearchivist-two-way-watched",
+    schemaHashes: {
+      "app/src/schema.sql": "dfc1bd7be0f6c01a79fc5146b25f623f3e0e0824e5877642673d3fb1f1fe91fe",
+      "app/src/channelPostsSchema.sql": "70a7df33bf373524cf6cd0687e46d7987a7cd90a2619fd9586d12d6f940d45a5",
+      "app/src/tubeArchivistSchema.sql": "31e77b7af023276f38d1075b0a5a2197fef150513f010b90bab5909971871056",
+      "app/src/dailymotionSchema.sql": "6e43314a30a4f5038dfd3cc2f44df69dc48090be8c68be4315090846259cdc7a",
+      "app/src/invidiousSchema.sql": "4f77a9670470989f8822b8cc02cc36e073fa57edb20cd81804bf2af4ca3a415b",
+    },
+    sqlite: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS tube_archivist_imported_watched (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, video_id TEXT NOT NULL REFERENCES tube_archivist_items(video_id) ON DELETE CASCADE, PRIMARY KEY (user_id, video_id))" },
+      { kind: "add-column", table: "tube_archivist_watch_outbox", column: "is_watched", definition: "INTEGER NOT NULL DEFAULT 1 CHECK (is_watched IN (0,1))" },
+    ],
+    postgres: [
+      { kind: "sql", statement: "CREATE TABLE IF NOT EXISTS tube_archivist_imported_watched (user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, video_id TEXT NOT NULL REFERENCES tube_archivist_items(video_id) ON DELETE CASCADE, PRIMARY KEY (user_id, video_id))" },
+      { kind: "add-column", table: "tube_archivist_watch_outbox", column: "is_watched", definition: "INTEGER NOT NULL DEFAULT 1 CHECK (is_watched IN (0,1))" },
     ],
   },
 ];

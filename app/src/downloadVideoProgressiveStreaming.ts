@@ -223,21 +223,6 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
     }
   }
 
-  /**
-   * Hand over a source somebody else already paid for.
-   *
-   * The import of a video outside the library resolves it with yt-dlp anyway,
-   * and that answer carries the progressive URL. Depositing it here is the
-   * difference between a player that starts and one that waits for the same
-   * question to be asked a second time. A source already held and still valid
-   * is left alone: it is the one requests in flight are using.
-   */
-  function primeDirectVideoSource(userId: number, videoId: string, source: Source): void {
-    const key = keyFor(userId, videoId);
-    const held = sources.get(key);
-    if (held && held.expiresAt > Date.now()) return;
-    sources.set(key, source);
-  }
 
   function invalidateDirectVideoSources(userId: number) {
     const prefix = `${userId}:`;
@@ -245,5 +230,5 @@ export function createDownloadVideoProgressiveStreaming(dependencies: Dependenci
     for (const [key, resolution] of resolutions) if (key.startsWith(prefix)) { resolutions.delete(key); resolution.controller.abort(); }
   }
 
-  return { getDirectVideoResponse: response, invalidateDirectVideoSources, primeDirectVideoSource };
+  return { getDirectVideoResponse: response, invalidateDirectVideoSources };
 }

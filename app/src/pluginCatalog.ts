@@ -331,6 +331,14 @@ export const PLUGINS: PluginManifest[] = [
     settingsScope: "global",
   },
   {
+    id: "search-suggest",
+    name: "Search suggestions",
+    version: "0.1.0",
+    description: "Completes what you type in the search box using YouTube's suggestion service.",
+    icon: "Search",
+    permissions: ["send:search-query"],
+  },
+  {
     id: "tubearchivist",
     name: "TubeArchivist",
     version: "0.1.0",
@@ -350,6 +358,36 @@ export const PLUGINS: PluginManifest[] = [
 ];
 
 export const PLUGIN_TEXT: Record<string, { name: LocalizedText; description: LocalizedText; permissions: Record<string, LocalizedText> }> = {
+  related: {
+    name: { en: "Related videos", pl: "Powiązane filmy", de: "Ähnliche Videos" },
+    description: {
+      en: "Shows the suggestions YouTube lists beside a video, read from the page its import already downloaded.",
+      pl: "Pokazuje propozycje, które YouTube wyświetla obok filmu — odczytane ze strony pobranej już przy imporcie.",
+      de: "Zeigt die Vorschläge, die YouTube neben einem Video listet — gelesen aus der Seite, die der Import ohnehin geladen hat.",
+    },
+    permissions: {
+      "read:library": {
+        en: "reads the videos and channels already in your library",
+        pl: "odczytuje filmy i kanały, które już masz w bibliotece",
+        de: "liest die Videos und Kanäle, die bereits in deiner Bibliothek sind",
+      },
+    },
+  },
+  "search-suggest": {
+    name: { en: "Search suggestions", pl: "Podpowiedzi wyszukiwania", de: "Suchvorschläge" },
+    description: {
+      en: "Completes what you type in the search box using YouTube's suggestion service.",
+      pl: "Uzupełnia tekst wpisywany w polu wyszukiwania, korzystając z usługi podpowiedzi YouTube.",
+      de: "Vervollständigt die Eingabe im Suchfeld über den Vorschlagsdienst von YouTube.",
+    },
+    permissions: {
+      "send:search-query": {
+        en: "sends what you type to YouTube to fetch completions",
+        pl: "wysyła wpisywany tekst do YouTube, aby pobrać podpowiedzi",
+        de: "sendet deine Eingabe an YouTube, um Vervollständigungen zu holen",
+      },
+    },
+  },
   discovery: {
     name: { en: "Recommendations", pl: "Rekomendacje", de: "Empfehlungen" },
     description: {

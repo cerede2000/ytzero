@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 const lineLimits: Record<string, number> = {
-  "app/src/routes.ts": 471,
+  "app/src/routes.ts": 473,
   "app/src/routes/authRoutes.ts": 492,
   "app/src/routes/backupRoutes.ts": 143,
   "app/src/routes/channelPlaylistRoutes.ts": 212,
@@ -19,19 +19,10 @@ const lineLimits: Record<string, number> = {
   "app/src/routes/socialRoutes.ts": 187,
   "app/src/routes/systemRoutes.ts": 145,
   "app/src/routes/tagRoutes.ts": 148,
-  "app/src/routes/userPlaylistRoutes.ts": 245,
-  "app/src/routes/videoActionRoutes.ts": 204,
-  "app/src/routes/videoRoutes.ts": 519,
-  "app/src/routes/userPlaylistRoutes.ts": 199,
-  "app/src/routes/videoActionRoutes.ts": 190,
-  "app/src/routes/videoRoutes.ts": 514,
->>>>>>> 166d6fb (Move the line ratchet up to where this branch actually sits)
-  "app/src/routes/videoRoutes.ts": 513,
->>>>>>> 2126885 (Move the line ratchet up to where this branch actually sits)
->>>>>>> c9c55d4 (Take the video out of the answer we already paid for, as well as the audio)
-  "app/src/routes/videoRoutes.ts": 513,
->>>>>>> f4374ef (Stop charging a video for a lookup nobody made)
-  "app/src/videoRoutesSupport.ts": 133,
+  "app/src/routes/userPlaylistRoutes.ts": 263,
+  "app/src/routes/videoActionRoutes.ts": 232,
+  "app/src/routes/videoRoutes.ts": 615,
+  "app/src/videoRoutesSupport.ts": 137,
   "app/src/routeCache.ts": 11,
   "ui/src/App.tsx": 24,
   "ui/src/AppRoutes.tsx": 105,

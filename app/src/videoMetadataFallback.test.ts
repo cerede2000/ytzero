@@ -76,6 +76,9 @@ describe("metadata cookie fallback", () => {
       publishedAt: "2026-09-08",
       duration: "62:03",
       liveStatus: "was_live",
+      // yt-dlp says nothing about the embed, and this fork's VideoInfo carries
+      // the question; unknown is not the same answer as refused.
+      playableInEmbed: null,
     });
   });
 

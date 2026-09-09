@@ -1129,9 +1129,105 @@ export interface FetchVideoInfoOptions {
   force?: boolean;
   userId?: number;
   cookieFallbackBudget?: MetadataCookieFallbackBudget;
+  /**
+   * The panel of suggestions beside the video, filled in passing.
+   *
+   * The watch page is downloaded here anyway and the panel is in it, so
+   * whoever wants that list gets it for the price of parsing. It stays
+   * empty when the page was not the source: neither InnerTube nor the
+   * embed carries one.
+   */
+  related?: { videos: RelatedVideo[] };
+  language?: PanelLanguage;
 }
 
-async function fetchVideoInfoAnonymously(videoId: string, userId?: number): Promise<VideoInfo> {
+/**
+ * The several ways a YouTube page says it knows who is reading it.
+ *
+ * One marker was not enough: it appears on a watch page and not on the home
+ * page, so a check made against the home page reported "not recognised" for a
+ * jar that was working perfectly a second later — a false alarm is worse than
+ * no alarm, since it sends somebody to re-export cookies that were fine.
+ */
+function readsAsSignedIn(html: string): boolean {
+  return /"LOGGED_IN"\s*:\s*true/.test(html)
+    || /"logged_in"\s*:\s*(?:true|"1")/.test(html)
+    || /"isSignedIn"\s*:\s*true/.test(html);
+}
+
+/**
+ * Whether YouTube still knows the account behind a jar.
+ *
+ * Asked directly rather than inferred from whatever else happened to make a
+ * signed-in request: the panel is fetched anonymously by default, so waiting
+ * for it to report would leave the question unanswered for ever on most
+ * instances. The home page is the cheapest thing that carries the marker.
+ */
+export async function fetchYoutubeSessionState(
+  cookieHeader: string,
+  userId?: number,
+): Promise<{ signedIn: boolean; setCookies: string[] }> {
+  const language = resolveYouTubeLanguage(userId);
+  const base = youtubeRequestHeaders(userId, language);
+  const res = await fetch("https://www.youtube.com/", {
+    headers: { ...base, ...languageHeaders(`${base.Cookie}; ${cookieHeader}`, language.hl as PanelLanguage) },
+  });
+  if (!res.ok) throw new Error(`YouTube fetch failed (${res.status})`);
+  const html = await res.text();
+  return { signedIn: readsAsSignedIn(html), setCookies: res.headers.getSetCookie?.() ?? [] };
+}
+
+/**
+ * Read the side panel as somebody, when asking as nobody was refused.
+ *
+ * The panel only ever comes from the watch page, and the watch page is the one
+ * thing yt-dlp cannot stand in for: its answer describes the video, not what
+ * YouTube would put beside it. So the fallback that rescues an import cannot
+ * rescue the panel, and on a refused address every video ends up with the
+ * library's own list — which is how a suggestion panel comes to show nothing
+ * but the channel you are already watching.
+ *
+ * A signed-in request is refused far less often than an anonymous one, and the
+ * jar is already on disk for yt-dlp. This asks the same page with it, once,
+ * for the video somebody is looking at.
+ */
+export async function fetchRelatedVideosAsSomebody(
+  videoId: string,
+  cookieHeader: string,
+  language: PanelLanguage = "en",
+  /**
+   * Told what the answer said about the session: whether the account behind
+   * the jar was recognised, and which cookies the response rotated.
+   */
+  session?: { signedIn: boolean; setCookies: string[] },
+): Promise<RelatedVideo[]> {
+  const base = youtubeRequestHeaders();
+  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    headers: { ...base, ...languageHeaders(`${base.Cookie}; ${cookieHeader}`, language) },
+  });
+  if (!res.ok) throw new Error(`YouTube fetch failed (${res.status})`);
+  const html = await res.text();
+  // Sending a jar is not the same as being known for it. An expired or rotated
+  // jar is answered with the page a stranger gets — parseable, twenty
+  // suggestions, and about nobody. Saying "credentialed" for the attempt made
+  // rather than the answer received is how a dead jar can look like a working
+  // one for a morning.
+  if (session) {
+    session.signedIn = readsAsSignedIn(html);
+    // YouTube rotates cookies as it answers. A browser writes them down; a
+    // file exported once does not, and drifts behind until it is no longer
+    // recognised at all.
+    session.setCookies = res.headers.getSetCookie?.() ?? [];
+  }
+  return relatedVideosFromWatchPage(extractVariable(html, "ytInitialData"), 40, language);
+}
+
+async function fetchVideoInfoAnonymously(
+  videoId: string,
+  userId?: number,
+  /** Filled in passing when the watch page was the source; see FetchVideoInfoOptions. */
+  panel?: { related?: { videos: RelatedVideo[] }; language?: PanelLanguage },
+): Promise<VideoInfo> {
   let result: VideoInfo;
   try {
     youtubeRefusalGate.enter();
@@ -1141,8 +1237,8 @@ async function fetchVideoInfoAnonymously(videoId: string, userId?: number): Prom
     const res = await fetch(url, { headers: youtubeRequestHeaders(userId, undefined, false) });
     if (!res.ok) throw new Error(`YouTube fetch failed (${res.status})`);
     const html = await res.text();
-    if (options.related) {
-      options.related.videos = relatedVideosFromWatchPage(extractVariable(html, "ytInitialData"), 40, options.language ?? "en");
+    if (panel?.related) {
+      panel.related.videos = relatedVideosFromWatchPage(extractVariable(html, "ytInitialData"), 40, panel.language ?? "en");
     }
     const pr = extractVariable(html, "ytInitialPlayerResponse");
     result = videoInfoFromPlayerResponse(videoId, pr);
@@ -1161,14 +1257,14 @@ async function fetchVideoInfoAnonymously(videoId: string, userId?: number): Prom
       try {
         result = await fetchVideoInfoFromEmbed(videoId, userId);
       } catch (embedError) {
+        // In the order they were asked, rather than one verdict outranking the
+        // other whoever gave it. The watch page sees the most and answers
+        // first; letting the embed's "private" beat its "unavailable" is how a
+        // deleted video came to be filed as private.
         const errors = [htmlError, innerTubeError, embedError];
-        if (errors.some(isPrivateVideoError)) {
-          youtubeRefusalGate.answered();
-          throw new PrivateVideoError();
-        }
-        if (errors.some(isDeletedVideoError)) {
-          youtubeRefusalGate.answered();
-          throw new DeletedVideoError();
+        for (const attempt of errors) {
+          if (isPrivateVideoError(attempt)) { youtubeRefusalGate.answered(); throw new PrivateVideoError(); }
+          if (isDeletedVideoError(attempt)) { youtubeRefusalGate.answered(); throw new DeletedVideoError(); }
         }
         const primary = htmlError instanceof Error ? htmlError.message : String(htmlError);
         const fallback = innerTubeError instanceof Error ? innerTubeError.message : String(innerTubeError);
@@ -1191,7 +1287,7 @@ export async function fetchVideoInfo(videoId: string, options: FetchVideoInfoOpt
   const cacheKey = `${resolveYouTubeLanguage(options.userId).cacheKey}:${videoId}`;
   return videoInfoCache.run(cacheKey, async () => {
     try {
-      return await fetchVideoInfoAnonymously(videoId, options.userId);
+      return await fetchVideoInfoAnonymously(videoId, options.userId, options);
     } catch (error) {
       if (!isYouTubeRefusalError(error)) throw error;
       return await retryVideoInfoWithCookies(videoId, error, {

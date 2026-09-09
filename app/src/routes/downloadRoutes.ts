@@ -18,7 +18,6 @@ import { validYouTubeVideoId } from "../youtubeComments";
 import { registerAudioRoutes } from "./audioRoutes";
 import { registerYtdlpUpdateRoutes } from "./ytdlpUpdateRoutes";
 import { ytdlpUpdateChannel, ytdlpUpdateIntervalDays } from "../ytdlpUpdater";
-import { ensureOnDemandVideo, OnDemandVideoImportError } from "../onDemandVideoImport";
 import type { DownloadQuality } from "../downloadSettings";
 import { invalidateYouTubeCookieHealth, youtubeCookieHealth } from "../youtubeCookieJar";
 

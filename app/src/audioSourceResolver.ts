@@ -223,10 +223,6 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     return resolveAudioSource(userId, videoId, signal);
   }
 
-  function primeAudioSource(userId: number, videoId: string, source: AudioSource): void {
-    if (audioSources.get(userId, videoId)) return;
-    audioSources.set(userId, videoId, source);
-  }
 
   function discardAudioSource(userId: number, videoId: string, failedUrl: string): void {
     const current = audioSources.get(userId, videoId);
@@ -257,5 +253,5 @@ export function createAudioSourceResolver(dependencies: AudioSourceResolverDepen
     }
   }
 
-  return { discardAudioSource, invalidateAudioSources, primeAudioSource, refreshAudioSource, resolveAudioSource, retryAudioSource };
+  return { discardAudioSource, invalidateAudioSources, refreshAudioSource, resolveAudioSource, retryAudioSource };
 }
