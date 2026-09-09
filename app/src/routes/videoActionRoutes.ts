@@ -10,8 +10,6 @@ import { ensureOnDemandVideo, OnDemandVideoImportError } from "../onDemandVideoI
 import { videoExistsStmt } from "../videoRoutesSupport";
 import { savePlaybackContext } from "./playbackRoutes";
 import { completeVideo } from "../videoCompletion";
-import { childLocalOnly } from "../childTime";
-import { ensureOnDemandVideo, OnDemandVideoImportError } from "../onDemandVideoImport";
 import { claimTubeArchivistWatchedState, enqueueTubeArchivistWatched } from "../tubeArchivist";
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;

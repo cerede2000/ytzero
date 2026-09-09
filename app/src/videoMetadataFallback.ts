@@ -116,6 +116,9 @@ export function parseYtdlpVideoInfo(videoId: string, serialized: string): VideoI
     publishedAt: ytdlpDate(raw.upload_date) ?? ytdlpDate(raw.release_date),
     duration: ytdlpDuration(raw),
     liveStatus: ytdlpLiveStatus(raw),
+    // yt-dlp answers about the video, not about the embed. Unknown stays
+    // unknown rather than being read as a refusal.
+    playableInEmbed: null,
   };
 }
 

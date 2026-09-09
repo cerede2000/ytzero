@@ -131,7 +131,6 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
   const {
     discardAudioSource,
     invalidateAudioSources: invalidateResolvedAudioSources,
-    primeAudioSource,
     refreshAudioSource,
     resolveAudioSource,
     retryAudioSource: retryResolvedAudioSource,
@@ -499,6 +498,6 @@ export function createDownloadAudioStreaming(dependencies: DownloadAudioStreamin
 
   return {
     getAudioHeadResponse, getAudioResponse, ...audioVod,
-    invalidateAudioSources, primeAudioSource, retryAudioSource,
+    invalidateAudioSources, retryAudioSource,
   };
 }

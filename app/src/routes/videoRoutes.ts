@@ -3,7 +3,7 @@ import { publishAppEvent } from "../appEvents";
 import { database } from "../database";
 import { getUserSetting } from "../db";
 import { fetchVideoChapters, fetchVideoCreators, fetchVideoInfo } from "../youtube";
-import { discoveryRecommendations, dismissDiscoveryRecommendation, recommendationFeed, refreshDiscoveryInBackground, refreshDiscoveryNow } from "../plugins";
+import { discoveryRecommendations, dismissDiscoveryRecommendation, getPluginSettings, pluginEnabled, recommendationFeed, refreshDiscoveryInBackground, refreshDiscoveryNow } from "../plugins";
 import { validYouTubeVideoId } from "../youtubeComments";
 import { childDownloadsOnly, childHidesLive, childLocalOnly, isChildUser, isParentLocked } from "../childTime";
 import { followedExists, profileVideoOwnershipExists, shortsUiVisibilitySql } from "../feedQuery";
@@ -12,15 +12,14 @@ import { getDeArrowBranding } from "../dearrow";
 import { log } from "../logger";
 import { ageMs, CHAPTERS_DB_TTL, CREATORS_DB_TTL } from "../routeCache";
 import { attachLibraryState, attachWatchedState, videoExistsStmt, videoSelect, type VideoRow } from "../videoRoutesSupport";
-import { selectRelatedForPanel } from "../relatedVideos";
-import { readRelatedVideos } from "../relatedVideoStore";
+import { selectRelatedForPanel, type RelatedVideo } from "../relatedVideos";
+import { panelLanguage } from "../relatedVideoText";
+import { readRelatedVideos, saveRelatedVideos } from "../relatedVideoStore";
 import { fetchRelatedVideos, type RelatedSource } from "../relatedVideoFetch";
 import { registerVideoCommentRoutes } from "./videoCommentRoutes";
 import { importExternalVideoInfo, type VideoInfoImportResult } from "../externalVideoInfoImport";
 import { refreshExternalWatchVideo } from "../externalVideoRefresh";
 import type { AudioSource } from "../audioSourceResolver";
-import { importVideo, LiveDisabledForProfileError } from "../videoImport";
-import { fetchVideoInfoViaYtdlp, type ProgressiveVideoSource } from "../videoInfoViaYtdlp";
 import { isYouTubeRefusalError, youtubeRefusalGate } from "../youtubeRateLimit";
 import { AsyncTtlCache } from "../asyncTtlCache";
 import { resolveYouTubeLanguage } from "../youtubeRequestLanguage";
@@ -244,11 +243,13 @@ api.get("/videos/:id/info", async (c) => {
     // The player lookup has its own coalescing cache. Keep this policy check
     // outside the completed-import cache so profile setting changes apply at once.
     const importKey = `${resolveYouTubeLanguage(uid).cacheKey}:${videoId}`;
-    const info = await fetchVideoInfo(videoId, { userId: uid });
+    const related: { videos: RelatedVideo[] } = { videos: [] };
+    const info = await fetchVideoInfo(videoId, { userId: uid, related, language: panelLanguage(getUserSetting(uid, "language")) });
     if (childHidesLive(uid) && info.liveStatus !== "none") {
       return c.json({ error: "live streams are disabled for this profile" }, 403);
     }
     const imported = await videoInfoImports.run(importKey, () => importExternalVideoInfo(info, uid));
+    if (related.videos.length > 0) await saveRelatedVideos(info.videoId, uid, related.videos);
     const { feed, feedError } = imported;
     if (relatedRefresh && feedError && isYouTubeRefusalError(feedError)) {
       const until = Date.now() + RELATED_REFUSED_TTL_MS;
@@ -262,7 +263,6 @@ api.get("/videos/:id/info", async (c) => {
     }
     return c.json({ info, related_refresh: "loaded" });
   } catch (e) {
-    if (e instanceof LiveDisabledForProfileError) return c.json({ error: e.message }, 403);
     log.error("external.video_info_failed", { videoId: c.req.param("id"), error: e instanceof Error ? e.message : String(e) });
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
   }
