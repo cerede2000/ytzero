@@ -12,6 +12,7 @@ import {
 } from "./videoVodPlaylist";
 import type { DlSettings } from "./downloader";
 import { potArgsFor } from "./ytdlpPotProvider";
+import { audioLanguageFor, preferDubbedAudio } from "./audioTrackLanguage";
 
 interface DownloadVideoDirectStreamingDependencies {
   YTDLP: string;
@@ -277,7 +278,9 @@ export function createDownloadVideoDirectStreaming(dependencies: DownloadVideoDi
     const cap = Number.isFinite(parsedHeight) && Number(parsedHeight) > 0
       ? `[height<=${Math.floor(Number(parsedHeight))}]`
       : "";
-    return `bestvideo[ext=mp4][vcodec^=avc1][protocol^=http]${cap}+bestaudio[ext=m4a][acodec^=mp4a][protocol^=http]`;
+    const video = `bestvideo[ext=mp4][vcodec^=avc1][protocol^=http]${cap}`;
+    const audio = "bestaudio[ext=m4a][acodec^=mp4a][protocol^=http]";
+    return `${preferDubbedAudio(video, audio, audioLanguageFor(userId))}${video}+${audio}`;
   }
 
   async function resolveAttempt(

@@ -936,7 +936,7 @@ async function writeNfoFile(videoId: string, base: string) {
 }
 
 async function runDownload(userId: number, videoId: string, s: DlSettings) {
-  const format = downloadFormat(String(s.quality), s.compatible_format === 1);
+  const format = downloadFormat(String(s.quality), s.compatible_format === 1, audioLanguageFor(userId));
   const base = await renderOutputTemplate(videoId, String(s.output_template));
   mkdirSync(dirname(join(DOWNLOADS_DIR, base)), { recursive: true });
   const baseArgs = [
