@@ -1,9 +1,11 @@
+import { preferDubbedAudio } from "./audioTrackLanguage";
+
 /**
  * Prefer a separate video + audio pair, then fall back to a progressive
  * format. Keeping the height cap on every branch prevents a fallback from
  * silently exceeding the quality selected by the user.
  */
-export function downloadFormat(quality: string, compatible = false): string {
+export function downloadFormat(quality: string, compatible = false, audioLanguage?: string): string {
   const parsedHeight = quality === "best" ? null : Number(quality);
   const height = parsedHeight != null && Number.isFinite(parsedHeight) && parsedHeight > 0
     ? Math.floor(parsedHeight)
@@ -11,10 +13,12 @@ export function downloadFormat(quality: string, compatible = false): string {
   if (compatible) {
     const compatibilityHeight = Math.min(height ?? 1080, 1080);
     const compatibilityCap = `[height<=${compatibilityHeight}]`;
-    return `bestvideo[vcodec^=avc1]${compatibilityCap}+bestaudio[acodec^=mp4a]/best[ext=mp4][vcodec^=avc1][acodec^=mp4a]${compatibilityCap}`;
+    const dub = audioLanguage ? preferDubbedAudio(`bestvideo[vcodec^=avc1]${compatibilityCap}`, "bestaudio[acodec^=mp4a]", audioLanguage) : "";
+    return `${dub}bestvideo[vcodec^=avc1]${compatibilityCap}+bestaudio[acodec^=mp4a]/best[ext=mp4][vcodec^=avc1][acodec^=mp4a]${compatibilityCap}`;
   }
   const cap = height ? `[height<=${height}]` : "";
-  return `bestvideo${cap}+bestaudio/bestvideo*${cap}/best${cap}`;
+  const dub = audioLanguage ? preferDubbedAudio(`bestvideo${cap}`, "bestaudio", audioLanguage) : "";
+  return `${dub}bestvideo${cap}+bestaudio/bestvideo*${cap}/best${cap}`;
 }
 
 /**

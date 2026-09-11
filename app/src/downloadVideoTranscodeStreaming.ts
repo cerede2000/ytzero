@@ -5,6 +5,7 @@ import { log } from "./logger";
 import { safeGoogleVideoUrl } from "./audioUpstreamUrl";
 import type { DlSettings } from "./downloader";
 import { potArgsFor } from "./ytdlpPotProvider";
+import { audioLanguageFor, preferDubbedAudio } from "./audioTrackLanguage";
 
 interface DownloadVideoStreamingDependencies {
   DOWNLOADS_DIR: string;
@@ -157,7 +158,8 @@ export function createDownloadVideoTranscodeStreaming(dependencies: DownloadVide
     const settings = await dlSettings(userId);
     const height = settings.quality === "best" ? null : Number(settings.quality);
     const cap = height ? `[height<=${height}]` : "";
-    return `bestvideo*[vcodec^=avc1]${cap}+bestaudio[acodec^=mp4a]/best[vcodec^=avc1]${cap}/best${cap}`;
+    const dub = preferDubbedAudio(`bestvideo*[vcodec^=avc1]${cap}`, "bestaudio[acodec^=mp4a]", audioLanguageFor(userId));
+    return `${dub}bestvideo*[vcodec^=avc1]${cap}+bestaudio[acodec^=mp4a]/best[vcodec^=avc1]${cap}/best${cap}`;
   }
 
   async function probeSource(userId: number, videoId: string, signal?: AbortSignal): Promise<SourceProbe | null> {
