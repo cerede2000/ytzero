@@ -432,9 +432,10 @@ async function subtitlePreferences(userId: number, videoId: string): Promise<str
     FROM videos v LEFT JOIN user_channels uc ON uc.channel_id=v.channel_id AND uc.user_id=?
     WHERE v.video_id=?
   `).get(userId, videoId) as { caption_mode: string | null; caption_language: string | null } | null;
+  const profileLanguage = normalizeLanguage(getUserSetting(userId, "language"));
   return [...new Set([
-    getUserSetting(userId, "player_cc_lang"),
-    getUserSetting(userId, "player_hl"),
+    resolvePlayerLanguage(getUserSetting(userId, "player_cc_lang"), profileLanguage),
+    resolvePlayerLanguage(getUserSetting(userId, "player_hl"), profileLanguage),
     ...String(settings.sub_langs ?? "").split(",").map((language) => language.trim()),
     row?.caption_mode === "language" ? row.caption_language : null,
   ].filter((language): language is string => typeof language === "string" && language.length > 0))];

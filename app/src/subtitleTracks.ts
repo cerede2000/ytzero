@@ -6,6 +6,8 @@ import { getUserSetting } from "./db";
 import { SUBTITLE_LANGUAGE_CODES } from "./subtitleLanguages";
 import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { potArgsFor } from "./ytdlpPotProvider";
+import { normalizeLanguage } from "../../shared/uiLanguages";
+import { resolvePlayerLanguage } from "../../shared/playerLanguage";
 
 /**
  * Subtitles, without keeping anything.
@@ -199,10 +201,11 @@ function createSubtitleTracks({
     const [subtitles, automatic] = stdout.split(/\r?\n/).map((line) => {
       try { return JSON.parse(line) as CaptionMap; } catch { return {} as CaptionMap; }
     });
+    const profileLanguage = normalizeLanguage(getUserSetting(userId, "language"));
     const wanted = wantedSubtitleLanguages([
-      getUserSetting(userId, "player_cc_lang"),
-      getUserSetting(userId, "player_hl"),
-      getUserSetting(userId, "language"),
+      resolvePlayerLanguage(getUserSetting(userId, "player_cc_lang"), profileLanguage),
+      resolvePlayerLanguage(getUserSetting(userId, "player_hl"), profileLanguage),
+      profileLanguage,
       String((await dlSettings(userId) as { sub_langs?: unknown }).sub_langs ?? ""),
     ]);
     return { tracks: subtitleTracksFromMaps(subtitles ?? {}, automatic ?? {}, wanted), refused: false };

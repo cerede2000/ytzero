@@ -22,6 +22,7 @@ import { useVideoHlsSource } from "./useVideoHlsSource";
 import "./LocalPlayer.css";
 import "./PlayerVolume.css";
 import "./LocalPlayerTransportLock.css";
+import { preferredSubtitle } from "../subtitlePreference";
 
 const VOLUME_KEY = "localPlayerVolume";
 const MUTED_KEY = "localPlayerMuted";
@@ -267,7 +268,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
       void pickSubLang(null);
       return;
     }
-    const preferred = subs.find((sub) => sub.lang === ccDefaultLang)?.lang ?? subs[0]?.lang ?? ccDefaultLang ?? null;
+    const preferred = preferredSubtitle(subs, ccDefaultLang);
     if (preferred) void pickSubLang(preferred);
   }, [ccDefaultLang, pickSubLang, subLang, subs]);
   const changeSubtitleSize = (direction: -1 | 1) => {
@@ -615,7 +616,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
       if (matches("subtitleLarger", e)) { e.preventDefault(); changeSubtitleSize(1); }
       else if (matches("subtitleSmaller", e)) { e.preventDefault(); changeSubtitleSize(-1); }
       else if (matches("toggleCaptions", e)) {
-        e.preventDefault(); if (!e.repeat) { const captionsWereOn = Boolean(subLang); const preferred = subs.find((sub) => sub.lang === ccDefaultLang)?.lang ?? subs[0]?.lang ?? ccDefaultLang; toggleSubtitles(); if (captionsWereOn || preferred) onShortcut?.(captionsWereOn ? "captionsOff" : "captionsOn"); }
+        e.preventDefault(); if (!e.repeat) { const captionsWereOn = Boolean(subLang); const preferred = preferredSubtitle(subs, ccDefaultLang); toggleSubtitles(); if (captionsWereOn || preferred) onShortcut?.(captionsWereOn ? "captionsOff" : "captionsOn"); }
       } else if (matches("togglePlay", e)) { e.preventDefault(); togglePlay(); }
       else if (matches("seekBack10", e)) { e.preventDefault(); seekBy(-10); onShortcut?.("back", 10); }
       else if (matches("seekForward10", e)) { e.preventDefault(); seekBy(10); onShortcut?.("forward", 10); }

@@ -230,9 +230,11 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   // Keeping the legacy 0/1 values makes existing databases and backups retain
   // their exact behaviour without a data migration.
   show_shorts: "0",
-  player_hl: "en",
+  // The player follows the profile language too: on a dubbed video the embed's
+  // `hl` picks the audio track and the captions, not only the controls.
+  player_hl: "profile",
   player_cc: "0",
-  player_cc_lang: "en",
+  player_cc_lang: "profile",
   // Subtitle appearance in the local player (per profile), in pixels.
   player_sub_size: "19",
   player_sub_color: "#ffffff",

@@ -14,6 +14,7 @@ import { Button, ColorPicker, Divider, Inline, Input, InputGroup, SelectMenu, Se
 import { SidebarNavEditor, VideoCardActionEditor } from "./SettingsEditors"; import { KeyboardShortcutSettings } from "./KeyboardShortcutSettings";
 import PlaybackSpeedOptionsSetting from "./PlaybackSpeedOptionsSetting";
 import { resolvePlaybackSpeeds, serializeCustomPlaybackSpeeds } from "../../../../shared/playbackSpeeds";
+import { PROFILE_PLAYER_LANGUAGE } from "../../../../shared/playerLanguage";
 const VideoCardSwipeSetting = lazy(() => import("./VideoCardSwipeSetting").then((module) => ({ default: module.VideoCardSwipeSetting })));
 const FeedBuilderSettings = (import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV
   ? lazy(() => import("./FeedBuilderSettings").then((module) => ({ default: module.FeedBuilderSettings })))
@@ -449,7 +450,11 @@ export function SettingsDisplayView({ controller, showToast }: { controller: Set
             <SelectMenu
               label={t("playerLanguage")}
               value={playerHl}
-              options={[{ value: "pl", label: "polski" }, { value: "en", label: "English" }, { value: "de", label: "Deutsch" }, { value: "es", label: "español" }, { value: "fr", label: "français" }, { value: "uk", label: "українська" }, { value: "ja", label: "日本語" }]}
+              options={[
+                // Follows the interface language, the way the titles above do.
+                { value: PROFILE_PLAYER_LANGUAGE, label: t("videoTitleLanguageProfile", { language: languageName(language) }) },
+                { value: "pl", label: "polski" }, { value: "en", label: "English" }, { value: "de", label: "Deutsch" }, { value: "es", label: "español" }, { value: "fr", label: "français" }, { value: "uk", label: "українська" }, { value: "ja", label: "日本語" },
+              ]}
               onChange={(next) => {
                 setPlayerHl(next);
                 savePlayer({ player_hl: next, player_cc_lang: next });

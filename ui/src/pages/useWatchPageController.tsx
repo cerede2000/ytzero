@@ -409,7 +409,8 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     ? video.channel_caption_language
     : null;
   const captionsDefaultOn = !channelCaptionsOff && (Boolean(channelCaptionLanguage) || settings?.player_cc === "1");
-  const captionsDefaultLang = channelCaptionLanguage || settings?.player_cc_lang || settings?.player_hl || "en";
+  const playerLanguage = resolvePlayerLanguage(settings?.player_hl, language);
+  const captionsDefaultLang = channelCaptionLanguage || resolvePlayerLanguage(settings?.player_cc_lang, playerLanguage);
 
   const takeEmbeddedScreenshot = useCallback(() => {
     if (!video) {
@@ -1165,7 +1166,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       origin: window.location.origin,
     };
     if (startSeconds > 10) playerVars.start = startSeconds;
-    if (settings?.player_hl) playerVars.hl = settings.player_hl;
+    playerVars.hl = playerLanguage;
     if (captionsDefaultOn) {
       playerVars.cc_load_policy = 1;
       playerVars.cc_lang_pref = captionsDefaultLang;

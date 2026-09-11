@@ -1,5 +1,6 @@
 import type { AppSettings } from "./api";
 import { SUBTITLE_LANGUAGES } from "./subtitleLanguages";
+import { resolvePlayerLanguage } from "../../shared/playerLanguage";
 
 export const ENHANCE_BRIDGE_VERSION = 1;
 export const ENHANCE_CONFIGURATION_ELEMENT_ID = "ytzero-enhance-configuration";
@@ -213,7 +214,7 @@ export function createEnhanceConfiguration(settings: Partial<AppSettings>) {
     enabled: booleanSetting(settings.enhance_enabled, true),
     player: {
       replaceControls: booleanSetting(settings.enhance_replace_controls, true),
-      language: settings.player_hl || "en",
+      language: resolvePlayerLanguage(settings.player_hl, settings.language || "en"),
       preferredQuality: settings.player_quality || "auto",
       defaultPlaybackRate: numberSetting(settings.player_speed, 1, 0.1, 4),
       keyboardSeekSeconds: numberSetting(settings.keyboard_seek_seconds, 5, 1, 120),
@@ -221,7 +222,7 @@ export function createEnhanceConfiguration(settings: Partial<AppSettings>) {
       autoFullscreenLandscape: booleanSetting(settings.auto_fullscreen_landscape, false),
       captions: {
         enabledByDefault: booleanSetting(settings.player_cc, false),
-        language: settings.player_cc_lang || settings.player_hl || "en",
+        language: resolvePlayerLanguage(settings.player_cc_lang, resolvePlayerLanguage(settings.player_hl, settings.language || "en")),
         availableLanguages: SUBTITLE_LANGUAGES.map(({ code, label }) => ({ code, label })),
         style: {
           fontSizePx: numberSetting(settings.player_sub_size, 19, 12, 48),
