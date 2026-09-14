@@ -91,7 +91,7 @@ export function registerUserPlaylistRoutes(
         await database.prepare("INSERT INTO user_playlist_videos (playlist_id, video_id, position) VALUES (?, ?, ?)").run(row.id, videoId, position);
       }
       return row;
-    });
+    })();
     refreshDiscoveryInBackground(uid);
     return c.json({ playlist });
   });
@@ -203,7 +203,7 @@ export function registerUserPlaylistRoutes(
     await database.transaction(async () => {
       await database.prepare("DELETE FROM user_playlist_videos WHERE playlist_id = ? AND video_id = ?").run(c.req.param("id"), c.req.param("videoId"));
       await database.prepare("DELETE FROM user_playlist_download_protections WHERE playlist_id = ? AND video_id = ?").run(c.req.param("id"), c.req.param("videoId"));
-    });
+    })();
     refreshDiscoveryInBackground(uid);
     return c.json({ ok: true });
   });
