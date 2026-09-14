@@ -65,6 +65,20 @@ describe("HTTP route manifest", () => {
       "PUT /access-control/group-order", "PUT /access-control/default-group", "PUT /access-control/profiles/:id",
       "DELETE /access-control/groups/:id",
     ];
+    // Ours, each named so what is left is upstream's own list, unchanged.
+    const searchSuggestRoute = "GET /search/suggest";
+    const suggestionsRoute = "GET /videos/:id/suggestions";
+    // A playlist is a list somebody arranged, so the arrangement is something
+    // the page can send back.
+    const playlistOrderRoute = "PUT /playlists/:id/order";
+    // The seam every search provider is reached through.
+    const providerRoutes = ["GET /search/providers", "GET /search/external"];
+    // Where a profile mints the token its phone signs in with. The dialect's
+    // own routes live on the outer app and never reach this list.
+    const invidiousRoutes = routes.filter((route) => route.includes("/invidious/"));
+    // An experiment on its own island: routes nothing upstream calls.
+    const dailymotionRoutes = routes.filter((route) => route.includes("/dailymotion"));
+    const ourRoutes = [searchSuggestRoute, suggestionsRoute, playlistOrderRoute, ...providerRoutes, ...invidiousRoutes, ...dailymotionRoutes];
     const publicShareManagementRoutes = [
       "GET /public-shares", "PUT /public-shares/policy", "POST /public-shares",
       "PATCH /public-shares/:id", "POST /public-shares/:id/rotate", "DELETE /public-shares/:id",

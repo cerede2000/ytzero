@@ -6,7 +6,7 @@ import { fetchRelatedVideosAsSomebody, fetchVideoInfo } from "./youtube";
 import { fetchWatchNextPanel } from "./youtubeInnerTube";
 import { panelLanguage } from "./relatedVideoText";
 import { youtubeCookieHeader } from "./youtubeCookieHeader";
-import { persistSetCookies, recordCookieRecognition } from "./youtubeCookieHealth";
+import { knownYouTubeCookieRecognition } from "./youtubeCookieJar";
 import { isYouTubeRefusal } from "./youtubeRefusalQuiet";
 
 /**
@@ -104,14 +104,14 @@ export function createRelatedVideoFetcher(
   load = (videoId: string, related: { videos: RelatedVideo[] }, userId: number) =>
     fetchVideoInfo(videoId, { force: true, related, language: panelLanguage(getUserSetting(userId, "language")) }),
   now: () => number = Date.now,
-  loadAsSomebody = async (videoId: string, userId: number, session?: { signedIn: boolean; setCookies: string[] }): Promise<RelatedVideo[]> => {
+  loadAsSomebody = async (videoId: string, userId: number, session?: { signedIn: boolean }): Promise<RelatedVideo[]> => {
     const cookieHeader = cookieHeaderFor(userId);
     if (!cookieHeader) return [];
-    const videos = await fetchRelatedVideosAsSomebody(videoId, cookieHeader, panelLanguage(getUserSetting(userId, "language")), session);
-    if (session) {
-      recordCookieRecognition(userId, session.signedIn);
-      persistSetCookies(userId, session.setCookies);
-    }
+    // The jar module reads the answer as it arrives: it writes back what the
+    // page rotated and notes whether the account was recognised. What the log
+    // reports is that note, not the attempt.
+    const videos = await fetchRelatedVideosAsSomebody(videoId, cookieHeader, panelLanguage(getUserSetting(userId, "language")), userId);
+    if (session) session.signedIn = knownYouTubeCookieRecognition(userId) === true;
     return videos;
   },
   forget = forgetRelatedVideos,
@@ -156,7 +156,7 @@ export function createRelatedVideoFetcher(
        * question is theirs. A profile with no jar of its own returns from the
        * account attempt at once, having asked nothing.
        */
-      const recognised = { signedIn: false, setCookies: [] as string[] };
+      const recognised = { signedIn: false };
       /**
        * One line for every panel that arrives, whichever path produced it.
        *

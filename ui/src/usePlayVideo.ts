@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Video } from "./apiTypes";
+import { createWatchRoutePreview } from "./pages/watchRuntime";
 import type { PlaybackQueueContext, PlayOptions, PlayVideo } from "./playbackQueue";
 
 /**
@@ -22,19 +23,9 @@ export function usePlayVideo(): PlayVideo {
         playbackQueue,
         fromStart: options?.fromStart,
         audio: options?.audio,
-        // What the card was already showing. A video that is not in the
-        // library has to be imported before the page knows anything about it,
-        // and that takes as long as it takes — but the title, the channel and
-        // the thumbnail were on screen a moment ago, so there is no reason to
-        // stare at an empty page while it happens.
-        preview: {
-          videoId: video.video_id,
-          title: video.title,
-          channelId: video.channel_id,
-          channelTitle: video.channel_title,
-          thumbnail: video.thumbnail,
-          duration: video.duration ?? null,
-        },
+        // What the card was already showing, so the page is not empty while a
+        // video that is not in the library yet is imported.
+        watchPreview: createWatchRoutePreview(video),
       },
     },
   ), [navigate]);

@@ -37,6 +37,7 @@ import { DOWNLOAD_MANIFEST_SUFFIX, recoverDownloadsFromDisk, writeDownloadManife
 import { downloadScheduleAllowsNow } from "./downloadSchedule";
 import { backgroundTasksEnabled } from "./deploymentMode";
 import { resolveDownloadQuality, type DownloadQuality } from "./downloadSettings";
+import { audioLanguageFor } from "./audioTrackLanguage";
 import { createMobilePlayback } from "./mobilePlayback";
 export {
   DL_DEFAULTS,

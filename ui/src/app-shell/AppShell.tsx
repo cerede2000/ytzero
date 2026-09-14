@@ -33,10 +33,7 @@ export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
 
   useSidebarVisibility(location.pathname);
 
-  const play = useCallback((video: Video, playbackQueue?: PlaybackQueueContext, options?: PlayOptions) => navigate(
-    `/watch/${video.video_id}`,
-    { state: { playbackQueue, watchPreview: createWatchRoutePreview(video) } },
-  ), [navigate]);
+  const play = usePlayVideo();
 
   if (!i18nReady || !preferences.ready || !plugins.ready || !profile.ready) {
     return <AppBootstrap />;

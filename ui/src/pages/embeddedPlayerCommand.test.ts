@@ -20,7 +20,8 @@ describe("embedded player command routing", () => {
     expect(calls).toEqual(["toggle-play"]);
   });
 
-  for (const playerKind of ["local", "stream", "direct"] as const) {
+  // This fork plays the direct stream under "stream", so there is no "direct" kind to route.
+  for (const playerKind of ["local", "stream"] as const) {
     test(`keeps ${playerKind} on its native player path`, async () => {
       const calls: string[] = [];
       const result = await applyEmbeddedPlayerCommand({

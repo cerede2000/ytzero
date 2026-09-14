@@ -322,6 +322,12 @@ export function invalidateYouTubeCookieHealth(userId: number): void {
   healthInFlight.delete(userId);
 }
 
+/** What the last answer said, without asking again; null while nothing has answered. */
+export function knownYouTubeCookieRecognition(userId: number): boolean | null {
+  const recognition = recognitionByProfile.get(userId)?.recognition;
+  return recognition === "recognized" ? true : recognition === "unrecognized" ? false : null;
+}
+
 export async function youtubeCookieHealth(userId: number, now = Date.now()): Promise<YouTubeCookieHealth> {
   if (!downloadCookiesConfigured(userId)) {
     invalidateYouTubeCookieHealth(userId);
