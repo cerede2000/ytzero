@@ -53,16 +53,19 @@ The image carries the `bgutil` provider and its yt-dlp plugin, and runs it
 under the Deno that is already there, so the token is computed locally and no
 companion service is needed. Two variables adjust it:
 
-- `POT_PROVIDER_HOME` — where the provider lives, `off` to ignore it. yt-dlp
-  run by hand looks for it in the home directory instead, so checking on it
-  needs the path spelled out:
-  `--extractor-args "youtubepot-bgutilscript:server_home=/opt/bgutil-ytdlp-pot-provider/server"`;
+- `POT_PROVIDER_HOME` — where the provider lives, `off` to ignore it; by
+  default the install the image declares in `YTDLP_BGUTIL_SERVER_HOME`. yt-dlp
+  run by hand finds neither the plugin nor the script on its own, so checking
+  on it needs both spelled out:
+  `--plugin-dirs /opt/ytzero/yt-dlp-plugins --extractor-args "youtubepot-bgutilscript:server_home=/opt/ytzero/bgutil/server"`;
 - `POT_PROVIDER_URL` — the address of a companion provider service, if one is
   preferred to the bundled script.
 
-A token is what an unrecognised caller offers in place of an account, so an
-attempt that carries cookies goes without one — measured on a refused address,
-the same answer costs 4.5 s with cookies alone and 6.0 s with a token as well.
+Every attempt carries a token, cookies or not. A token once went only to the
+anonymous attempt — measured on a refused address, the same answer cost 4.5 s
+with cookies alone and 6.0 s with a token as well — until YouTube began
+challenging a signed-in caller too, and the attempt that could have answered was
+the one going without.
 
 A token is computed when someone opens a page rather than when a track starts:
 it is about the caller, not about a video, so nothing needs to be playing to
