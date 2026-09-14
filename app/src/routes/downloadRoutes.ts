@@ -5,8 +5,8 @@ import { database } from "../database";
 import { getUserSetting } from "../db";
 import { log } from "../logger";
 import { childLocalOnly, isChildUser } from "../childTime";
-import { DOWNLOADS_ADMIN_SETTING_KEYS, dlSettings, downloadCookiesConfigured, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
-import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, ensureMobilePlayback, getDirectVideoResponse, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, hasHlsSession, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
+import { DOWNLOADS_ADMIN_SETTING_KEYS, downloadCookiesConfigured, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
+import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, ensureMobilePlayback, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, getDirectVideoResponse, hasHlsSession, invalidateAudioSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
 import { createDownloadRule, deleteDownloadRule, DownloadRuleValidationError, listDownloadRules, previewDownloadRule, updateDownloadRule, type DownloadRuleInput } from "../downloadRules";
 import { availableSubtitlesForVideo, normalizeSubtitleLanguage, subtitleStreamForVideo } from "../subtitleAvailability";
 import { subtitleLanguageLabel } from "../subtitleLanguages";
@@ -19,7 +19,9 @@ import { registerAudioRoutes } from "./audioRoutes";
 import { registerYtdlpUpdateRoutes } from "./ytdlpUpdateRoutes";
 import { ytdlpUpdateChannel, ytdlpUpdateIntervalDays } from "../ytdlpUpdater";
 import type { DownloadQuality } from "../downloadSettings";
-import { invalidateYouTubeCookieHealth, youtubeCookieHealth } from "../youtubeCookieJar";
+import { normalizeLanguage } from "../../../shared/uiLanguages";
+import { resolvePlayerLanguage } from "../../../shared/playerLanguage";
+import { invalidateYouTubeCookieHealth, knownYouTubeCookieRecognition, youtubeCookieHealth } from "../youtubeCookieJar";
 
 type ApiEnvironment = { Variables: { userId: number; sessionAdmin?: boolean; profileAdmin?: boolean } };
 type Api = Hono<ApiEnvironment>;
@@ -181,7 +183,6 @@ api.post("/downloads/cookies", async (c) => {
     saveDownloadCookies(uid, await file.text());
     invalidateYouTubeCookieHealth(uid);
     invalidateAudioSources(uid);
-    invalidateDirectVideoSources(uid);
     return c.json(await youtubeCookieHealth(uid));
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
@@ -194,7 +195,6 @@ api.delete("/downloads/cookies", async (c) => {
   removeDownloadCookies(uid);
   invalidateYouTubeCookieHealth(uid);
   invalidateAudioSources(uid);
-  invalidateDirectVideoSources(uid);
   return c.json({ configured: false, recognition: "unknown" as const, checked_at: null });
 });
 
@@ -224,9 +224,8 @@ api.get("/downloads", async (c) => {
  * settings page that manages it, so the way to find out was to go looking —
  * usually after an hour of things quietly failing for no stated reason.
  *
- * Never asked for on this path: it answers from what the last question found,
- * and the questions are put where a failure already suggests one — a lookup
- * that failed holding the jar, or somebody opening the page. A poll every few
+ * Never asked for on this path: it answers from what the last response read
+ * with the jar said, or the last check the settings page made. A poll every few
  * seconds must not become a request to YouTube every few seconds.
  */
 api.get("/downloads/summary", async (c) => {
@@ -238,7 +237,7 @@ api.get("/downloads/summary", async (c) => {
     cookies_configured: jar,
     // Configured and dead is the state worth a badge. Unknown is not: nothing
     // has asked yet, and a warning on no evidence is a warning nobody trusts.
-    cookies_recognised: jar ? cookieHealth(uid)?.recognised ?? null : null,
+    cookies_recognised: jar ? knownYouTubeCookieRecognition(uid) : null,
   });
 });
 

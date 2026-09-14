@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { shouldDriveYouTubePlayer } from "./watchPlayerDrive";
 import confetti from "canvas-confetti";
 import { emit, emitToast, subscribe } from "../events";
 import { scheduleSettingWrite } from "../settingsWriteQueue";
@@ -34,6 +35,7 @@ import { canUseWatchAudioMode } from "./watchAudioMode";
 import { useWatchPlaybackPosition } from "./useWatchPlaybackPosition";
 import { useYouTubeMediaSession } from "./useYouTubeMediaSession";
 import { resolveShortcutBindings, SHORTCUT_CLOSE_EVENT, shortcutActionMatches } from "../keyboardShortcuts";
+import { resolvePlayerLanguage } from "../../../shared/playerLanguage";
 import { normalizeWatchCommentsMode } from "../../../shared/watchComments";
 import { applyEmbeddedPlayerCommand } from "./embeddedPlayerCommand";
 
@@ -50,6 +52,13 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const feedSort = searchParams.get("sort") === "arrival" ? "arrival" : "published";
   const playlistSort = normalizePlaylistSort(searchParams.get("sort"));
   const watchTogetherRoomId = searchParams.get("room")?.trim() || null;
+  // Opening a list is not resuming a video: a position remembered for an entry
+  // belongs to the last time it was watched on its own, not to the run the
+  // listener has just started.
+  const startFromBeginning = Boolean((location.state as { fromStart?: unknown } | null)?.fromStart);
+  // Where the element had already got to when the page caught up with it.
+  const routeStartAt = Number((location.state as { startAt?: unknown } | null)?.startAt);
+  const resumeAtSeconds = Number.isFinite(routeStartAt) && routeStartAt > 0 ? routeStartAt : 0;
   const routePreview = resolveWatchRoutePreview(location.state, id);
   const routePlaybackQueue = useMemo<PlaybackQueueContext | null>(() => {
     const stateQueue = (location.state as { playbackQueue?: unknown } | null)?.playbackQueue;
@@ -84,26 +93,6 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const [videoUnavailable, setVideoUnavailable] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const videoMissing = missingVideoId === id;
-  /**
-   * What the card that was clicked already knew. Not the row — that still has
-   * to be imported — but enough for the page to look like itself while it is.
-   */
-  const routePreview = useMemo<VideoInfo | null>(() => {
-    const preview = (location.state as { preview?: Record<string, unknown> } | null)?.preview;
-    if (!preview || typeof preview.videoId !== "string" || preview.videoId !== id) return null;
-    return {
-      videoId: preview.videoId,
-      title: typeof preview.title === "string" ? preview.title : "",
-      channelId: typeof preview.channelId === "string" ? preview.channelId : "",
-      channelTitle: typeof preview.channelTitle === "string" ? preview.channelTitle : "",
-      description: "",
-      thumbnail: typeof preview.thumbnail === "string" ? preview.thumbnail : "",
-      viewCount: null,
-      publishedAt: null,
-      duration: typeof preview.duration === "string" ? preview.duration : null,
-      liveStatus: "none",
-    };
-  }, [id, location.state]);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [related, setRelated] = useState<Video[]>([]);
   const [relatedPending, setRelatedPending] = useState(false);

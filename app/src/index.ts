@@ -49,6 +49,11 @@ app.get("/api/health", async (c) => {
   return c.json({ status: "ok", version: VERSION, commit: COMMIT, uptime: Math.round(process.uptime()), database: mode.database, background_tasks: mode.backgroundTasks });
 });
 
+// Invidious-speaking routes for third-party clients, off unless asked for.
+// Declared before the API router for the same reason /api/health is: they must
+// answer without the session middleware, which no such client can satisfy.
+registerInvidiousCompat(app);
+
 // Public bearer links live outside the authenticated API router. This router
 // never resolves a profile from cookies and exposes only its own allowlisted
 // read-only projection and token-scoped media resources.

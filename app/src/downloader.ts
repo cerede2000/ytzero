@@ -36,6 +36,7 @@ import { DOWNLOAD_MANIFEST_SUFFIX, recoverDownloadsFromDisk, writeDownloadManife
 import { downloadScheduleAllowsNow } from "./downloadSchedule";
 import { backgroundTasksEnabled } from "./deploymentMode";
 import { resolveDownloadQuality, type DownloadQuality } from "./downloadSettings";
+import { audioLanguageFor } from "./audioTrackLanguage";
 import { createMobilePlayback } from "./mobilePlayback";
 export {
   DL_DEFAULTS,
@@ -1170,14 +1171,7 @@ const {
   ytdlpStatus,
 });
 
-const { getDirectVideoResponse, invalidateDirectVideoSources } = createDownloadVideoProgressiveStreaming({
-  YTDLP,
-  downloadCookiesConfigured,
-  downloadCookiesFile,
-  ytdlpStatus,
-});
-
-export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodPlaylist, getDirectVideoResponse, getHlsPlaylist, getHlsResource, getHlsSegment, hasHlsSession, getLiveAudioPlaylist, getLiveAudioResource, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, liveStreamEnabled, retryAudioSource };
+export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodPlaylist, getHlsPlaylist, getHlsResource, getHlsSegment, getDirectVideoResponse, hasHlsSession, getLiveAudioPlaylist, getLiveAudioResource, invalidateAudioSources, isSegmentName, liveStreamEnabled, retryAudioSource };
 export const ensureMobilePlayback = mobilePlayback.ensure;
 // ---------- scheduler ----------
 

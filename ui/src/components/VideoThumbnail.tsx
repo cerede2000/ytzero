@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import { img, NO_VIDEO_THUMBNAIL, videoThumbnail, youtubeThumbnailFallback } from "../img";
+import { type ReactNode, useEffect, useState } from "react";
+import { img, NO_VIDEO_THUMBNAIL } from "../img";
+import { pendingRetry, shownThumbnail, thumbnailCandidates } from "../thumbnailFallback";
 import "./VideoThumbnail.css";
 
 export type VideoThumbnailVariant =
@@ -74,23 +75,6 @@ export function VideoThumbnail({
   fallbackSrc?: string;
   children?: ReactNode;
 }) {
-  const [image, setImage] = useState(() => ({ source: src, displayedSource: videoThumbnail(src), fallbackAttempted: false }));
-
-  useEffect(() => {
-    setImage({ source: src, displayedSource: videoThumbnail(src), fallbackAttempted: false });
-  }, [src]);
-
-  const handleImageError = () => {
-    setImage((current) => {
-      if (current.source !== src || current.displayedSource === NO_VIDEO_THUMBNAIL) return current;
-
-      const fallback = current.fallbackAttempted ? null : youtubeThumbnailFallback(src);
-      return fallback
-        ? { source: src, displayedSource: img(fallback), fallbackAttempted: true }
-        : { source: src, displayedSource: NO_VIDEO_THUMBNAIL, fallbackAttempted: true };
-    });
-  };
-
   const classes = VARIANT_CLASSES[variant];
   /*
    * An image that renders nothing must not leave a hole.
@@ -107,7 +91,8 @@ export function VideoThumbnail({
   const [retried, setRetried] = useState<readonly string[]>([]);
   const [painted, setPainted] = useState<string | null>(null);
   const candidates = thumbnailCandidates(src, fallbackSrc);
-  const wanted = candidates.find((candidate) => !failed.includes(candidate)) ?? candidates[0];
+  // Past the last candidate, the placeholder upstream draws for a missing image.
+  const wanted = candidates.find((candidate) => !failed.includes(candidate)) ?? NO_VIDEO_THUMBNAIL;
   /*
    * A card that already shows something never blinks through empty.
    *
@@ -156,7 +141,7 @@ export function VideoThumbnail({
         loading={loading}
         draggable={draggable}
         onLoad={() => setPainted(shown)}
-        onError={() => setFailed((previous) => previous.includes(shown) ? previous : [...previous, shown])}
+        onError={() => { if (shown !== NO_VIDEO_THUMBNAIL) setFailed((previous) => previous.includes(shown) ? previous : [...previous, shown]); }}
       />
       {children}
       <PlaybackIndicator watched={watched} progress={progress} />

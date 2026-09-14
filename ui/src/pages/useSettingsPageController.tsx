@@ -35,7 +35,7 @@ import ProfilesSettings, { ProfilePasswordSettings } from "../components/setting
 import { ChannelOwnership, FilterRuleGroups, PlaylistSettingsItem, PluginMultiselect, RuleRow, SidebarNavEditor, TagRow } from "../components/settings/SettingsEditors";
 import { ChangelogNote, LogLine, SettingsLoadingState } from "../components/settings/SettingsSupport";
 
-type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "plugins" | "sharing" | "advanced" | "profiles" | "auth" | "cluster";
+type Tab = "channels" | "tags" | "playlists" | "display" | "notifications" | "clients" | "plugins" | "sharing" | "advanced" | "profiles" | "auth" | "cluster";
 const TIME_ZONES = (() => {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "timeZone") => string[] };
   const supported = intl.supportedValuesOf?.("timeZone") ?? [

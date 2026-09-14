@@ -1,7 +1,6 @@
 import { searchDailymotionAll, type DailymotionChannel, type DailymotionVideo } from "./dailymotion";
 import { SEARCH_PROVIDERS, type SearchProviderDescription } from "./searchProviderCatalog";
 import { log } from "./logger";
-import { persistSetCookies } from "./youtubeCookieHealth";
 import { youtubeCookieHeader } from "./youtubeCookieHeader";
 import { searchDeeper, searchYouTube, type ChannelSearchResult, type SearchResult } from "./youtube";
 import type { PanelLanguage } from "./relatedVideoText";
@@ -123,23 +122,9 @@ export async function searchAcrossProviders(
   await Promise.all(providers.map(async (provider) => {
     try {
       found[provider.id] = await runProvider(provider.id, query, from, upTo, reader && jar
-        ? {
-          id: reader,
-          cookieHeader: jar,
-          /*
-           * A browser writes back what a page rotated, which is how a session
-           * stays a session. Nothing here did: the jar was only ever renewed
-           * by somebody opening a video or the page that displays its health,
-           * so between two such moments it aged untouched. A signed-in search
-           * is traffic we now make anyway, and its answers carry the same
-           * rotations.
-           *
-           * Only while the account is still known — writing what YouTube
-           * hands a stranger over the remains of an account is not a repair,
-           * and the guard for that lives with the jar.
-           */
-          onSetCookies: (setCookies) => persistSetCookies(reader, setCookies),
-        }
+        // The search writes back what its answers rotated, through the jar
+        // module, the way every other signed-in request does.
+        ? { id: reader, cookieHeader: jar }
         : null, language);
     } catch (error) {
       // Named, because a provider that answers nothing and a provider that was
@@ -156,7 +141,7 @@ async function runProvider(
   query: string,
   from: number,
   upTo: number,
-  reader: { id: number; cookieHeader: string; onSetCookies: (setCookies: string[]) => void } | null,
+  reader: { id: number; cookieHeader: string } | null,
   language: PanelLanguage,
 ): Promise<ProviderSearch> {
   if (id === "youtube") {

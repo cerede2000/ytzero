@@ -4,7 +4,9 @@ import { readYouTubeResponse } from "./youtubeRateLimit";
 import { sapisidFrom, sapisidHash } from "./youtubeInnerTube";
 import { languageHeaders } from "./youtubeLanguageCookie";
 import type { ChannelSearchResult, PublishedAgo, SearchResult } from "./youtube";
-import { readYouTubeResponseWithCookies } from "./youtubeCookieJar";
+import { readCount } from "./countText";
+import { parseCompactCount, type PanelLanguage } from "./relatedVideoText";
+import { readYouTubeResponseWithCookies, refreshYouTubeResponseCookies } from "./youtubeCookieJar";
 
 interface YoutubeSearchDependencies {
   requestHeaders: (userId?: number) => Record<string, string>;
@@ -203,8 +205,9 @@ function collectSearchChannels(data: any): ChannelSearchResult[] {
 
 async function fetchSearchData(query: string, filter = "", language: PanelLanguage = "en"): Promise<any | null> {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${filter}`;
-  const res = await fetch(url, { headers: requestHeaders(userId) });
-  return extractInitialData(await readYouTubeResponseWithCookies(res, "YouTube search failed", userId, url));
+  const res = await fetch(url, { headers: fetchHeaders(language) });
+  if (!res.ok) throw new Error(`YouTube search failed (${res.status})`);
+  return extractInitialData(await res.text());
 }
 
 // YouTube's "Channel" search filter (sp=EgIQAg%3D%3D). The default results page
@@ -316,8 +319,8 @@ interface SearchWalk {
   config: { apiKey: string; clientVersion: string } | null;
   /** Kept for the continuations, which must be asked by whoever began the walk. */
   cookieHeader: string | null;
-  /** What the answers rotated, handed back so the session stays a live one. */
-  harvest: ((setCookies: string[]) => void) | null;
+  /** Whose jar the walk runs on, so its answers are written back to it. */
+  readerId: number | null;
 }
 
 const walks = new Map<string, SearchWalk>();
@@ -328,16 +331,19 @@ const WALKS_MAX = 40;
 async function beginWalk(
   query: string,
   cookieHeader: string | null,
-  harvest: ((setCookies: string[]) => void) | null,
+  readerId: number | null,
   language: PanelLanguage,
 ): Promise<SearchWalk> {
-  const response = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  const response = await fetch(url, {
     headers: searchHeaders(cookieHeader, language),
   });
-  harvest?.(response.headers.getSetCookie());
   // Named rather than guessed at: a challenge page parses as no data at all,
   // and "layout change" is the wrong thing to tell somebody who is throttled.
-  const html = await readYouTubeResponse(response, "YouTube search failed");
+  // Asked as a reader, the answer is also written back to that reader's jar.
+  const html = readerId === null
+    ? await readYouTubeResponse(response, "YouTube search failed")
+    : await readYouTubeResponseWithCookies(response, "YouTube search failed", readerId, url);
   const data = extractInitialData(html);
   if (!data) throw new Error("YouTube search returned no data (bot challenge or layout change)");
   const config = innertubeConfig(html);
@@ -352,7 +358,7 @@ async function beginWalk(
     barren: 0,
     config,
     cookieHeader,
-    harvest,
+    readerId,
   };
   absorb(walk, data);
   return walk;
@@ -390,7 +396,7 @@ async function stepWalk(walk: SearchWalk): Promise<boolean> {
         continuation: walk.token,
       }),
     });
-    walk.harvest?.(response.headers.getSetCookie());
+    if (walk.readerId !== null) refreshYouTubeResponseCookies(response, walk.readerId, response.url);
     if (!response.ok) {
       endWalk(walk, "refused", { status: response.status });
       return false;
@@ -436,13 +442,13 @@ async function stepWalk(walk: SearchWalk): Promise<boolean> {
 async function searchDeeper(
   query: string,
   wanted: number,
-  reader: { id: number; cookieHeader: string | null; onSetCookies?: (setCookies: string[]) => void } | null = null,
+  reader: { id: number; cookieHeader: string | null } | null = null,
   language: PanelLanguage = countLanguage(),
 ): Promise<{ results: SearchResult[]; channels: ChannelSearchResult[]; more: boolean }> {
   const key = walkKey(query, reader?.cookieHeader ? reader.id : null, language);
   let walk = walks.get(key);
   if (!walk || Date.now() - walk.at > SEARCH_TTL) {
-    walk = await beginWalk(query, reader?.cookieHeader ?? null, reader?.onSetCookies ?? null, language);
+    walk = await beginWalk(query, reader?.cookieHeader ?? null, reader?.cookieHeader ? reader.id : null, language);
     if (walks.size >= WALKS_MAX) walks.clear();
     walks.set(key, walk);
   }

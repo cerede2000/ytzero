@@ -14,7 +14,7 @@ import { resolveYouTubeLanguage, youtubeRequestHeaders, youtubeRssHeaders, type 
 import { MetadataCookieFallbackBudget, retryVideoInfoWithCookies } from "./videoMetadataFallback";
 import { AsyncTtlCache } from "./asyncTtlCache";
 import { readYouTubeBodyWithCookies, readYouTubeResponseWithCookies, refreshYouTubeResponseCookies } from "./youtubeCookieJar";
-export { DeletedVideoError, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError, videoOEmbedAvailabilityFromStatus } from "./youtubeVideoAvailability";
+export { DeletedVideoError, fetchVideoOEmbed, fetchVideoOEmbedAvailability, isDeletedVideoError, isPrivateVideoError, PrivateVideoError, videoOEmbedAvailabilityFromStatus } from "./youtubeVideoAvailability";
 const _require = createRequire(import.meta.url);
 const InnerTubeClient = _require("innertube.js");
 const _yt = new InnerTubeClient();
@@ -1142,42 +1142,6 @@ export interface FetchVideoInfoOptions {
 }
 
 /**
- * The several ways a YouTube page says it knows who is reading it.
- *
- * One marker was not enough: it appears on a watch page and not on the home
- * page, so a check made against the home page reported "not recognised" for a
- * jar that was working perfectly a second later — a false alarm is worse than
- * no alarm, since it sends somebody to re-export cookies that were fine.
- */
-function readsAsSignedIn(html: string): boolean {
-  return /"LOGGED_IN"\s*:\s*true/.test(html)
-    || /"logged_in"\s*:\s*(?:true|"1")/.test(html)
-    || /"isSignedIn"\s*:\s*true/.test(html);
-}
-
-/**
- * Whether YouTube still knows the account behind a jar.
- *
- * Asked directly rather than inferred from whatever else happened to make a
- * signed-in request: the panel is fetched anonymously by default, so waiting
- * for it to report would leave the question unanswered for ever on most
- * instances. The home page is the cheapest thing that carries the marker.
- */
-export async function fetchYoutubeSessionState(
-  cookieHeader: string,
-  userId?: number,
-): Promise<{ signedIn: boolean; setCookies: string[] }> {
-  const language = resolveYouTubeLanguage(userId);
-  const base = youtubeRequestHeaders(userId, language);
-  const res = await fetch("https://www.youtube.com/", {
-    headers: { ...base, ...languageHeaders(`${base.Cookie}; ${cookieHeader}`, language.hl as PanelLanguage) },
-  });
-  if (!res.ok) throw new Error(`YouTube fetch failed (${res.status})`);
-  const html = await res.text();
-  return { signedIn: readsAsSignedIn(html), setCookies: res.headers.getSetCookie?.() ?? [] };
-}
-
-/**
  * Read the side panel as somebody, when asking as nobody was refused.
  *
  * The panel only ever comes from the watch page, and the watch page is the one
@@ -1195,30 +1159,21 @@ export async function fetchRelatedVideosAsSomebody(
   videoId: string,
   cookieHeader: string,
   language: PanelLanguage = "en",
-  /**
-   * Told what the answer said about the session: whether the account behind
-   * the jar was recognised, and which cookies the response rotated.
-   */
-  session?: { signedIn: boolean; setCookies: string[] },
+  /** Whose jar this is, so the answer is written back to it and read for recognition. */
+  userId?: number,
 ): Promise<RelatedVideo[]> {
   const base = youtubeRequestHeaders();
-  const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const res = await fetch(url, {
     headers: { ...base, ...languageHeaders(`${base.Cookie}; ${cookieHeader}`, language) },
   });
-  if (!res.ok) throw new Error(`YouTube fetch failed (${res.status})`);
-  const html = await res.text();
-  // Sending a jar is not the same as being known for it. An expired or rotated
-  // jar is answered with the page a stranger gets — parseable, twenty
-  // suggestions, and about nobody. Saying "credentialed" for the attempt made
-  // rather than the answer received is how a dead jar can look like a working
-  // one for a morning.
-  if (session) {
-    session.signedIn = readsAsSignedIn(html);
-    // YouTube rotates cookies as it answers. A browser writes them down; a
-    // file exported once does not, and drifts behind until it is no longer
-    // recognised at all.
-    session.setCookies = res.headers.getSetCookie?.() ?? [];
-  }
+  // Sending a jar is not the same as being known for it: an expired one is
+  // answered with the page a stranger gets. The jar module reads that answer,
+  // so what is recorded is the reply rather than the attempt, and the cookies
+  // the page rotated are written back while the account is still known.
+  const html = userId === undefined
+    ? await readYouTubeResponse(res, "YouTube fetch failed")
+    : await readYouTubeResponseWithCookies(res, "YouTube fetch failed", userId, url);
   return relatedVideosFromWatchPage(extractVariable(html, "ytInitialData"), 40, language);
 }
 

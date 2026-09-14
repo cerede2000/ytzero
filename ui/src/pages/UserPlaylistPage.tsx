@@ -16,6 +16,7 @@ import PlaylistPlaybackActions from "../components/PlaylistPlaybackActions";
 import type { PlayVideo, PlaybackQueueContext } from "../playbackQueue";
 import { normalizeUserPlaylistSort, type UserPlaylistSort } from "../playlistSort";
 import { HeaderSettingsHeader, HeaderSettingsItem, HeaderSettingsOption, HeaderSettingsPopover } from "../components/HeaderSettingsMenu";
+import { movedItem } from "../playlistReorder";
 import PublicShareControl from "../components/PublicShareControl";
 
 export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {

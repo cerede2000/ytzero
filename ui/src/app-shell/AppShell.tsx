@@ -18,7 +18,6 @@ import { usePluginRoutes } from "./usePluginRoutes";
 import { useProfileSession } from "./useProfileSession";
 import { useSidebarVisibility } from "./sidebarVisibility";
 import { useI18n } from "../i18n";
-import { createWatchRoutePreview } from "../pages/watchRuntime";
 import "../AppShell.css";
 
 export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
@@ -32,10 +31,7 @@ export default function AppShell({ isAdmin }: { isAdmin: boolean }) {
 
   useSidebarVisibility(location.pathname);
 
-  const play = useCallback((video: Video, playbackQueue?: PlaybackQueueContext, options?: PlayOptions) => navigate(
-    `/watch/${video.video_id}`,
-    { state: { playbackQueue, watchPreview: createWatchRoutePreview(video) } },
-  ), [navigate]);
+  const play = usePlayVideo();
 
   if (!i18nReady || !preferences.ready || !plugins.ready || !profile.ready) {
     return <AppBootstrap />;

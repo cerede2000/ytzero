@@ -217,6 +217,14 @@ function effectiveCookieProfile(userId?: number): number | null {
 export function refreshYouTubeResponseCookies(response: Response, userId: number | undefined, requestUrl: string): number {
   const effectiveUserId = effectiveCookieProfile(userId);
   if (!effectiveUserId) return 0;
+  /*
+   * Only a session YouTube still recognises has anything to renew. An expired
+   * jar is not refused, it is answered as a stranger, and a stranger is handed
+   * fresh visitor cookies: merged in, they write an anonymous session over the
+   * remains of the account one, and nothing short of exporting the jar again
+   * brings it back.
+   */
+  if (recognitionByProfile.get(effectiveUserId)?.recognition === "unrecognized") return 0;
   const setCookies = responseSetCookies(response);
   if (setCookies.length === 0) return 0;
   const destination = downloadCookiesFile(effectiveUserId);
@@ -264,9 +272,11 @@ function recordRecognition(userId: number | undefined, body: string, now = Date.
 }
 
 export async function readYouTubeBodyWithCookies(response: Response, userId: number | undefined, requestUrl: string): Promise<string> {
-  refreshYouTubeResponseCookies(response, userId, requestUrl);
   const body = await response.text();
+  // Recognition first: what this body says about the account decides whether
+  // the cookies it came with are worth writing down.
   recordRecognition(userId, body);
+  refreshYouTubeResponseCookies(response, userId, requestUrl);
   return body;
 }
 
@@ -276,8 +286,12 @@ export async function readYouTubeResponseWithCookies(
   userId: number | undefined,
   requestUrl: string,
 ): Promise<string> {
-  refreshYouTubeResponseCookies(response, userId, requestUrl);
-  return readYouTubeResponse(response, failure, (body) => recordRecognition(userId, body));
+  // Observed before the response is judged, so a rejected answer still has its
+  // rotation persisted — once its body has said whether the account is known.
+  return readYouTubeResponse(response, failure, (body) => {
+    recordRecognition(userId, body);
+    refreshYouTubeResponseCookies(response, userId, requestUrl);
+  });
 }
 
 function healthResult(userId: number): YouTubeCookieHealth | null {
@@ -292,6 +306,12 @@ function healthResult(userId: number): YouTubeCookieHealth | null {
 export function invalidateYouTubeCookieHealth(userId: number): void {
   recognitionByProfile.delete(userId);
   healthInFlight.delete(userId);
+}
+
+/** What the last answer said, without asking again; null while nothing has answered. */
+export function knownYouTubeCookieRecognition(userId: number): boolean | null {
+  const recognition = recognitionByProfile.get(userId)?.recognition;
+  return recognition === "recognized" ? true : recognition === "unrecognized" ? false : null;
 }
 
 export async function youtubeCookieHealth(userId: number, now = Date.now()): Promise<YouTubeCookieHealth> {
