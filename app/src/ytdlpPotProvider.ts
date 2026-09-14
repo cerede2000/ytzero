@@ -17,43 +17,75 @@ import { join } from "node:path";
  * provider installed these arguments are empty and yt-dlp behaves as before.
  */
 
-/** Where the image installs the provider; the script is run from here. */
-const DEFAULT_POT_PROVIDER_HOME = "/opt/bgutil-ytdlp-pot-provider/server";
+/*
+ * Where the image installs the plugin and the script. It declares both for
+ * yt-dlp as YTDLP_BGUTIL_PLUGIN_DIR and YTDLP_BGUTIL_SERVER_HOME, and those
+ * declarations are read first: one install, named in one place.
+ */
+const IMAGE_PLUGIN_DIR = "/opt/ytzero/yt-dlp-plugins";
+const IMAGE_SERVER_HOME = "/opt/ytzero/bgutil/server";
+
+type Environment = Record<string, string | undefined>;
 
 export interface PotProviderEnvironment {
   /** Directory holding the provider sources, or "" / "off" to skip it. */
   home?: string;
+  /** Directory yt-dlp loads the provider's plugin from. */
+  pluginDir?: string;
   /** Base URL of a companion provider service, if one is run instead. */
   url?: string;
+  /** Where the defaults above are read from. */
+  env?: Environment;
   exists?: (path: string) => boolean;
   /** Resolves links, because the runtime it is handed to does not. */
   real?: (path: string) => string;
 }
 
+/** The script's home: an operator's choice, else the install the image declares. */
+function providerHome(env: Environment): string {
+  return env.POT_PROVIDER_HOME ?? env.YTDLP_BGUTIL_SERVER_HOME ?? IMAGE_SERVER_HOME;
+}
+
 /**
- * The `--extractor-args` yt-dlp needs to reach whichever provider is present.
+ * The arguments yt-dlp needs to reach whichever provider is present.
  * The script provider is only offered once its entry point is really on disk:
  * naming a missing one makes yt-dlp complain on every single call.
  */
 export function potProviderArgs(environment: PotProviderEnvironment = {}): string[] {
   const {
-    home = process.env.POT_PROVIDER_HOME ?? DEFAULT_POT_PROVIDER_HOME,
-    url = process.env.POT_PROVIDER_URL ?? "",
+    env = process.env,
+    home = providerHome(env),
+    pluginDir = env.YTDLP_BGUTIL_PLUGIN_DIR ?? IMAGE_PLUGIN_DIR,
+    url = env.POT_PROVIDER_URL ?? "",
     exists = existsSync,
     real = (path: string) => { try { return realpathSync(path); } catch { return path; } },
   } = environment;
-  const args: string[] = [];
+  const providers: string[] = [];
   const trimmedUrl = url.trim();
-  if (trimmedUrl) args.push("--extractor-args", `youtubepot-bgutilhttp:base_url=${trimmedUrl}`);
+  if (trimmedUrl) providers.push("--extractor-args", `youtubepot-bgutilhttp:base_url=${trimmedUrl}`);
   const trimmedHome = home.trim();
   if (trimmedHome && trimmedHome !== "off" && exists(join(trimmedHome, "src", "generate_once.ts"))) {
     // The real directory, not a link to it: the script is run under a runtime
     // whose file permissions are granted per path, and it compares the path it
     // resolves against the one it was granted. A link makes those differ, and
     // the script dies reading its own dependencies.
-    args.push("--extractor-args", `youtubepot-bgutilscript:server_home=${real(trimmedHome)}`);
+    providers.push("--extractor-args", `youtubepot-bgutilscript:server_home=${real(trimmedHome)}`);
   }
-  return args;
+  if (providers.length === 0) return [];
+  /*
+   * yt-dlp searches only its default directories for plugins and the image
+   * installs this one elsewhere, so the directory travels with every provider
+   * argument. Left to the anonymous attempts, which upstream's
+   * `ytdlpAttemptArgs` covers, an attempt carrying cookies ran with no provider
+   * at all: "PO Token Providers: none". Those attempts get the pair twice, and
+   * yt-dlp loads the plugin once.
+   *
+   * Only when it is really there. A missing directory is not skipped: yt-dlp
+   * stops with "Invalid plugin directory" before it fetches anything.
+   */
+  const trimmedPluginDir = pluginDir.trim();
+  const plugin = trimmedPluginDir && exists(trimmedPluginDir) ? ["--plugin-dirs", trimmedPluginDir] : [];
+  return [...plugin, ...providers];
 }
 
 /** Resolved once: the answer cannot change without restarting the process. */
@@ -80,7 +112,7 @@ export function potArgsFor(_useCookies?: boolean): string[] {
 
 /** The script provider's home, when the bundled script is the one in use. */
 function scriptProviderHome(): string | null {
-  const home = (process.env.POT_PROVIDER_HOME ?? DEFAULT_POT_PROVIDER_HOME).trim();
+  const home = providerHome(process.env).trim();
   if (!home || home === "off") return null;
   if (!existsSync(join(home, "src", "generate_once.ts"))) return null;
   try {
