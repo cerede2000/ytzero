@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shouldDriveYouTubePlayer } from "./watchPlayerDrive";
+import { embeddedCaptionVars } from "./embeddedCaptionVars";
 import confetti from "canvas-confetti";
 import { emit, emitToast, subscribe } from "../events";
 import { scheduleSettingWrite } from "../settingsWriteQueue";
