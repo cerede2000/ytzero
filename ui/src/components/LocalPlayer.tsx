@@ -342,6 +342,7 @@ const LocalPlayer = forwardRef<LocalPlayerHandle, {
     const v = videoRef.current;
     if (!v) return;
     setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+    setResolution(v.videoHeight || 0);
     if (!hls && startSeconds > 0 && startSeconds < v.duration - 5) v.currentTime = startSeconds;
     v.playbackRate = playbackRate;
     enforceLocalPlayerVolume(v, volume);

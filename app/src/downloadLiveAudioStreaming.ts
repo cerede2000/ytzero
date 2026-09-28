@@ -4,7 +4,7 @@ import { cookieAttemptMemory } from "./cookieAttemptOrder";
 import { videoInfoRefusalQuiet } from "./youtubeRefusalQuiet";
 import { downloadCookieAttempts } from "./downloadStrategy";
 import { rewriteLiveAudioPlaylist } from "./liveAudioPlaylist";
-import { ytdlpAttemptArgs } from "./downloadConfig";
+import { potArgsFor } from "./ytdlpPotProvider";
 import { log } from "./logger";
 
 interface DownloadLiveAudioDependencies {

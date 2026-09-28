@@ -308,6 +308,7 @@ export function createDownloadVideoDirectStreaming(dependencies: DownloadVideoDi
       "--ignore-config", "--no-playlist",
       "-f", selector,
       "--skip-download", "--dump-single-json",
+      ...potArgsFor(useCookies),
     ];
     if (signal.aborted) return { kind: "failed" };
     let process: ReturnType<typeof Bun.spawn>;

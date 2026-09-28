@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { api, type ChildStatus, type ProfilePermissions, type Video } from "./api";
 import type { ToastVariant } from "./events";
-import type { PlaybackQueueContext } from "./playbackQueue";
+import type { PlaybackQueueContext, PlayOptions } from "./playbackQueue";
 import type { ChannelOpenSyncMode } from "../../shared/channelSyncModes";
 import { DelayedPageSkeleton } from "./components/LoadingState";
 const ArchivePage = lazy(() => import("./pages/ArchivePage"));

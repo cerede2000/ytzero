@@ -333,12 +333,24 @@ export default function UserPlaylistPage({ onPlay }: { onPlay: PlayVideo }) {
           {videos.map((v, index) => (
             <div
               key={v.video_id}
-              video={v}
-              onPlay={playPlaylistVideo}
-              onChanged={load}
-              keepAfter={STATE_ONLY_FEEDBACK}
-              onRemoveFromPlaylist={(videoId) => api.removeVideoFromUserPlaylist(playlist.id, videoId)}
-            />
+              className={`playlist-video${reorderable ? " playlist-video--reorderable" : ""}${carriedVideoId === v.video_id ? " is-carried" : ""}`}
+              data-playlist-index={reorderable ? index : undefined}
+            >
+              {reorderable && <button
+                type="button"
+                className="playlist-video__grip"
+                aria-label={t("playlistReorderHint")}
+                title={t("playlistReorderHint")}
+                onPointerDown={(event) => { event.preventDefault(); setCarriedVideoId(v.video_id); }}
+              ><GripVertical size={16} /></button>}
+              <VideoCard
+                video={v}
+                onPlay={playPlaylistVideo}
+                onChanged={load}
+                keepAfter={STATE_ONLY_FEEDBACK}
+                onRemoveFromPlaylist={(videoId) => api.removeVideoFromUserPlaylist(playlist.id, videoId)}
+              />
+            </div>
           ))}
         </div>
       )}

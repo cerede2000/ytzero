@@ -15,10 +15,10 @@
     "@resvg/resvg-js": "^2.6.2",
     "@simplewebauthn/server": "^13.3.2",
     "bonjour-service": "^1.4.4",
-    "fast-xml-parser": "^5.7.0",
-    "hono": "^4.6.0",
+    "fast-xml-parser": "^5.11.0",
+    "hono": "^4.13.4",
     "innertube.js": "^1.1.5",
-    "openid-client": "^6.8.4",
+    "openid-client": "^6.8.7",
     "sharp": "^0.35.4"
   },
   "devDependencies": {

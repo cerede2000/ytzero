@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shouldDriveYouTubePlayer } from "./watchPlayerDrive";
-import { embeddedCaptionVars } from "./embeddedCaptionVars";
 import confetti from "canvas-confetti";
 import { emit, emitToast, subscribe } from "../events";
 import { scheduleSettingWrite } from "../settingsWriteQueue";
@@ -223,8 +222,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
   const [downloadReadyToReload, setDownloadReadyToReload] = useState(false);
   const [youtubeAutoplayBlocked, setYoutubeAutoplayBlocked] = useState(false);
   const [youtubeError, setYoutubeError] = useState<number | null>(null);
-  const [directFallback, setDirectFallback] = useState(false);
-  const [directProgressive, setDirectProgressive] = useState(false);
+
   const downloadPollGenerationRef = useRef(0);
   // The embed said it cannot play (removed/private, or embedding disabled).
   // With streaming on, that is the cue to drop to the direct stream instead.
@@ -390,7 +388,6 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     capturePlaybackPosition, playbackPositionVideoIdRef, playbackStartSeconds,
     progressRef, streamPositionRef,
   } = useWatchPlaybackPosition({
-    sourceKey: directProgressive ? "progressive" : "hls",
     audioActive, id, membersOnlyNotice, playerKind, playerRef,
     privateVideoNotice, resumeAtSeconds, sharedStartSeconds, startFromBeginning, video,
   });
@@ -411,12 +408,14 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
         : Math.min(48, Math.max(12, Number(rawSubtitleSize) || 19));
   // A channel can either inherit the profile preference, explicitly turn
   // captions off, or force one language. These values apply to both players.
+  const playerLanguage = resolvePlayerLanguage(settings?.player_hl, language);
   const captions = resolveWatchCaptions({
     channelMode: video?.channel_caption_mode,
     channelLanguage: video?.channel_caption_language,
     playerCc: settings?.player_cc,
-    playerCcLang: settings?.player_cc_lang,
-    playerHl: settings?.player_hl,
+    // Our player language layer decides both before upstream's fallback chain sees them.
+    playerCcLang: resolvePlayerLanguage(settings?.player_cc_lang, playerLanguage),
+    playerHl: playerLanguage,
   });
   const channelCaptionsOff = captions.channelOff;
   const captionsDefaultOn = captions.defaultOn;
@@ -552,22 +551,11 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     setSkipStreaming(true);
   }, [capturePlaybackPosition]);
 
-  const exitDirectStream = useCallback(() => {
-    capturePlaybackPosition();
-    if (!directProgressive) {
-      setDirectProgressive(true);
-      return;
-    }
-    setDirectFallback(false);
-    setPlayerSource("youtube");
-  }, [capturePlaybackPosition, directProgressive]);
 
   useEffect(() => {
     setYoutubeError(null);
   }, [id, playerKind]);
 
-  useEffect(() => { setDirectFallback(false); }, [id]);
-  useEffect(() => { setDirectProgressive(false); }, [id]);
 
   // Effective playback rate: per-channel override, else the global default.
   // Kept in a ref so the player effect can read it without re-creating the player.
@@ -1189,7 +1177,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
       origin: window.location.origin,
     };
     if (startSeconds > 10) playerVars.start = startSeconds;
-    if (settings?.player_hl) playerVars.hl = settings.player_hl;
+    playerVars.hl = playerLanguage;
     Object.assign(playerVars, captionPlayerVars(captionsDefaultOn, captionsDefaultLang));
     if (settings?.player_quality && settings.player_quality !== "auto") playerVars.vq = settings.player_quality;
 
@@ -1758,8 +1746,7 @@ export function useWatchPageController(audioModeRequested: boolean = false) {
     downloadSubtitleLanguages,
     downloadsEnabled,
     dismissUpNextVideo,
-    exitDirectStream,
-    directProgressive,
+
     exitStreaming,
     goToUpNextVideo,
     handleEnded,

@@ -1,5 +1,5 @@
 import { database } from "./database";
-import { classifyIsShort, fetchAllChannelStreams, fetchAllChannelVideos, fetchChannelAbout, fetchChannelFeed, fetchChannelPlaylists, fetchChannelStreams, fetchChannelSubscriberCountFromWatch, fetchChannelVideosDurations, fetchLiveInfo, fetchPlaylistFeed, fetchPlaylistSnapshot, fetchVideoInfo, fetchVideoPublishedAt, isPrivateVideoError } from "./youtube";
+import { classifyIsShort, fetchAllChannelStreams, fetchAllChannelVideos, fetchChannelAbout, fetchChannelFeed, fetchChannelPlaylists, fetchChannelStreams, fetchChannelSubscriberCountFromWatch, fetchChannelVideos, fetchChannelVideosDurations, fetchLiveInfo, fetchPlaylistFeed, fetchPlaylistSnapshot, fetchVideoInfo, fetchVideoPublishedAt, isPrivateVideoError } from "./youtube";
 import { MetadataCookieFallbackBudget } from "./videoMetadataFallback";
 import { applyAutoTags } from "./autotags";
 import { applyPlaylistRulesToVideo } from "./userPlaylists";

@@ -13,6 +13,7 @@ export function useWatchPlaybackPosition({
   privateVideoNotice,
   resumeAtSeconds,
   sharedStartSeconds,
+  startFromBeginning,
   sourceKey,
   video,
 }: {
@@ -24,6 +25,7 @@ export function useWatchPlaybackPosition({
   privateVideoNotice: boolean;
   resumeAtSeconds: number;
   sharedStartSeconds: number;
+  startFromBeginning: boolean;
   sourceKey?: string;
   video: Video | null;
 }) {

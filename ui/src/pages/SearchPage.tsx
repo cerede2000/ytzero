@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./SearchPage.css";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Search, ShieldBan } from "lucide-react";
 import { api, type Channel, type ChannelSearchResult, type SearchResult, type Video } from "../api";
 import { useI18n } from "../i18n";
@@ -320,6 +320,20 @@ export default function SearchPage({ onPlay, hideExternalSearch = false }: { onP
           )}
           </div>}
         </section>
+      )}
+
+      {!hideExternalSearch && providers.length > 1 && (
+        <div className="search-source-filter" role="group" aria-label={t("searchEverySource")}>
+          <button type="button" className={`search-source-chip${chosen ? "" : " is-active"}`}
+            aria-pressed={!chosen} onClick={() => chooseSource("")}>{t("searchEverySource")}</button>
+          {providers.map((provider) => (
+            <button key={provider.id} type="button"
+              className={`search-source-chip${chosen === provider.id ? " is-active" : ""}`}
+              data-source={provider.id}
+              aria-pressed={chosen === provider.id}
+              onClick={() => chooseSource(provider.id)}>{provider.label}</button>
+          ))}
+        </div>
       )}
 
       {hideExternalSearch && (

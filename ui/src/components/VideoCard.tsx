@@ -632,7 +632,20 @@ export function VideoCard({
           : revealFeedback === "unscheduled"
             ? "swipe-reveal--unscheduled"
             : "swipe-reveal--right";
-  const visibleActionIds = actionConfig.actions.filter((action) => !action.hidden).map((action) => action.id);
+  /*
+   * Only what this provider's videos can actually be subjected to.
+   *
+   * Every action below already refuses when its own precondition is missing,
+   * but their preconditions are about the library, and a provider with no rows
+   * there would simply show an empty cluster. `remove` is the exception, and
+   * the point: leaving a shelf is about the reader, is written to this
+   * provider's own table, and must stay reachable. The list grows as more of
+   * its own actions are wired.
+   */
+  const ownActionIds = new Set<VideoCardActionId>(["remove"]);
+  const visibleActionIds = actionConfig.actions
+    .filter((action) => !action.hidden && (!withoutLibraryRow || ownActionIds.has(action.id)))
+    .map((action) => action.id);
   const otherPlaybackModeIsAudio = otherPlaybackModeIsAudioOnly();
   const scheduleIndex = visibleActionIds.indexOf("schedule");
   const actionsBeforeSchedule = scheduleIndex < 0 ? visibleActionIds : visibleActionIds.slice(0, scheduleIndex);
@@ -680,13 +693,13 @@ export function VideoCard({
           <button className="action-btn" aria-label={video.downloads_enabled ? t("downloadLocally") : t("enableDownloadsFeature")} onClick={requestLocalDownload}><ArrowDownToLine /></button>
         </Tooltip>;
       case "archive":
-        return allowReject && status !== "archived" ? <Tooltip key={id} text={t("reject")} portal={actionsInBar}>
+        return allowReject && status !== "archived" ? <Tooltip key={id} text={t("reject")} portal>
           <button className="action-btn" aria-label={t("reject")} onClick={(e) => act(e, () => api.archiveVideo(video.video_id), "rejected")}><Archive /></button>
         </Tooltip> : null;
       case "watched":
         return allowMarkWatched && watched ? <Tooltip key={id} text={t("markUnwatched")} portal>
           <button className="action-btn" aria-label={t("markUnwatched")} onClick={(e) => act(e, markUnwatched, "unwatched")}><EyeOff /></button>
-        </Tooltip> : allowMarkWatched && status !== "archived" ? <Tooltip key={id} text={t("markWatched")} portal={actionsInBar}>
+        </Tooltip> : allowMarkWatched && status !== "archived" ? <Tooltip key={id} text={t("markWatched")} portal>
           <button className="action-btn" aria-label={t("markWatched")} onClick={(e) => act(e, markWatched, "watched")}><Eye /></button>
         </Tooltip> : null;
       case "restore":
@@ -694,6 +707,13 @@ export function VideoCard({
         return showRestore || (status === "archived" && keepsCard("restored")) ? <button key={id} className="action-btn" aria-label={t("restore")} onClick={(e) => act(e, () => api.restore(video.video_id), "restored")}><Undo2 /></button> : null;
       case "remove":
         if (onRemoveFromPlaylist) return <button key={id} className="action-btn" aria-label={t("removeFromPlaylist")} onClick={(e) => act(e, () => onRemoveFromPlaylist(video.video_id), "removed")}><Trash2 /></button>;
+        // Leaving a shelf that fills itself, which is neither rejecting the
+        // video nor deleting a record of it — hence the cross rather than the
+        // bin, and a place in this cluster rather than a control of its own
+        // fighting the others for the same corner.
+        if (onRemoveFromContinue) return <Tooltip key={id} text={t("continueRemove")} portal>
+          <button className="action-btn" aria-label={t("continueRemove")} onClick={(e) => act(e, async () => onRemoveFromContinue(video.video_id), "removed")}><X /></button>
+        </Tooltip>;
         return onRemoveFromHistory && video.history_id != null ? <button key={id} className="action-btn" aria-label={t("removeFromHistory")} onClick={(e) => act(e, () => onRemoveFromHistory(video.history_id!), "removed")}><Trash2 /></button> : null;
       case "otherPlaybackMode": {
         if (otherPlaybackModeIsAudio && (video.is_private === 1 || video.members_only === 1 || video.live_status === "upcoming")) return null;

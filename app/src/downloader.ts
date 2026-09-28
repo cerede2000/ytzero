@@ -11,7 +11,6 @@ import { beginMutation, maintenanceActive } from "./maintenance";
 import { publishAppEvent, subscribeToAppEvents } from "./appEvents";
 import { notifyDownloadFailed } from "./notifications";
 import { createDownloadStreaming } from "./downloadStreaming";
-import { createDownloadVideoProgressiveStreaming } from "./downloadVideoProgressiveStreaming";
 import { directVideoStreaming } from "./directVideoStreaming";
 import { autoDownloadFollowerExistsSql } from "./downloadEligibility";
 import { automaticDownloadCandidates, migrateLegacyDownloadAutomation } from "./downloadRules";
@@ -1150,6 +1149,7 @@ const {
   getAudioResponse,
   getAudioVodPlaylist,
   getDirectVideoResponse,
+  invalidateDirectVideoSources: invalidateProgressiveVideoSources,
   getHlsPlaylist,
   getHlsResource,
   getHlsSegment,
@@ -1172,20 +1172,12 @@ const {
   ytdlpStatus,
 });
 
-const { getDirectVideoResponse, invalidateDirectVideoSources: invalidateProgressiveVideoSources } = createDownloadVideoProgressiveStreaming({
-  YTDLP,
-  dlSettings,
-  downloadCookiesConfigured,
-  downloadCookiesFile,
-  ytdlpStatus,
-});
-
 function invalidateDirectVideoSources(userId: number): void {
   invalidateProgressiveVideoSources(userId);
   directVideoStreaming.invalidateDirectHlsSources(userId);
 }
 
-export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodPlaylist, getDirectVideoResponse, getHlsPlaylist, getHlsResource, getHlsSegment, hasHlsSession, getLiveAudioPlaylist, getLiveAudioResource, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, liveStreamEnabled, retryAudioSource };
+export { destroyHlsSession, getAudioHeadResponse, getAudioResponse, getAudioVodPlaylist, getHlsPlaylist, getHlsResource, getHlsSegment, getDirectVideoResponse, hasHlsSession, getLiveAudioPlaylist, getLiveAudioResource, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, liveStreamEnabled, retryAudioSource };
 export const ensureMobilePlayback = mobilePlayback.ensure;
 // ---------- scheduler ----------
 

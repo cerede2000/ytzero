@@ -161,8 +161,7 @@ export default function WatchPage() {
     downloadsEnabled,
     dismissUpNextVideo,
     exitStreaming,
-    exitDirectStream,
-    directProgressive,
+
     goToUpNextVideo,
     handleEnded,
     id,
@@ -377,9 +376,7 @@ export default function WatchPage() {
                 <LocalPlayer
                   key={`${video.video_id}-player-${sharedStartSeconds}`}
                   ref={playerRef}
-                  hls={playerKind === "direct" && !directProgressive}
-                  durationSeconds={parseVideoDurationSeconds(video.duration) ?? undefined}
-                  src={playerKind === "direct" ? (directProgressive ? api.directStreamUrl(video.video_id) : api.directHlsUrl(video.video_id)) : api.streamUrl(video.video_id)}
+                  src={api.streamUrl(video.video_id)}
                   poster={videoThumbnail(video.thumbnail)}
                   autoplay={!watchTogetherRoomId}
                   transportLocked={watchTogetherTransportLocked}
@@ -432,15 +429,8 @@ export default function WatchPage() {
                 </div>
               ) : playerKind === "youtube" ? (
                 <div ref={ytWrapRef} className="watch-player-yt" tabIndex={-1} aria-label={video?.title} />
-              ) : playerKind === "loading" ? (
-                <div className="wp-panel" style={video ? { backgroundImage: `url(${videoThumbnail(video.thumbnail)})` } : undefined}>
-                  <div className="wp-panel-scrim" />
-                  <div className="wp-panel-content" aria-busy="true">
-                    <LoaderCircle className="spin" size={30} />
-                  </div>
-                </div>
-              ) : video && (
-                <div className="wp-panel" style={{ backgroundImage: `url(${videoThumbnail(video.thumbnail)})` }}>
+              ) : (video || playerKind === "loading") && (
+                <div className="wp-panel" style={{ backgroundImage: `url(${panelBackdrop(video?.thumbnail, id)})` }}>
                   <div className="wp-panel-scrim" />
                   {playerKind === "blocked" && (
                     <div className="wp-panel-content">

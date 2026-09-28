@@ -652,7 +652,7 @@ const AudioModePlayer = forwardRef<WatchPlayerHandle, {
           </div>
           {status !== "error" && (
             <div className="audio-mode-player" aria-label={title} tabIndex={-1}>
-              <button ref={playButtonRef} className="lp-btn audio-mode-play" onClick={togglePlay} aria-label={playing ? t("playerPause") : t("playerPlay")} disabled={status !== "ready"}>
+              <button className="lp-btn audio-mode-play" onClick={togglePlay} aria-label={playing ? t("playerPause") : t("playerPlay")} disabled={status !== "ready"}>
                 {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
               </button>
               {live ? (

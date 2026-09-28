@@ -19,7 +19,6 @@ import { useProfileSession } from "./useProfileSession";
 import { useSidebarVisibility } from "./sidebarVisibility";
 import { useI18n } from "../i18n";
 import { normalizeChannelOpenSyncMode } from "../../../shared/channelSyncModes";
-import { createWatchRoutePreview } from "../pages/watchRuntime";
 import "../AppShell.css";
 
 export default function AppShell({ isAdmin }: { isAdmin: boolean }) {

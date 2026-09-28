@@ -195,7 +195,32 @@ export const api = {
     }),
   cleanupUndo: () => http<{ restored: number }>("/cleanup/undo", { method: "POST", body: "{}" }),
   inProgress: () => sharedGet<{ videos: Video[] }>("in-progress", "/in-progress"),
-  youtubeSearch: (q: string) => http<{ results: SearchResult[]; channels: ChannelSearchResult[]; restricted?: boolean }>(`/search/youtube?q=${encodeURIComponent(q)}`),
+  youtubeSearch: (q: string) => http<{ results: SearchResult[]; channels: ChannelSearchResult[]; downloads_allowed?: boolean; downloads_enabled?: boolean; restricted?: boolean }>(`/search/youtube?q=${encodeURIComponent(q)}`),
+  searchProviders: () => http<{ providers: SearchProviderDescription[] }>("/search/providers"),
+  dailymotionContinue: () => http<{
+    videos: { videoId: string; title: string; channelTitle: string; thumbnail: string; durationSeconds: number | null; publishedAt: string | null; views: number | null }[];
+    progress: Record<string, { positionSeconds: number; durationSeconds: number }>;
+  }>("/dailymotion/continue"),
+  forgetDailymotionProgress: (id: string) => http<{ ok: true }>(
+    `/dailymotion/videos/${encodeURIComponent(id)}/progress`, { method: "DELETE" },
+  ),
+  dailymotionProgress: (ids: string[]) => http<{ progress: Record<string, { positionSeconds: number; durationSeconds: number | null; watched: boolean }> }>(
+    `/dailymotion/progress?ids=${encodeURIComponent(ids.join(","))}`,
+  ),
+  saveDailymotionProgress: (id: string, position: number, duration: number | null) => http<{ ok: true }>(
+    `/dailymotion/videos/${encodeURIComponent(id)}/progress`,
+    { method: "PUT", body: JSON.stringify({ position, duration }) },
+  ),
+  // The page names the language it is rendering in. What comes back is titled
+  // in that language, whatever the profile's stored setting happens to say.
+  searchExternal: (q: string, sources: string[], page = 1, language = "en") => http<ExternalSearch>(
+    `/search/external?q=${encodeURIComponent(q)}&page=${page}&hl=${encodeURIComponent(language)}${sources.length ? `&sources=${encodeURIComponent(sources.join(","))}` : ""}`,
+  ),
+  searchSuggest: (q: string, language: string, signal?: AbortSignal) =>
+    http<{ suggestions: string[]; channels: SearchSuggestChannel[] }>(
+      `/search/suggest?q=${encodeURIComponent(q)}&hl=${encodeURIComponent(language)}`,
+      { signal },
+    ),
   plugins: () => sharedGet<{ plugins: PluginManifest[] }>("plugins", "/plugins"),
   updatePlugin: (id: string, enabled: boolean) =>
     http<{ plugins: PluginManifest[] }>(`/plugins/${id}`, { method: "PUT", body: JSON.stringify({ enabled }) }),
@@ -266,7 +291,6 @@ export const api = {
   pinDownload: (id: string, pinned: boolean, profileId?: number) =>
     http<{ ok: true; download: VideoDownload | null }>(`/videos/${id}/download/pin${profileId ? `?profile_id=${profileId}` : ""}`, { method: "PUT", body: JSON.stringify({ pinned }) }),
   streamUrl: (id: string) => `/api/videos/${id}/stream`,
-  directStreamUrl: (id: string) => `/api/videos/${id}/direct-stream`,
   directHlsUrl: (id: string) => `/api/videos/${id}/direct-hls/index.m3u8`,
   hlsUrl: (id: string) => `/api/videos/${id}/hls/index.m3u8`,
   audioUrl: (id: string) => `/api/videos/${id}/audio`,

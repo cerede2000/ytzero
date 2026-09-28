@@ -7,7 +7,7 @@ import { getUserSetting } from "../db";
 import { log } from "../logger";
 import { childLocalOnly, isChildUser } from "../childTime";
 import { DOWNLOADS_ADMIN_SETTING_KEYS, downloadCookiesConfigured, downloadSettings, profileDownloadsEnabled, removeDownloadCookies, saveDownloadCookies, setDownloadSettings, setProfileDownloadsEnabled } from "../downloadConfig";
-import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, ensureMobilePlayback, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, getDirectVideoResponse, hasHlsSession, invalidateAudioSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
+import { activeDownloadProgress, cancelAllPendingDownloads, downloadStats, downloadStatusSummary, enqueueDownload, ensureMobilePlayback, getDownload, getHlsPlaylist, getHlsResource, getHlsSegment, getDirectVideoResponse, hasHlsSession, invalidateAudioSources, invalidateDirectVideoSources, isSegmentName, listDownloads, listSubtitleFiles, liveStreamEnabled, prioritizeDownload, removeDownload, setDownloadPinned, srtToVtt, ytdlpJavascriptRuntimeStatus, ytdlpStatus } from "../downloader";
 import { createDownloadRule, deleteDownloadRule, DownloadRuleValidationError, listDownloadRules, previewDownloadRule, updateDownloadRule, type DownloadRuleInput } from "../downloadRules";
 import { availableSubtitlesForVideo, normalizeSubtitleLanguage, subtitleStreamForVideo } from "../subtitleAvailability";
 import { subtitleLanguageLabel } from "../subtitleLanguages";
@@ -187,6 +187,7 @@ api.post("/downloads/cookies", async (c) => {
     saveDownloadCookies(uid, await file.text());
     invalidateYouTubeCookieHealth(uid);
     invalidateAudioSources(uid);
+    invalidateDirectVideoSources(uid);
     return c.json(await youtubeCookieHealth(uid));
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
@@ -199,6 +200,7 @@ api.delete("/downloads/cookies", async (c) => {
   removeDownloadCookies(uid);
   invalidateYouTubeCookieHealth(uid);
   invalidateAudioSources(uid);
+  invalidateDirectVideoSources(uid);
   return c.json({ configured: false, recognition: "unknown" as const, checked_at: null });
 });
 
