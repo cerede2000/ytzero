@@ -9,6 +9,7 @@ import { colors, typography } from "../theme";
 import { TvControlSurface } from "./TvSurface";
 import { SidebarIcon } from "./SidebarIcon";
 import { useReducedMotion, useTvScale } from "../motion";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type Props = {
   bookmark: BookmarkVideo;
@@ -83,7 +84,7 @@ export const BookmarkRow = forwardRef<View, Props>(function BookmarkRow(
 
         <View style={styles.thumbnailFrame}>
           {thumbnailSource.uri ? (
-            <Image source={thumbnailSource} resizeMode="cover" style={styles.thumbnail} />
+            <Image source={imageSourceWithHeaders(thumbnailSource)} resizeMode="cover" style={styles.thumbnail} />
           ) : (
             <View style={[styles.thumbnail, styles.placeholder]}><Text style={styles.placeholderText}>YT Zero</Text></View>
           )}

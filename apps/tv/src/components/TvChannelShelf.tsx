@@ -6,6 +6,7 @@ import { TvHorizontalList } from "./TvHorizontalList";
 import { TvControlSurface } from "./TvSurface";
 import { TvPressable } from "./TvPressable";
 import { TvLiveBadge } from "./TvLiveBadge";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type Props = {
   title: string;
@@ -69,7 +70,7 @@ const ChannelItem = forwardRef<View, {
       {({ focused }) => <>
         <TvControlSurface radius={24} focused={focused} filled={false} />
         <View style={styles.avatarWrap}>
-          {source.uri ? <Image source={source} style={styles.avatar} resizeMode="cover" /> : <View style={[styles.avatar, styles.placeholder]} />}
+          {source.uri ? <Image source={imageSourceWithHeaders(source)} style={styles.avatar} resizeMode="cover" /> : <View style={[styles.avatar, styles.placeholder]} />}
           {channel.is_live === 1 && <TvLiveBadge label={liveLabel} placement="avatar" />}
         </View>
         <Text numberOfLines={2} style={[styles.name, focused && styles.nameFocused]}>{channel.title}</Text>

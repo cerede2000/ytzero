@@ -10,6 +10,7 @@ import { motion, useReducedMotion, useTvScale } from "../motion";
 import { formatVideoCardMetadata } from "../videoMetadata";
 import { formatVideoDuration } from "../duration";
 import { TvChannelIdentity } from "./TvChannelIdentity";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type ImageSource = { uri: string; headers?: Record<string, string> };
 
@@ -44,7 +45,7 @@ const VideoArtwork = memo(function VideoArtwork({
   const progressStyle = useMemo(() => ({ width: `${progress}%` as `${number}%` }), [progress]);
   return <>
     {source.uri ? (
-      <Image source={source} style={styles.image} resizeMode="cover" />
+      <Image source={imageSourceWithHeaders(source)} style={styles.image} resizeMode="cover" />
     ) : (
       <View style={[styles.image, styles.placeholder]}><Text style={styles.placeholderText}>YT Zero</Text></View>
     )}

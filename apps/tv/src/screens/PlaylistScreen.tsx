@@ -18,6 +18,7 @@ import { TvLoadingMark } from "../components/TvLoadingMark";
 import { VideoCard } from "../components/VideoCard";
 import type { VideoActionOptions } from "../components/TvVideoActionMenu";
 import { TvGridList } from "../components/TvGridList";
+import { imageSourceWithHeaders } from "../imageSource";
 
 const emptyVideos: Video[] = [];
 const videoKey = (video: Video) => video.video_id;
@@ -119,7 +120,7 @@ export function PlaylistScreen({ api, language, t, playlistId, onBack, onOpen, v
       {...tvGridListPerformance(columns)} contentContainerStyle={styles.content} rowStyle={styles.row}
       ListHeaderComponent={<View>
         {page ? <View style={styles.hero}>
-          <Image source={api.thumbnailSource(page.playlist.thumbnail)} style={styles.thumbnail} />
+          <Image source={imageSourceWithHeaders(api.thumbnailSource(page.playlist.thumbnail))} style={styles.thumbnail} />
           <View style={styles.copy}>
             <Text accessibilityRole="header" style={styles.title}>{page.playlist.title}</Text>
             <Text style={styles.meta}>{page.playlist.channel_title} · {t("videos")}: {count.format(page.videos.length)}</Text>

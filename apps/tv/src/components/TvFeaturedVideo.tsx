@@ -12,6 +12,7 @@ import { TvHorizontalList } from "./TvHorizontalList";
 import { TvPressable } from "./TvPressable";
 import { TvChannelIdentity } from "./TvChannelIdentity";
 import { formatVideoDuration } from "../duration";
+import { imageSourceWithHeaders } from "../imageSource";
 
 const videoKey = (video: Video) => video.video_id;
 
@@ -117,7 +118,7 @@ const FeaturedThumbnail = forwardRef<View, { video: Video; source: ImageURISourc
     nextFocusUp={nextFocusUp} nextFocusDown={nextFocusDown} onPress={() => { memory.remember(); onPress(); }}
     onFocus={onFocus} onBlur={onBlur}
     style={({ focused }) => [styles.thumbnail, selected && styles.selectedThumbnail, focused && styles.focusedThumbnail]}>
-    <Image source={source} resizeMode="contain" style={styles.image} />
+    <Image source={imageSourceWithHeaders(source)} resizeMode="contain" style={styles.image} />
   </TvPressable>;
 });
 const styles = StyleSheet.create({

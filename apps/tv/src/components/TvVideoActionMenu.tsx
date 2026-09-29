@@ -28,6 +28,7 @@ import { useTvModalBack } from "../useTvModalBack";
 import { TvFocusScope } from "./TvFocusScope";
 import { requestTvFocus } from "../focus";
 import { restoreFocus } from "../focusRestoration";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type MenuView = "actions" | "schedule" | "playlists";
 
@@ -260,7 +261,7 @@ function VideoActionMenu({ api, actionConfig, onClose, onOpenChannel, onRemove, 
         <TvScreenTransition surface="glass" radius={36} style={[styles.panel, { height: panelHeight }]}>
           <View style={styles.videoSummary}>
             <View style={styles.thumbnailFrame}>
-              {currentVideo.thumbnail ? <Image source={api.thumbnailSource(currentVideo.thumbnail)} resizeMode="cover" style={styles.thumbnail} /> : null}
+              {currentVideo.thumbnail ? <Image source={imageSourceWithHeaders(api.thumbnailSource(currentVideo.thumbnail))} resizeMode="cover" style={styles.thumbnail} /> : null}
               {formatVideoDuration(currentVideo.duration) ? <View style={styles.duration}><Text style={styles.durationText}>{formatVideoDuration(currentVideo.duration)}</Text></View> : null}
             </View>
             <Text numberOfLines={3} style={styles.videoTitle}>{currentVideo.title}</Text>

@@ -11,6 +11,7 @@ import { motion, useIncreasedContrast, useReducedMotion, useTvScale } from "../m
 import { formatVideoCardMetadata } from "../videoMetadata";
 import { formatVideoDuration } from "../duration";
 import { TvChannelIdentity } from "./TvChannelIdentity";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type ImageSource = { uri: string; headers?: Record<string, string> };
 
@@ -62,7 +63,7 @@ const ShortArtwork = memo(function ShortArtwork({
   return <>
     {source.uri ? (
       <Image
-        source={source}
+        source={imageSourceWithHeaders(source)}
         resizeMode="cover"
         style={[styles.image, watched === 1 && styles.imageWatched]}
         onError={!portraitFailed ? () => setPortraitFailed(true) : undefined}

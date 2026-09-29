@@ -4,6 +4,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { colors } from "../theme";
 import { useIncreasedContrast, useReducedMotion, useReducedTransparency } from "../motion";
 import { TvGradientMask } from "./TvGradientMask";
+import { imageSourceWithHeaders } from "../imageSource";
 
 /** Artwork stays behind the reading/focus plane; gradients darken the text area. */
 export function TvBackdrop({ source, fallbackSource, style }: { source: ImageURISource; fallbackSource?: ImageURISource; style?: StyleProp<ViewStyle> }) {
@@ -54,9 +55,9 @@ function BackdropArtwork({ source, blurSource, onError }: { source: ImageURISour
 function ArtworkImage({ source, blurSource, onLoad, onError }: { source: ImageURISource; blurSource: ImageURISource; onLoad?: () => void; onError?: () => void }) {
   const opaque = useReducedTransparency();
   return <>
-    <Image source={source} style={StyleSheet.absoluteFill} resizeMode="cover" onLoad={onLoad} onError={onError} />
+    <Image source={imageSourceWithHeaders(source)} style={StyleSheet.absoluteFill} resizeMode="cover" onLoad={onLoad} onError={onError} />
     {!opaque ? <TvGradientMask style={StyleSheet.absoluteFill} pointerEvents="none" accessible={false}>
-      <Image source={blurSource} style={styles.blurArtwork} resizeMode="cover" blurRadius={16} />
+      <Image source={imageSourceWithHeaders(blurSource)} style={styles.blurArtwork} resizeMode="cover" blurRadius={16} />
     </TvGradientMask> : null}
   </>;
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Image, StyleSheet, Text, View, type ImageURISource, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { colors, typography } from "../theme";
+import { imageSourceWithHeaders } from "../imageSource";
 
 /** Compact, non-focusable channel attribution shared by video surfaces. */
 export function TvChannelIdentity({ title, source, size = 26, textStyle, style, detail }: {
@@ -10,7 +11,7 @@ export function TvChannelIdentity({ title, source, size = 26, textStyle, style, 
   return <View style={[styles.row, style]}>
     <View accessible={false} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
       {source?.uri && failedUri !== source.uri
-        ? <Image source={source} resizeMode="cover" style={StyleSheet.absoluteFill} onError={() => setFailedUri(source.uri)} />
+        ? <Image source={imageSourceWithHeaders(source)} resizeMode="cover" style={StyleSheet.absoluteFill} onError={() => setFailedUri(source.uri)} />
         : <Text style={[styles.initial, { fontSize: size * 0.55 }]}>{Array.from(title.trim())[0]?.toLocaleUpperCase()}</Text>}
     </View>
     <Text numberOfLines={1} style={[styles.name, textStyle]}>{title}</Text>

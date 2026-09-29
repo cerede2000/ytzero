@@ -16,6 +16,7 @@ import { TvPageHeading } from "../components/TvPageHeading";
 import { TvGlassVisibility } from "../components/TvGlassSurface";
 import type { VideoActionOptions } from "../components/TvVideoActionMenu";
 import { PlaylistScreen } from "./PlaylistScreen";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type Props = {
   api: YtZeroApi; language: Language; t: Translate; selectedId: string | null;
@@ -81,7 +82,7 @@ export function FollowedPlaylistsScreen(props: Props) {
     <TvListButton
       ref={targetRef(item.playlist_id, index)}
       deferPress
-      leading={<Image source={api.thumbnailSource(item.thumbnail)} style={styles.thumbnail} resizeMode="cover" />}
+      leading={<Image source={imageSourceWithHeaders(api.thumbnailSource(item.thumbnail))} style={styles.thumbnail} resizeMode="cover" />}
       label={item.title}
       detail={`${item.channel_title} · ${t("videos")}: ${count.format(Number(item.video_count) || 0)}`}
       nextFocusUp={index === 0 ? profileFocusTarget : undefined}

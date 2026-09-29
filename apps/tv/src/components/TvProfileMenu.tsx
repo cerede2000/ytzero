@@ -26,6 +26,7 @@ import { TvScreenTransition } from "./TvScreenTransition";
 import { TvFocusScope } from "./TvFocusScope";
 import { useTvModalBack } from "../useTvModalBack";
 import Svg, { Path } from "react-native-svg";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type Props = {
   selection?: { preferredProfileId?: number; title: string; description: string; onCancel: () => void };
@@ -447,7 +448,7 @@ function ProfileAvatar({ api, profile, size }: { api: YtZeroApi; profile: Profil
   return (
     <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: profile.avatar ? colors.surfaceRaised : profile.avatar_color }]}>
       {profile.avatar ? (
-        <Image source={api.avatarSource(profile.avatar)} style={{ width: size, height: size, borderRadius: size / 2 }} resizeMode="cover" />
+        <Image source={imageSourceWithHeaders(api.avatarSource(profile.avatar))} style={{ width: size, height: size, borderRadius: size / 2 }} resizeMode="cover" />
       ) : (
         <Text style={[styles.avatarInitial, { fontSize: Math.round(size * 0.42) }]}>{initial}</Text>
       )}

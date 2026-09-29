@@ -22,6 +22,7 @@ import { localeTags, type Translate } from "../i18n";
 import { tvVerticalListPerformance } from "../listPerformance";
 import { colors, typography, screenPadding } from "../theme";
 import type { Language, TvProfileSettings, Video, VideoComment } from "../types";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type Props = {
   api: YtZeroApi;
@@ -256,7 +257,7 @@ export function WatchScreen({ api, incognito, isChild, language, t, video: initi
         {short ? <View style={[styles.imageFrame, { width: Math.min(330, height * 0.3) }, styles.shortImageFrame]}>
           {video.thumbnail ? (
             <Image
-              source={short && !portraitFailed ? api.shortThumbnailSource(video.video_id) : api.thumbnailSource(video.thumbnail)}
+              source={imageSourceWithHeaders(short && !portraitFailed ? api.shortThumbnailSource(video.video_id) : api.thumbnailSource(video.thumbnail))}
               resizeMode="cover"
               style={styles.image}
               onError={short && !portraitFailed ? () => setPortraitFailed(true) : undefined}
@@ -403,7 +404,7 @@ function ChannelButton({ api, video, nextFocusUp, nextFocusDown, onTargetReady, 
     >
       {({ focused }) => <>
         <TvControlSurface radius={39} focused={focused} filled={false} />
-        {avatar?.uri ? <Image source={avatar} style={styles.channelAvatar} /> : <View style={[styles.channelAvatar, styles.channelAvatarPlaceholder]} />}
+        {avatar?.uri ? <Image source={imageSourceWithHeaders(avatar)} style={styles.channelAvatar} /> : <View style={[styles.channelAvatar, styles.channelAvatarPlaceholder]} />}
         <View style={styles.channelCopy}>
           <Text numberOfLines={1} style={[styles.channelTitle, focused && styles.channelTextFocused]}>{video.channel_title}</Text>
           {video.channel_subscriber_count ? <Text style={[styles.channelSubscribers, focused && styles.channelSubTextFocused]}>{video.channel_subscriber_count}</Text> : null}
@@ -418,7 +419,7 @@ function CommentCard({ api, comment, t }: { api: YtZeroApi; comment: VideoCommen
   const flags = [comment.isPinned ? t("pinnedComment") : "", comment.authorIsUploader ? t("creatorComment") : "", comment.timeText ?? ""].filter(Boolean);
   return (
     <View style={styles.commentCard}>
-      {avatar?.uri ? <Image source={avatar} style={styles.commentAvatar} /> : <View style={[styles.commentAvatar, styles.channelAvatarPlaceholder]} />}
+      {avatar?.uri ? <Image source={imageSourceWithHeaders(avatar)} style={styles.commentAvatar} /> : <View style={[styles.commentAvatar, styles.channelAvatarPlaceholder]} />}
       <View style={styles.commentCopy}>
         <View style={styles.commentHeader}>
           <Text style={styles.commentAuthor}>{comment.author}</Text>

@@ -20,6 +20,7 @@ import { tvGridListPerformance } from "../listPerformance";
 import { colors, typography, screenPadding } from "../theme";
 import type { Channel, ChannelAbout, Language, Video } from "../types";
 import { useChannelSync } from "../useChannelSync";
+import { imageSourceWithHeaders } from "../imageSource";
 
 type Props = {
   api: YtZeroApi;
@@ -271,11 +272,11 @@ export function ChannelScreen({ api, videoUpdate, channelId, focusRequest, langu
   const header = (
     <View>
       <View style={styles.hero}>
-        {about?.banner ? <Image source={api.thumbnailSource(about.banner)} resizeMode="cover" style={styles.banner} /> : null}
+        {about?.banner ? <Image source={imageSourceWithHeaders(api.thumbnailSource(about.banner))} resizeMode="cover" style={styles.banner} /> : null}
         <View style={styles.heroShade} />
         <View style={styles.heroContent}>
           <View style={styles.avatarFrame}>
-            {avatar ? <Image source={api.thumbnailSource(avatar)} resizeMode="cover" style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback]}><Text style={styles.avatarInitial}>{title.trim()[0]?.toLocaleUpperCase() ?? "?"}</Text></View>}
+            {avatar ? <Image source={imageSourceWithHeaders(api.thumbnailSource(avatar))} resizeMode="cover" style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback]}><Text style={styles.avatarInitial}>{title.trim()[0]?.toLocaleUpperCase() ?? "?"}</Text></View>}
           </View>
           <View style={styles.heroCopy}>
             <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>{title}</Text>
