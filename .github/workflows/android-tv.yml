@@ -1,0 +1,147 @@
+name: Build Android TV App
+
+# Builds the television client in `apps/tv` for Android TV / Google TV / Fire TV
+# and leaves an installable APK on the run. The native `android/` project is not
+# in version control: Expo regenerates it here from `app.json`, the same
+# `expo prebuild` the application's README documents for a local build.
+#
+# The package is signed with the React Native template's debug key, which is a
+# fixed file rather than a per-run one — so a later build still installs over an
+# earlier one. It is not a key for publishing to a store; that would need a real
+# keystore held as a repository secret.
+
+on:
+  push:
+    branches:
+      - integration
+    paths:
+      - "apps/tv/**"
+      - ".github/workflows/android-tv.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-tv-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the Android TV package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/tv
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up the Bun runtime
+        uses: oven-sh/setup-bun@v2
+
+      - name: Set up the Java toolchain Gradle needs
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+
+      - name: Install the application dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run the television application's own checks
+        run: |
+          set -euo pipefail
+          bun test src
+          bun run typecheck
+
+      - name: Number this build so it installs over the previous one
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          # Android refuses a package whose versionCode is not higher than the
+          # installed one. The tracked value stays 1; the run number is what lets
+          # a downloaded APK replace the one already on the television.
+          bun --eval '
+            const config = await Bun.file("app.json").json();
+            config.expo.android.versionCode = Number(process.env.RUN_NUMBER);
+            await Bun.write("app.json", JSON.stringify(config, null, 2) + "\n");
+            console.log("versionCode:", config.expo.android.versionCode);
+          '
+
+      - name: Generate the native Android project
+        env:
+          EXPO_TV: "1"
+        run: bunx expo prebuild --platform android --clean --no-install
+
+      - name: Confirm the package is built for a television
+        run: |
+          set -euo pipefail
+          manifest=android/app/src/main/AndroidManifest.xml
+          # A build without these succeeds and produces a package the television's
+          # launcher never shows, which is only discovered on the device. They come
+          # from the TV config plugin, so they are asserted here instead.
+          grep -q 'android.software.leanback' "${manifest}"
+          grep -q 'android.intent.category.LEANBACK_LAUNCHER' "${manifest}"
+          grep -q 'android:name="android.hardware.touchscreen" android:required="false"' "${manifest}"
+          echo "Leanback launcher, TV feature flags and optional touchscreen are declared."
+
+      - name: Set up Gradle with its caches
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: apps/tv/android
+
+      - name: Assemble the release package
+        working-directory: apps/tv/android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Name the package after the commit it came from
+        id: package
+        run: |
+          set -euo pipefail
+          apk="$(find android/app/build/outputs/apk/release -name '*.apk' -print -quit)"
+          [ -n "${apk}" ] || { echo "no APK was produced"; exit 1; }
+          name="ytzero-tv-${GITHUB_SHA:0:7}.apk"
+          mv "${apk}" "android/${name}"
+          echo "name=${name}" >> "${GITHUB_OUTPUT}"
+          echo "size=$(du -h "android/${name}" | cut -f1)" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload the installable package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ytzero-tv-apk-${{ github.run_number }}
+          path: apps/tv/android/${{ steps.package.outputs.name }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Say what was built and how to install it
+        env:
+          APK_NAME: ${{ steps.package.outputs.name }}
+          APK_SIZE: ${{ steps.package.outputs.size }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Android TV package"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| File | \`${APK_NAME}\` (${APK_SIZE}) |"
+            echo "| Commit | \`${GITHUB_SHA:0:7}\` |"
+            echo "| versionCode | ${GITHUB_RUN_NUMBER} |"
+            echo "| Signed with | the React Native template debug key |"
+            echo
+            echo "Download it from this run's artifacts, then install it:"
+            echo
+            echo '```sh'
+            echo "adb connect <television-address>:5555"
+            echo "adb install -r ${APK_NAME}"
+            echo '```'
+            echo
+            echo "Sideloaders such as Downloader work too. This is a client: it pairs"
+            echo "with a YT Zero instance over the network, it does not carry one."
+          } >> "${GITHUB_STEP_SUMMARY}"
