@@ -8,6 +8,7 @@ import { TvCloseButton } from "./TvCloseButton";
 import { TvFocusScope } from "./TvFocusScope";
 import { TvSurface } from "./TvSurface";
 import { TvListButton } from "./TvListButton";
+import { TvModalCanvas } from "./TvModalCanvas";
 
 export function TvChoiceSheet<T extends string>({ title, options, value, busy, error, t, onSelect, onClose }: {
   title: string; options: ReadonlyArray<{ value: T; label: string }>; value: T;
@@ -23,6 +24,7 @@ export function TvChoiceSheet<T extends string>({ title, options, value, busy, e
     if (target) return focusWhenReady(target, () => setFocused(true));
   }, [focused, options, shown, value]);
   return <Modal transparent visible animationType="none" onShow={() => setShown(true)} onRequestClose={onClose}>
+    <TvModalCanvas>
     <TvFocusScope style={styles.fill}><TVFocusGuideView accessibilityViewIsModal autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.overlay}>
       <View style={styles.panel}>
         <TvSurface radius={38}>
@@ -37,6 +39,7 @@ export function TvChoiceSheet<T extends string>({ title, options, value, busy, e
         </TvSurface>
       </View>
     </TVFocusGuideView></TvFocusScope>
+    </TvModalCanvas>
   </Modal>;
 }
 const styles = StyleSheet.create({

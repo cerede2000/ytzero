@@ -2,12 +2,12 @@ import { useCallback, useMemo, type ReactElement } from "react";
 import {
   FlatList,
   StyleSheet,
-  useWindowDimensions,
   type ListRenderItem,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
 import { TvScrollEdges } from "./TvScrollEdges";
+import { useViewport } from "../viewport";
 
 type Props<Item> = {
   data: Item[];
@@ -46,7 +46,7 @@ export function TvHorizontalList<Item>({
   style,
   wrapperStyle,
 }: Props<Item>) {
-  const { width } = useWindowDimensions();
+  const { width } = useViewport();
   const initialCount = useMemo(() => {
     const requested = initialNumToRender
       ?? (estimatedItemExtent ? Math.ceil(width / estimatedItemExtent) + 2 : 8);

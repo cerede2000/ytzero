@@ -10,6 +10,7 @@ import { useTvModalBack } from "../useTvModalBack";
 import { TvScreenTransition } from "./TvScreenTransition";
 import { requestTvFocus } from "../focus";
 import { TvFocusScope } from "./TvFocusScope";
+import { TvModalCanvas } from "./TvModalCanvas";
 
 export const TvTextDetails = forwardRef<View, { text: string; title: string; t: Translate; nextFocusUp?: FocusDestination; nextFocusDown?: FocusDestination }>(function TvTextDetails({ text, title, t, nextFocusUp, nextFocusDown }, ref) {
   const [open, setOpen] = useState(false);
@@ -30,12 +31,14 @@ export const TvTextDetails = forwardRef<View, { text: string; title: string; t: 
       <Text numberOfLines={2} style={styles.text}>{text}</Text><Text style={styles.more}>{t("more")} ›</Text>
     </TvPressable>
     {open ? <Modal transparent animationType="none" onRequestClose={close} onShow={() => requestAnimationFrame(() => requestTvFocus(closeTarget.current))}>
+      <TvModalCanvas>
       <TvFocusScope style={{ flex: 1 }}><TVFocusGuideView accessibilityViewIsModal autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.overlay}>
         <TvScreenTransition surface="content" radius={36} style={styles.panel}>
           <View style={styles.header}><Text accessibilityRole="header" numberOfLines={2} style={styles.title}>{title}</Text><TvCloseButton ref={closeTarget} t={t} preferredFocus onPress={close} /></View>
           <TVTextScrollView style={[styles.scroller, textFocused && styles.scrollerFocused]} onFocus={() => setTextFocused(true)} onBlur={() => setTextFocused(false)} contentContainerStyle={styles.content} scrollDuration={reduced ? 0 : 0.22} snapToStart={false} snapToEnd={false}><Text selectable={false} style={styles.fullText}>{text}</Text></TVTextScrollView>
         </TvScreenTransition>
       </TVFocusGuideView></TvFocusScope>
+      </TvModalCanvas>
     </Modal> : null}
   </>;
 });

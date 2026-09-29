@@ -31,6 +31,7 @@ import { isTvBrowseDestination, type TvBrowseDestination, type TvDestination } f
 import { clearAccessToken, loadConnection, saveConnection } from "./src/storage";
 import type { AuthStatus, Language, PairingAuthorization, Video } from "./src/types";
 import { colors, sidebarRailWidth, topBarMetrics } from "./src/theme";
+import { resolveTvCanvas, ViewportProvider } from "./src/viewport";
 import { tvVideoCardActionConfig, type VideoCardActionConfig } from "./src/videoCardActions";
 import { SessionQueueProvider, useSessionQueueActions, useSessionQueueItems } from "./src/SessionQueue";
 import { TvQueueSheet } from "./src/components/TvQueueSheet";
@@ -102,7 +103,15 @@ function TvApp() {
   const returnFocus = useRef<{ current: View | null } | null>(null);
   const cancelFocusReturn = useRef<(() => void) | null>(null);
   const previousScreen = useRef<Screen>("boot");
-  const { width, height } = useWindowDimensions();
+  const display = useWindowDimensions();
+  // Lay out on the canvas this interface was drawn on, then shrink it onto the
+  // screen the platform actually reports. See `src/viewport.ts`.
+  const canvas = useMemo(() => resolveTvCanvas(display), [display.width, display.height, display.fontScale]);
+  const { width, height } = canvas;
+  const canvasStyle = useMemo(
+    () => ({ width: canvas.width, height: canvas.height, transform: [{ scale: canvas.scale }] }),
+    [canvas.width, canvas.height, canvas.scale],
+  );
   const [screen, setScreen] = useState<Screen>("boot");
   const backdropController = useMemo(createBackdropController, []);
   const backdropScroll = useRef(new Animated.Value(0)).current;
@@ -711,7 +720,9 @@ function TvApp() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={styles.screen}>
+    <ViewportProvider value={canvas}>
+    <View style={[styles.canvas, canvasStyle]}>
     {launchRevealing ? <TvFocusScope style={styles.root}>
       {screen !== "detail" && browsingScreen === "/" && api
         ? <TvHomeBackdrop api={api} controller={backdropController} height={height} opacity={backdropOpacity} />
@@ -789,10 +800,17 @@ function TvApp() {
     {launchVisible ? <TvLaunchAnimation ready={screen !== "boot" || bootError} accessibilityLabel={t("booting")}
       onReveal={() => setLaunchRevealing(true)} onFinish={() => setLaunchVisible(false)} /> : null}
     </View>
+    </ViewportProvider>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // The canvas is centred and clipped: scaled about its own centre it covers
+  // the screen exactly, whatever the platform reported.
+  screen: { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  // No flex here: the canvas is sized in design points, not by its parent.
+  canvas: { backgroundColor: colors.background },
   root: { flex: 1, width: "100%", height: "100%", backgroundColor: colors.background },
   content: { flex: 1 },
   // Preserve list measurements, scroll offset and mounted cells under AVKit.

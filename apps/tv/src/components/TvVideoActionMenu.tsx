@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Text,
   TVFocusGuideView,
-  useWindowDimensions,
   View,
 } from "react-native";
 import type { YtZeroApi } from "../api";
@@ -29,6 +28,8 @@ import { TvFocusScope } from "./TvFocusScope";
 import { requestTvFocus } from "../focus";
 import { restoreFocus } from "../focusRestoration";
 import { imageSourceWithHeaders } from "../imageSource";
+import { useViewport } from "../viewport";
+import { TvModalCanvas } from "./TvModalCanvas";
 
 type MenuView = "actions" | "schedule" | "playlists";
 
@@ -62,7 +63,7 @@ export function TvVideoActionMenu(props: Props) {
 
 function VideoActionMenu({ api, actionConfig, onClose, onOpenChannel, onRemove, onVideoChange, preserveMenuKey, t, video }: Props & { video: Video }) {
   const queue = useSessionQueue();
-  const { height, fontScale } = useWindowDimensions();
+  const { height, fontScale } = useViewport();
   const queued = queue.items.some((item) => item.video_id === video?.video_id);
   const [view, setView] = useState<MenuView>("actions");
   const [currentVideo, setCurrentVideo] = useState(video);
@@ -256,6 +257,7 @@ function VideoActionMenu({ api, actionConfig, onClose, onOpenChannel, onRemove, 
 
   return (
     <Modal animationType="none" onRequestClose={goBack} onShow={() => setShown(true)} transparent visible>
+      <TvModalCanvas>
       <TvFocusScope style={styles.fill}>
       <TVFocusGuideView accessibilityViewIsModal autoFocus destinations={entryTarget ? [entryTarget] : undefined} trapFocusDown trapFocusLeft trapFocusRight trapFocusUp style={styles.overlay}>
         <TvScreenTransition surface="glass" radius={36} style={[styles.panel, { height: panelHeight }]}>
@@ -371,6 +373,7 @@ function VideoActionMenu({ api, actionConfig, onClose, onOpenChannel, onRemove, 
         </TvScreenTransition>
       </TVFocusGuideView>
       </TvFocusScope>
+      </TvModalCanvas>
     </Modal>
   );
 }

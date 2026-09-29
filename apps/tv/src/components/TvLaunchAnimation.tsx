@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, useWindowDimensions } from "react-native";
+import { Animated, Easing, StyleSheet } from "react-native";
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from "react-native-svg";
 import { useMotionReady, useReducedMotion } from "../motion";
 import { colors } from "../theme";
 import { LogoMark } from "./Logo";
+import { useViewport } from "../viewport";
 
 // Fixed trajectories keep the burst consistent across renders and devices.
 const particles = [
@@ -62,7 +63,7 @@ type Props = { ready: boolean; accessibilityLabel: string; onReveal: () => void;
 export function TvLaunchAnimation({ ready, accessibilityLabel, onReveal, onFinish }: Props) {
   const reduced = useReducedMotion();
   const motionReady = useMotionReady();
-  const { width } = useWindowDimensions();
+  const { width } = useViewport();
   const size = Math.min(260, Math.max(184, width * 0.145));
   const progress = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;

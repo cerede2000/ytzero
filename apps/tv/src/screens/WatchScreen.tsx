@@ -4,7 +4,7 @@ import { formatVideoDuration } from "../duration";
 import { TvTextDetails } from "../components/TvTextDetails";
 import { TvListButton } from "../components/TvListButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Image, StyleSheet, Text, TVFocusGuideView, useWindowDimensions, View, type FocusDestination, type ListRenderItemInfo } from "react-native";
+import { FlatList, Image, StyleSheet, Text, TVFocusGuideView, View, type FocusDestination, type ListRenderItemInfo } from "react-native";
 import type { YtZeroApi } from "../api";
 import { TvBackdrop } from "../components/TvBackdrop";
 import { TvNativePlayer } from "../components/TvNativePlayer";
@@ -23,6 +23,7 @@ import { tvVerticalListPerformance } from "../listPerformance";
 import { colors, typography, screenPadding } from "../theme";
 import type { Language, TvProfileSettings, Video, VideoComment } from "../types";
 import { imageSourceWithHeaders } from "../imageSource";
+import { useViewport } from "../viewport";
 
 type Props = {
   api: YtZeroApi;
@@ -63,7 +64,7 @@ function validDate(value: string | null | undefined): Date | null {
 
 export function WatchScreen({ api, incognito, isChild, language, t, video: initialVideo, onBack, onOpenChannel, onOpenVideo, onVideoChange, onVideoLongPress, queueContext, autoplay, initialPosition, onShowQueue, onPrimaryFocusTarget, profileFocusTarget }: Props) {
   const [preview, setPreview] = useState(initialVideo);
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useViewport();
   const [video, setVideo] = useState(preview);
   const [related, setRelated] = useState<Video[]>([]);
   // `undefined` means that profile settings are still loading. Keep the

@@ -1,14 +1,15 @@
 import { TvPageBackButton } from "./TvPageBackButton";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, TVFocusGuideView, useWindowDimensions, View } from "react-native";
+import { StyleSheet, Text, TVFocusGuideView, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import type { Translate } from "../i18n";
 import { colors, screenPadding } from "../theme";
 import { Logo } from "./Logo";
 import { TvSurface } from "./TvSurface";
+import { useViewport } from "../viewport";
 
 export function TvSetupLayout({ title, description, t, onBack, children, copyFooter, copyHeader }: { title: string; description: string; t: Translate; onBack?: () => void; children: ReactNode; copyFooter?: ReactNode; copyHeader?: ReactNode }) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useViewport();
   return <TVFocusGuideView autoFocus style={styles.screen}>
     <Svg pointerEvents="none" width={width} height={height} style={StyleSheet.absoluteFill}><Defs><LinearGradient id="setup-background" x1="1" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#172134" /><Stop offset="0.5" stopColor="#0b101a" /><Stop offset="1" stopColor={colors.background} /></LinearGradient></Defs><Rect width="100%" height="100%" fill="url(#setup-background)" /></Svg>
     {onBack ? <TvPageBackButton t={t} onPress={onBack} /> : null}

@@ -27,6 +27,7 @@ import { TvFocusScope } from "./TvFocusScope";
 import { useTvModalBack } from "../useTvModalBack";
 import Svg, { Path } from "react-native-svg";
 import { imageSourceWithHeaders } from "../imageSource";
+import { TvModalCanvas } from "./TvModalCanvas";
 
 type Props = {
   selection?: { preferredProfileId?: number; title: string; description: string; onCancel: () => void };
@@ -330,6 +331,7 @@ export function TvProfileMenu({
       </View>}
 
       <Modal visible={overlayVisible} transparent animationType="none" onRequestClose={() => { if (pinFor) returnToProfiles(); else if (selection) close(); else if (view === "profiles") setView("menu"); else close(); }}>
+      <TvModalCanvas>
       <TvSurfaceRoot><TvFocusScope style={{ flex: 1 }}>
       {open && (
         <TVFocusGuideView accessibilityViewIsModal autoFocus trapFocusDown trapFocusLeft trapFocusRight trapFocusUp style={[styles.overlay, view === "profiles" && styles.fullscreenOverlay]}>
@@ -438,7 +440,7 @@ export function TvProfileMenu({
           </TvScreenTransition>
         </TVFocusGuideView>
       )}
-      </TvFocusScope></TvSurfaceRoot></Modal>
+      </TvFocusScope></TvSurfaceRoot></TvModalCanvas></Modal>
     </>
   );
 }

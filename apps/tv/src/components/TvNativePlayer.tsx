@@ -19,6 +19,7 @@ import { shortsNavigation, type PlaybackQueueContext } from "../playbackQueue";
 import { focusWhenReady, suspendBackgroundFocusRedirects } from "../focus";
 import { TvFocusScope } from "./TvFocusScope";
 import { useTvModalBack } from "../useTvModalBack";
+import { TvModalCanvas } from "./TvModalCanvas";
 
 type Props = {
   api: YtZeroApi; video: Video; startPosition: number; incognito: boolean; isChild: boolean; t: Translate;
@@ -388,7 +389,7 @@ export function TvNativePlayer(props: Props) {
             setPresented(false);
             if (!failure.current) void close();
           }} />
-        {!presented && !dismissing ? <View style={styles.panel}>
+        {!presented && !dismissing ? <TvModalCanvas><View style={styles.panel}>
           {!error ? <TvLoadingMark accessibilityLabel={t("preparingPlayback")} size={48} /> : null}
           <Text style={styles.eyebrow}>{error ? t("playbackErrorTitle") : t("preparingPlayback")}</Text>
           <Text accessibilityRole="header" numberOfLines={3} style={styles.title}>{currentVideo.title}</Text>
@@ -398,7 +399,7 @@ export function TvNativePlayer(props: Props) {
             <TvButton ref={detailsButton} deferPress label={t("videoDetails")} preferredFocus={!error || error === "playbackRestricted"} onFocus={() => setPanelFocused(true)} onPress={() => { showDetails.current = true; void close(); }} />
             {error && error !== "playbackRestricted" ? <TvButton ref={retryButton} label={t("tryAgain")} preferredFocus variant="primary" onPress={() => { switching.current = false; setAttempt((value) => value + 1); }} /> : null}
           </View>
-        </View> : null}
+        </View></TvModalCanvas> : null}
       </TvFocusScope>
     </Modal>
   );
