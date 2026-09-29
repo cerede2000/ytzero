@@ -1,3 +1,5 @@
 {
-  "NSLocalNetworkUsageDescription": "A YT Zero megkeresi a szerveredet a helyi hálózaton, hogy cím megadása nélkül csatlakoztathasd a televíziót."
+  "ios": {
+    "NSLocalNetworkUsageDescription": "A YT Zero megkeresi a szerveredet a helyi hálózaton, hogy cím megadása nélkül csatlakoztathasd a televíziót."
+  }
 }

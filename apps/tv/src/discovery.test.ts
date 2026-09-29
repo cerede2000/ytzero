@@ -43,7 +43,13 @@ describe("TV Bonjour discovery", () => {
       expect(Object.keys(messages).sort()).toEqual(Object.keys(discoveryMessages.en).sort());
       for (const message of Object.values(messages)) expect(message.trim().length).toBeGreaterThan(0);
       const permission = await Bun.file(new URL(`../locales/${language}.json`, import.meta.url)).json();
-      expect(permission.NSLocalNetworkUsageDescription.length).toBeGreaterThan(20);
+      // Expo hands a key written at the root of a locale file to both platforms.
+      // This one is an Info.plist key: on Android it becomes a string resource no
+      // default locale declares, and `lintVitalRelease` refuses to assemble the
+      // package over it. Keeping it under `ios` is what lets the television
+      // application be built for Android TV at all.
+      expect(Object.keys(permission)).toEqual(["ios"]);
+      expect(permission.ios.NSLocalNetworkUsageDescription.length).toBeGreaterThan(20);
     }
   });
 });

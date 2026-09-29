@@ -1,3 +1,5 @@
 {
-  "NSLocalNetworkUsageDescription": "YT Zero wyszukuje serwer w sieci lokalnej, aby połączyć telewizor bez wpisywania adresu."
+  "ios": {
+    "NSLocalNetworkUsageDescription": "YT Zero wyszukuje serwer w sieci lokalnej, aby połączyć telewizor bez wpisywania adresu."
+  }
 }

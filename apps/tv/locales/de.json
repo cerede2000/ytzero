@@ -1,3 +1,5 @@
 {
-  "NSLocalNetworkUsageDescription": "YT Zero sucht deinen Server im lokalen Netzwerk, damit du diesen Fernseher ohne Adresseingabe verbinden kannst."
+  "ios": {
+    "NSLocalNetworkUsageDescription": "YT Zero sucht deinen Server im lokalen Netzwerk, damit du diesen Fernseher ohne Adresseingabe verbinden kannst."
+  }
 }
