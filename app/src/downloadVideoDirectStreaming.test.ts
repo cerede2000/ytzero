@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createDownloadVideoDirectStreaming } from "./downloadVideoDirectStreaming";
+import { subscribeToLogs } from "./logger";
 import { createDownloadVideoStreaming } from "./downloadVideoStreaming";
 
 function concat(...parts: Uint8Array<ArrayBufferLike>[]): Uint8Array<ArrayBuffer> {
@@ -270,6 +271,34 @@ describe("direct no-transcode video HLS", () => {
       expect(requests).toBe(0);
       streaming.resetDirectHlsSessions();
     }
+  });
+
+  test("a refused index says which stream, and why, instead of only a failed request", async () => {
+    // Every failure below this line leaves the route with nothing but a 502.
+    // Read from the instance's log, "the television cannot play this" and
+    // "the host refused the URL it had just issued" must not look the same.
+    const audio = mediaFixture([6_000], [500]);
+    const spawn = (() => fakeProcess(selection(1))) as unknown as typeof Bun.spawn;
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => (
+      String(input).includes("/video-")
+        ? new Response(null, { status: 403 })
+        : rangedResponse(audio.bytes, new Headers(init?.headers).get("range"))
+    )) as typeof fetch;
+    const streaming = createDownloadVideoDirectStreaming(directDependencies(spawn, fetchImpl));
+    const lines: string[] = [];
+    const stop = subscribeToLogs((event) => lines.push(event.line));
+    try {
+      expect((await streaming.getDirectHlsPlaylist(1, "refused-index", "index.m3u8")).kind).toBe("failed");
+    } finally {
+      stop();
+      streaming.resetDirectHlsSessions();
+    }
+    const reported = lines.filter((line) => line.includes("downloads.direct_stream_index_failed"));
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toContain('"stream":"video"');
+    expect(reported[0]).toContain('"reason":"refused"');
+    expect(reported[0]).toContain('"status":403');
+    expect(reported[0]).toContain('"videoId":"refused-index"');
   });
 
   test("a refused index URL is resolved again on the next manifest request", async () => {

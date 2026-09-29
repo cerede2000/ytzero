@@ -128,6 +128,17 @@ type SessionBuildResult =
   | { kind: "unsupported"; expiresAt: number }
   | { kind: "failed" };
 
+/**
+ * Why reading a stream's index gave up.
+ *
+ * Every one of these ends as the same 502, and the route has nothing else to
+ * say: a television reports that the video will not play and the instance's
+ * log carries one line saying a request failed. Naming the step turns that
+ * into an answer — a signed URL refused by the host that issued it is not the
+ * same problem as a range the host answered with the wrong bytes.
+ */
+type IndexFailure = "refused" | "no_response" | "timeout" | "invalid_range" | "short_body" | "index_too_large";
+
 const INITIAL_INDEX_BYTES = 64 * 1024;
 const MAX_INDEX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_RESOLVE_TIMEOUT_MS = 30_000;
@@ -485,7 +496,7 @@ export function createDownloadVideoDirectStreaming(dependencies: DownloadVideoDi
   async function readIndex(source: DirectVideoMediaSource, signal: AbortSignal): Promise<
     | { kind: "ok"; indexed: IndexedSource }
     | { kind: "unsupported" }
-    | { kind: "failed" }
+    | { kind: "failed"; reason: IndexFailure; status?: number }
   > {
     let requestedBytes = INITIAL_INDEX_BYTES;
     while (!signal.aborted && requestedBytes <= MAX_INDEX_BYTES) {
@@ -494,15 +505,19 @@ export function createDownloadVideoDirectStreaming(dependencies: DownloadVideoDi
         const response = await fetchRange(source, 0, requestedBytes - 1, operation.signal);
         if (!response || response.status === 403 || response.status === 404 || response.status === 410) {
           await response?.body?.cancel().catch(() => {});
-          return { kind: "failed" };
+          return response
+            ? { kind: "failed", reason: "refused", status: response.status }
+            : { kind: "failed", reason: operation.signal.aborted ? "timeout" : "no_response" };
         }
         const range = validatedContentRange(response, 0, requestedBytes - 1);
         if (!range) {
           await response.body?.cancel().catch(() => {});
-          return { kind: "failed" };
+          return { kind: "failed", reason: "invalid_range", status: response.status };
         }
         const buffer = await response.arrayBuffer().catch(() => null);
-        if (!buffer || buffer.byteLength !== range.length || operation.signal.aborted) return { kind: "failed" };
+        if (!buffer || buffer.byteLength !== range.length || operation.signal.aborted) {
+          return { kind: "failed", reason: operation.signal.aborted ? "timeout" : "short_body", status: response.status };
+        }
         const bytes = new Uint8Array(buffer);
         const parsed = parseMediaSidx(bytes, range.total);
         if (parsed.kind === "need_more") {
@@ -518,7 +533,7 @@ export function createDownloadVideoDirectStreaming(dependencies: DownloadVideoDi
         operation.dispose();
       }
     }
-    return { kind: "failed" };
+    return { kind: "failed", reason: signal.aborted ? "timeout" : "index_too_large" };
   }
 
   function presentationFor(videoId: string, sources: DirectVideoSources, video: IndexedSource, audio: IndexedSource) {
@@ -548,7 +563,13 @@ export function createDownloadVideoDirectStreaming(dependencies: DownloadVideoDi
   }
 
   async function buildSession(userId: number, videoId: string, signal: AbortSignal): Promise<SessionBuildResult> {
-    if (!await videoAvailable(videoId) || signal.aborted) return { kind: "failed" };
+    if (!await videoAvailable(videoId)) {
+      // The route read the row and let this through, so a refusal here means
+      // the two disagree about the same video: worth a line, not a bare 502.
+      log.warn("downloads.direct_stream_unavailable_row", { userId, videoId });
+      return { kind: "failed" };
+    }
+    if (signal.aborted) return { kind: "failed" };
     const resolution = await resolveSources(userId, videoId, signal);
     if (resolution.kind === "unsupported") return {
       kind: "unsupported",
@@ -561,6 +582,12 @@ export function createDownloadVideoDirectStreaming(dependencies: DownloadVideoDi
       readIndex(sources.audio, signal),
     ]);
     if (signal.aborted || video.kind === "failed" || audio.kind === "failed") {
+      // Without this the only trace of a video that will not play is a 502 in
+      // the request log, which names neither the step nor the stream.
+      const failed = video.kind === "failed" ? { stream: "video" as const, ...video } : audio.kind === "failed" ? { stream: "audio" as const, ...audio } : null;
+      if (failed) log.warn("downloads.direct_stream_index_failed", {
+        userId, videoId, stream: failed.stream, reason: failed.reason, status: failed.status ?? null,
+      });
       // A refused signed URL must not poison every manifest retry for hours.
       const key = keyFor(userId, videoId);
       if (sourceCache.get(key)?.sources === sources) sourceCache.delete(key);
